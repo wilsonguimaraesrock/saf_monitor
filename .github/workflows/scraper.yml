@@ -1,13 +1,10 @@
 name: Scraper SAF
 
-# Coleta dados do dfranquias 3x por dia (seg–sex)
-# 8h, 12h e 17h BRT = 11h, 15h, 20h UTC
+# Coleta dados do dfranquias a cada hora (seg–sex, 8h–20h BRT = 11h–23h UTC)
 # Playwright roda localmente no runner do GitHub Actions
 on:
   schedule:
-    - cron: '0 11 * * 1-5'
-    - cron: '0 15 * * 1-5'
-    - cron: '0 20 * * 1-5'
+    - cron: '0 11-23 * * 1-5'
   workflow_dispatch:
 
 jobs:
