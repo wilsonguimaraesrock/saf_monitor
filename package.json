@@ -9,6 +9,7 @@
     "lint": "next lint",
     "db:migrate": "node --loader ts-node/esm scripts/migrate.ts",
     "scraper:run": "node --loader ts-node/esm src/scraper/runner.ts",
+    "report:send": "node --loader ts-node/esm scripts/send-report.ts",
     "scheduler:start": "node --loader ts-node/esm src/scheduler/index.ts",
     "typecheck": "tsc --noEmit"
   },

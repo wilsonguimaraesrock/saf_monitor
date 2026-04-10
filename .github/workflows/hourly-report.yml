@@ -1,8 +1,7 @@
 name: Relatório Horário Telegram
 
 # Roda a cada hora, seg–sex, 8h–20h BRT (11h–23h UTC)
-# A rota /api/cron/report verifica o horário BRT internamente
-# e retorna { skipped: true } se estiver fora da janela.
+# O script verifica o horário BRT internamente e sai sem enviar se fora da janela.
 on:
   schedule:
     - cron: '0 11-23 * * 1-5'
@@ -11,21 +10,24 @@ on:
 jobs:
   send-report:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
       - name: Enviar relatório para o Telegram
-        run: |
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.VERCEL_APP_URL }}/api/cron/report")
-
-          BODY=$(echo "$RESPONSE" | head -n -1)
-          STATUS=$(echo "$RESPONSE" | tail -n 1)
-
-          echo "Status HTTP: $STATUS"
-          echo "Resposta: $BODY"
-
-          if [ "$STATUS" != "200" ]; then
-            echo "Erro: status $STATUS"
-            exit 1
-          fi
+        env:
+          DATABASE_URL:         ${{ secrets.DATABASE_URL }}
+          DATABASE_SSL:         'true'
+          TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
+          VERCEL_APP_URL:       ${{ secrets.VERCEL_APP_URL }}
+          NODE_ENV:             production
+        run: node --loader ts-node/esm scripts/send-report.ts
