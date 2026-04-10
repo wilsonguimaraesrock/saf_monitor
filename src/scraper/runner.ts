@@ -17,7 +17,7 @@ import { normalizeTicket } from '../engine/normalizer';
 import { classifyCategory } from '../engine/classifier';
 import { calculatePriorityScore } from '../engine/scorer';
 import { clusterTickets } from '../engine/clustering';
-import { upsertTicket, saveSnapshot, saveDailyStats, saveTicketUpdates, createCronRun, finishCronRun } from '../repository/tickets';
+import { upsertTicket, saveSnapshot, saveDailyStats, saveTicketUpdates, createCronRun, finishCronRun, markDisappearedTicketsResolved } from '../repository/tickets';
 import { createChildLogger } from '../lib/logger';
 import { RawTicket } from '../lib/types';
 
@@ -65,7 +65,14 @@ export async function runScraper(triggeredBy = 'scheduled'): Promise<{
       }
     }
 
-    // 3. Enriquece os top 25 tickets por score com histórico de mensagens
+    // 3. Marca como resolvidos os tickets que sumiram da listagem
+    const seenIds = result.tickets.map((t) => t.externalId).filter(Boolean);
+    const vanished = await markDisappearedTicketsResolved(seenIds);
+    if (vanished > 0) {
+      log.info(`${vanished} ticket(s) marcados como resolvidos (sumiram da listagem)`);
+    }
+
+    // 4. Enriquece os top 25 tickets por score com histórico de mensagens
     const TOP_N = 25;
     const topIds = processedTickets
       .sort((a, b) => b.score - a.score)
@@ -91,10 +98,10 @@ export async function runScraper(triggeredBy = 'scheduled'): Promise<{
       }
     }
 
-    // 4. Clustering por assunto
+    // 5. Clustering por assunto
     await clusterTickets();
 
-    // 5. Estatísticas do dia
+    // 6. Estatísticas do dia
     await saveDailyStats();
 
     await finishCronRun(runId, {

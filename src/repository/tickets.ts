@@ -251,6 +251,44 @@ export async function finishCronRun(
   );
 }
 
+/**
+ * Marca como 'resolvido' todos os tickets que estavam ativos no banco
+ * mas não apareceram na última coleta do scraper.
+ *
+ * Isso acontece porque o dfranquias remove tickets resolvidos da listagem —
+ * o scraper nunca os vê novamente e o banco ficaria desatualizado.
+ *
+ * Retorna a quantidade de tickets marcados como resolvidos.
+ */
+export async function markDisappearedTicketsResolved(
+  seenExternalIds: string[]
+): Promise<number> {
+  if (seenExternalIds.length === 0) return 0;
+
+  // Busca todos os tickets ativos no banco (últimos 3 meses)
+  const active = await query<{ id: string; external_id: string }>(
+    `SELECT id, external_id FROM saf_tickets
+     WHERE status NOT IN ('resolvido','cancelado')
+       AND opened_at >= NOW() - INTERVAL '3 months'`
+  );
+
+  // Quais ativos não foram vistos na coleta?
+  const seenSet   = new Set(seenExternalIds);
+  const vanished  = active.filter((t) => !seenSet.has(t.external_id));
+
+  if (vanished.length === 0) return 0;
+
+  const ids = vanished.map((t) => t.id);
+  await execute(
+    `UPDATE saf_tickets
+     SET status = 'resolvido', resolved_at = NOW(), updated_at = NOW()
+     WHERE id = ANY($1::uuid[])`,
+    [ids]
+  );
+
+  return vanished.length;
+}
+
 // -------------------------------------------------------
 // QUERIES DO DASHBOARD
 // -------------------------------------------------------
