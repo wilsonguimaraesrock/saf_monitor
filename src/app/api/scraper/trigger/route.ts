@@ -10,7 +10,7 @@ const REPO     = 'saf_monitor';
 const WORKFLOW = 'scraper.yml';
 
 export async function POST() {
-  const token = process.env.GITHUB_PAT;
+  const token = process.env.GH_PAT;
   if (!token) {
     return NextResponse.json({ error: 'GITHUB_PAT não configurado' }, { status: 500 });
   }
