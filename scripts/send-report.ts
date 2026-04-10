@@ -58,6 +58,7 @@ async function fetchStats(pool: Pool) {
       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'myrock' ${ACTIVE} ${WINDOW})     AS cnt_rock,
       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'plataformas_aulas' ${ACTIVE} ${WINDOW}) AS cnt_plat,
       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'suporte_emails' ${ACTIVE} ${WINDOW})    AS cnt_email,
+      (SELECT COUNT(*) FROM saf_tickets WHERE resolved_at::date = CURRENT_DATE ${SCOPE})            AS resolved_today,
       (SELECT COUNT(*) FROM saf_tickets
        WHERE last_updated_at < NOW() - INTERVAL '7 days' ${ACTIVE})                                 AS stalled
   `);
@@ -85,6 +86,7 @@ function buildMessage(
     `📊 <b>Resumo SAFs — ${label}</b>`,
     '',
     `📋 Total abertos: <b>${n(s.total_open)}</b>`,
+    `✅ Concluídos hoje: <b>${n(s.resolved_today)}</b>`,
     n(s.total_overdue)  > 0 ? `🔴 Atrasados: <b>${n(s.total_overdue)}</b>`               : `✅ Sem tickets atrasados`,
     n(s.total_awaiting) > 0 ? `⏳ Aguardando nossa resposta: <b>${n(s.total_awaiting)}</b>` : `✅ Nada aguardando resposta`,
     n(s.total_critical) > 0 ? `🚨 Críticos (score ≥ 70): <b>${n(s.total_critical)}</b>`  : '',
