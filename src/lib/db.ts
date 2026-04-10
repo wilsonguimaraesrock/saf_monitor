@@ -29,14 +29,16 @@ function buildPool(): Pool {
     throw new Error('DATABASE_URL não configurada. Defina no .env.local');
   }
 
-  // pg-connection-string compat para DO SSL
-  if (connectionString.includes('sslmode=require') && !connectionString.includes('uselibpqcompat')) {
-    connectionString = connectionString.replace('sslmode=require', 'sslmode=require&uselibpqcompat=true');
-  }
+  // Remove sslmode da URL — o SSL é configurado via objeto ssl no Pool,
+  // evitando conflito e o erro 08P01 (protocol_violation)
+  connectionString = connectionString
+    .replace(/[?&]sslmode=[^&]*/g, (m) => m.startsWith('?') ? '?' : '')
+    .replace(/\?&/, '?')
+    .replace(/[?&]$/, '');
 
   let ssl: boolean | { rejectUnauthorized: boolean; ca?: string } = false;
 
-  if (process.env.DATABASE_SSL === 'true' || connectionString.includes('sslmode=require')) {
+  if (process.env.DATABASE_SSL === 'true') {
     const caPath = process.env.DB_SSL_CA_PATH;
     if (caPath) {
       const resolved = path.resolve(caPath);
