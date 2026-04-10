@@ -355,7 +355,8 @@ export async function enrichTicketDetail(page: Page, externalId: string): Promis
 export async function enrichTicketsInBatch(
   externalIds: string[],
 ): Promise<Map<string, { author?: string; content?: string; occurredAt?: string; isOurs?: boolean }[]>> {
-  const results = new Map<string, typeof results extends Map<string, infer V> ? V : never>();
+  type MsgEntry = { author?: string; content?: string; occurredAt?: string; isOurs?: boolean };
+  const results = new Map<string, MsgEntry[]>();
   if (externalIds.length === 0) return results;
 
   const browser = await chromium.launch({ headless: HEADLESS });
