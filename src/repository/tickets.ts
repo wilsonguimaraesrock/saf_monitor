@@ -347,6 +347,12 @@ export async function getTicketsFiltered(filters: {
   const params: unknown[] = [];
   let p = 1;
 
+  // Por padrão, exclui resolvidos e cancelados.
+  // Só mostra se o filtro de status pedir explicitamente.
+  if (!filters.status) {
+    conditions.push("status NOT IN ('resolvido','cancelado')");
+  }
+
   if (filters.status)               { conditions.push(`status = $${p++}`);              params.push(filters.status); }
   if (filters.category)             {
     // Substitui o filtro de escopo pelo de categoria específica
