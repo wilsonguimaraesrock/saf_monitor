@@ -258,10 +258,13 @@ export async function finishCronRun(
 // Janela padrão: apenas tickets abertos nos últimos 3 meses
 const WINDOW = `AND opened_at >= NOW() - INTERVAL '3 months'`;
 
+// Categorias do escopo — exclui 'outros' e 'nao_classificado' de todas as queries
+const SCOPE_CATS = `AND priority_category IN ('dsa_joy','myrock','plataformas_aulas','suporte_emails')`;
+
 export async function getOverdueTickets(limit = 50) {
   return query(
     `SELECT * FROM saf_tickets
-     WHERE is_overdue = true AND status NOT IN ('resolvido','cancelado') ${WINDOW}
+     WHERE is_overdue = true AND status NOT IN ('resolvido','cancelado') ${WINDOW} ${SCOPE_CATS}
      ORDER BY days_overdue DESC, priority_score DESC
      LIMIT $1`,
     [limit]
@@ -271,7 +274,7 @@ export async function getOverdueTickets(limit = 50) {
 export async function getAwaitingTickets(limit = 50) {
   return query(
     `SELECT * FROM saf_tickets
-     WHERE awaiting_our_response = true AND status NOT IN ('resolvido','cancelado') ${WINDOW}
+     WHERE awaiting_our_response = true AND status NOT IN ('resolvido','cancelado') ${WINDOW} ${SCOPE_CATS}
      ORDER BY days_waiting_us DESC, priority_score DESC
      LIMIT $1`,
     [limit]
@@ -281,7 +284,7 @@ export async function getAwaitingTickets(limit = 50) {
 export async function getOldestTickets(limit = 10) {
   return query(
     `SELECT * FROM saf_tickets
-     WHERE status NOT IN ('resolvido','cancelado') ${WINDOW}
+     WHERE status NOT IN ('resolvido','cancelado') ${WINDOW} ${SCOPE_CATS}
      ORDER BY opened_at ASC NULLS LAST
      LIMIT $1`,
     [limit]
@@ -291,7 +294,7 @@ export async function getOldestTickets(limit = 10) {
 export async function getCriticalTickets(limit = 30) {
   return query(
     `SELECT * FROM saf_tickets
-     WHERE priority_score >= 70 AND status NOT IN ('resolvido','cancelado') ${WINDOW}
+     WHERE priority_score >= 70 AND status NOT IN ('resolvido','cancelado') ${WINDOW} ${SCOPE_CATS}
      ORDER BY priority_score DESC
      LIMIT $1`,
     [limit]
@@ -301,13 +304,13 @@ export async function getCriticalTickets(limit = 30) {
 export async function getDashboardStats() {
   return queryOne(
     `SELECT
-       (SELECT COUNT(*) FROM saf_tickets WHERE status NOT IN ('resolvido','cancelado') ${WINDOW})               AS total_open,
-       (SELECT COUNT(*) FROM saf_tickets WHERE is_overdue AND status NOT IN ('resolvido','cancelado') ${WINDOW}) AS total_overdue,
-       (SELECT COUNT(*) FROM saf_tickets WHERE awaiting_our_response AND status NOT IN ('resolvido','cancelado') ${WINDOW}) AS total_awaiting,
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_score >= 70 AND status NOT IN ('resolvido','cancelado') ${WINDOW}) AS total_critical,
-       (SELECT COUNT(*) FROM saf_tickets WHERE resolved_at::date = CURRENT_DATE)                               AS total_resolved_today,
-       (SELECT ROUND(AVG(days_waiting_us)::numeric * 24, 1) FROM saf_tickets WHERE awaiting_our_response ${WINDOW}) AS avg_response_hours,
-       (SELECT ROUND(AVG(days_open)::numeric * 24, 1) FROM saf_tickets WHERE status = 'resolvido' ${WINDOW})   AS avg_resolution_hours,
+       (SELECT COUNT(*) FROM saf_tickets WHERE status NOT IN ('resolvido','cancelado') ${WINDOW} ${SCOPE_CATS})               AS total_open,
+       (SELECT COUNT(*) FROM saf_tickets WHERE is_overdue AND status NOT IN ('resolvido','cancelado') ${WINDOW} ${SCOPE_CATS}) AS total_overdue,
+       (SELECT COUNT(*) FROM saf_tickets WHERE awaiting_our_response AND status NOT IN ('resolvido','cancelado') ${WINDOW} ${SCOPE_CATS}) AS total_awaiting,
+       (SELECT COUNT(*) FROM saf_tickets WHERE priority_score >= 70 AND status NOT IN ('resolvido','cancelado') ${WINDOW} ${SCOPE_CATS}) AS total_critical,
+       (SELECT COUNT(*) FROM saf_tickets WHERE resolved_at::date = CURRENT_DATE ${SCOPE_CATS})                               AS total_resolved_today,
+       (SELECT ROUND(AVG(days_waiting_us)::numeric * 24, 1) FROM saf_tickets WHERE awaiting_our_response ${WINDOW} ${SCOPE_CATS}) AS avg_response_hours,
+       (SELECT ROUND(AVG(days_open)::numeric * 24, 1) FROM saf_tickets WHERE status = 'resolvido' ${WINDOW} ${SCOPE_CATS})   AS avg_resolution_hours,
        (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'dsa_joy' AND status NOT IN ('resolvido','cancelado') ${WINDOW}) AS count_dsa_joy,
        (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'myrock' AND status NOT IN ('resolvido','cancelado') ${WINDOW}) AS count_myrock,
        (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'plataformas_aulas' AND status NOT IN ('resolvido','cancelado') ${WINDOW}) AS count_plataformas_aulas,
@@ -336,12 +339,21 @@ export async function getTicketsFiltered(filters: {
   limit?: number;
   offset?: number;
 }) {
-  const conditions: string[] = ["opened_at >= NOW() - INTERVAL '3 months'"];
+  const conditions: string[] = [
+    "opened_at >= NOW() - INTERVAL '3 months'",
+    // Sempre limita às categorias do escopo, a menos que uma categoria específica seja selecionada
+    "priority_category IN ('dsa_joy','myrock','plataformas_aulas','suporte_emails')",
+  ];
   const params: unknown[] = [];
   let p = 1;
 
   if (filters.status)               { conditions.push(`status = $${p++}`);              params.push(filters.status); }
-  if (filters.category)             { conditions.push(`priority_category = $${p++}`);   params.push(filters.category); }
+  if (filters.category)             {
+    // Substitui o filtro de escopo pelo de categoria específica
+    const idx = conditions.findIndex((c) => c.startsWith('priority_category IN'));
+    conditions[idx] = `priority_category = $${p++}`;
+    params.push(filters.category);
+  }
   if (filters.franchise)            { conditions.push(`franchise ILIKE $${p++}`);       params.push(`%${filters.franchise}%`); }
   if (filters.isOverdue !== undefined)           { conditions.push(`is_overdue = $${p++}`);             params.push(filters.isOverdue); }
   if (filters.awaitingOurResponse !== undefined) { conditions.push(`awaiting_our_response = $${p++}`); params.push(filters.awaitingOurResponse); }
