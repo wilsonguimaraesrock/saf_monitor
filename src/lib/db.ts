@@ -1,17 +1,13 @@
 /**
  * Conexão com PostgreSQL (Digital Ocean Managed Database)
  *
- * Usa um pool de conexões via `pg`.
- * A DATABASE_URL deve incluir o certificado CA quando
- * a opção "Require SSL" estiver ativa no DO (recomendado).
+ * Usa globalThis para manter um único pool entre hot-reloads do Next.js
+ * e entre invocações serverless na mesma instância.
  *
- * Formato da URL:
- *   postgresql://user:password@host:port/dbname?sslmode=require
- *
- * Para SSL com CA customizado:
- *   Baixe o certificado CA em: Digital Ocean → Database → Connection Details
- *   e coloque em /certs/do-ca-certificate.crt
- *   Adicione a variável DB_SSL_CA_PATH=./certs/do-ca-certificate.crt
+ * Pool sizing para serverless:
+ *   - max: 3  → cada instância Vercel abre no máximo 3 conexões
+ *   - Digital Ocean Connection Pooler (porta 25061, PgBouncer) lida com
+ *     multiplexação e evita "too many clients"
  */
 
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
@@ -21,19 +17,23 @@ import { createChildLogger } from './logger';
 
 const log = createChildLogger('db');
 
+// Chave no globalThis — sobrevive hot-reloads do Next.js dev
+declare global {
+  // eslint-disable-next-line no-var
+  var __pgPool: Pool | undefined;
+}
+
 function buildPool(): Pool {
   let connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error('DATABASE_URL não configurada. Defina no .env.local');
   }
 
-  // Digital Ocean: adiciona uselibpqcompat para evitar que sslmode=require
-  // seja tratado como verify-full nas versões novas do pg-connection-string
+  // pg-connection-string compat para DO SSL
   if (connectionString.includes('sslmode=require') && !connectionString.includes('uselibpqcompat')) {
     connectionString = connectionString.replace('sslmode=require', 'sslmode=require&uselibpqcompat=true');
   }
 
-  // SSL obrigatório para Digital Ocean Managed DB
   let ssl: boolean | { rejectUnauthorized: boolean; ca?: string } = false;
 
   if (process.env.DATABASE_SSL === 'true' || connectionString.includes('sslmode=require')) {
@@ -44,7 +44,6 @@ function buildPool(): Pool {
         ssl = { rejectUnauthorized: true, ca: fs.readFileSync(resolved).toString() };
         log.info('SSL com CA personalizado configurado');
       } else {
-        log.warn(`CA não encontrado em ${resolved}. Usando SSL sem verificação de CA.`);
         ssl = { rejectUnauthorized: false };
       }
     } else {
@@ -52,35 +51,43 @@ function buildPool(): Pool {
     }
   }
 
-  return new Pool({
+  const pool = new Pool({
     connectionString,
     ssl: ssl || undefined,
-    max: 10,               // máximo de conexões no pool
-    idleTimeoutMillis: 30_000,
+    // Serverless: mantém o pool pequeno — o PgBouncer faz a multiplexação
+    max: 3,
+    min: 0,
+    idleTimeoutMillis: 10_000,   // fecha conexões ociosas rapidamente
     connectionTimeoutMillis: 5_000,
+    allowExitOnIdle: true,       // libera o event loop em ambientes serverless
   });
+
+  pool.on('error', (err) => {
+    log.error(`Pool error: ${err.message}`);
+  });
+
+  return pool;
 }
 
-// Singleton do pool — reutilizado entre requests no Next.js
-let pool: Pool | null = null;
-
 export function getPool(): Pool {
-  if (!pool) pool = buildPool();
-  return pool;
+  // Em produção usa globalThis para sobreviver entre invocações da mesma instância
+  // Em dev isso também evita múltiplos pools por hot-reload
+  if (!globalThis.__pgPool) {
+    globalThis.__pgPool = buildPool();
+  }
+  return globalThis.__pgPool;
 }
 
 // -------------------------------------------------------
 // Helpers de query tipados
 // -------------------------------------------------------
 
-/** Executa query e retorna todas as linhas */
 export async function query<T extends QueryResultRow = QueryResultRow>(
   sql: string,
   params: unknown[] = []
 ): Promise<T[]> {
-  const client = getPool();
   try {
-    const result: QueryResult<T> = await client.query<T>(sql, params);
+    const result: QueryResult<T> = await getPool().query<T>(sql, params);
     return result.rows;
   } catch (err) {
     log.error(`Query error: ${(err as Error).message}\nSQL: ${sql}`);
@@ -88,7 +95,6 @@ export async function query<T extends QueryResultRow = QueryResultRow>(
   }
 }
 
-/** Executa query e retorna a primeira linha ou null */
 export async function queryOne<T extends QueryResultRow = QueryResultRow>(
   sql: string,
   params: unknown[] = []
@@ -97,18 +103,15 @@ export async function queryOne<T extends QueryResultRow = QueryResultRow>(
   return rows[0] ?? null;
 }
 
-/** Executa query sem retorno (INSERT/UPDATE/DELETE) */
 export async function execute(sql: string, params: unknown[] = []): Promise<QueryResult> {
-  const client = getPool();
   try {
-    return await client.query(sql, params);
+    return await getPool().query(sql, params);
   } catch (err) {
     log.error(`Execute error: ${(err as Error).message}\nSQL: ${sql}`);
     throw err;
   }
 }
 
-/** Executa bloco em transação */
 export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await getPool().connect();
   try {
@@ -124,7 +127,6 @@ export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>)
   }
 }
 
-/** Verifica se a conexão está ativa */
 export async function healthCheck(): Promise<boolean> {
   try {
     await query('SELECT 1');
