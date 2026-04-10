@@ -5,7 +5,7 @@
 import { Suspense } from 'react';
 import {
   AlertTriangle, Clock, CheckCircle2,
-  Timer, TrendingUp, Gamepad2, Monitor, BookOpen, Mail, LayoutGrid, School,
+  Gamepad2, Monitor, BookOpen, Mail, LayoutGrid, School,
 } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { FilterCardWrapper } from '@/components/FilterCardWrapper';
@@ -128,8 +128,7 @@ async function DashboardContent({ searchParams }: PageProps) {
     <div className="space-y-6">
 
       {/* ── Cards principais (filtráveis) ─────────────────────── */}
-      {/* Grid 12 colunas: cards principais ocupam 2 cols, cards de tempo 1 col */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-12 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-10 gap-3">
 
         {/* Todos — reseta filtros (xl:col-span-2) */}
         <div className="col-span-1 sm:col-span-1 xl:col-span-2">
@@ -163,16 +162,7 @@ async function DashboardContent({ searchParams }: PageProps) {
             tooltip="Tickets cuja data de resolução (resolved_at) é hoje. Atualizado a cada coleta do scraper." />
         </div>
 
-        {/* Cards de tempo — compactos (xl:col-span-1) */}
-        <div className="col-span-1 sm:col-span-1 xl:col-span-1">
-          <StatCard compact label="Resp. média" value={`${s.avgResponseHours.toFixed(1)}h`} icon={Timer} variant="default"
-            tooltip="Tempo médio (em horas) que os tickets ficam aguardando nossa resposta." />
-        </div>
 
-        <div className="col-span-1 sm:col-span-1 xl:col-span-1">
-          <StatCard compact label="Resol. média" value={`${s.avgResolutionHours.toFixed(1)}h`} icon={TrendingUp} variant="default"
-            tooltip="Tempo médio (em horas) do total de dias aberto dos tickets já resolvidos." />
-        </div>
       </div>
 
       {/* ── Cards por categoria (filtráveis) ─────────────────── */}
