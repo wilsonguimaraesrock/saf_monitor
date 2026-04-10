@@ -18,20 +18,36 @@ import { RawTicket, PriorityCategory } from '../lib/types';
 // -------------------------------------------------------
 const CATEGORY_KEYWORDS: Record<PriorityCategory, string[]> = {
   dsa_joy: [
+    // Nomes do produto
     'dsa', 'joy', 'dsa joy', 'dsajoy',
+    // Serviços reais do dfranquias
+    'cadastro de turmas', 'sugestoes de melhorias joy', 'sugestões de melhorias joy',
   ],
   myrock: [
+    // Nomes do produto
     'myrock', 'my rock', 'rock', 'my-rock',
+    // Serviços reais do dfranquias
+    'my rock adm', 'my rock lms', 'my rock problemas no acesso',
+    'my rock aluno presencial', 'my rock assuntos diversos',
+    'my rock correcao', 'my rock correcção', 'my rock bring it out',
+    'rock spot', 'myrock situacao no acesso', 'myrock situação no acesso',
   ],
   plataformas_aulas: [
+    // Palavras genéricas
     'plataforma', 'plataformas', 'aula', 'aulas', 'lms', 'ead',
     'curso', 'cursos', 'ensino', 'aprendizado', 'e-learning',
     'google classroom', 'moodle', 'canvas',
+    // Serviços reais do dfranquias
+    'duo', 'plataforma offline', 'plataforma online',
+    'cursos regulares', 'ondemand', 'on demand',
+    'situacao em plataforma', 'situação em plataforma',
+    'feedback de conteudo', 'feedback de conteúdo',
+    'curadoria de livros', 'cancelamento de pedidos',
   ],
   suporte_emails: [
     'email', 'e-mail', 'emails', 'e-mails', 'smtp', 'imap',
     'caixa de entrada', 'outlook', 'gmail', 'webmail',
-    'domínio de email', 'configurar email', 'email bounce',
+    'dominio de email', 'domínio de email', 'configurar email', 'email bounce',
   ],
   outros: [],
   nao_classificado: [],

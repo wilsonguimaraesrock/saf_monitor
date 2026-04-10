@@ -4,8 +4,8 @@
 
 import { Suspense } from 'react';
 import {
-  AlertTriangle, Clock, Inbox, Zap, CheckCircle2,
-  Timer, TrendingUp, Gamepad2, Monitor, BookOpen, Mail, LayoutGrid,
+  AlertTriangle, Clock, CheckCircle2,
+  Timer, TrendingUp, Gamepad2, Monitor, BookOpen, Mail, LayoutGrid, School,
 } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { FilterCardWrapper } from '@/components/FilterCardWrapper';
@@ -27,6 +27,9 @@ import {
   getTicketsFiltered,
 } from '@/repository/tickets';
 import { query } from '@/lib/db';
+
+// Garante que o painel sempre busca dados frescos do banco (sem cache)
+export const dynamic = 'force-dynamic';
 
 interface PageProps {
   searchParams: Promise<{
@@ -90,6 +93,7 @@ async function DashboardContent({ searchParams }: PageProps) {
     countMyrock:           Number(stats?.count_myrock           ?? 0),
     countPlataformasAulas: Number(stats?.count_plataformas_aulas ?? 0),
     countSuporteEmails:    Number(stats?.count_suporte_emails   ?? 0),
+    totalAwaitingSchool:   Number(stats?.total_awaiting_school  ?? 0),
   };
 
   const countOutros = Math.max(0, s.totalOpen - s.countDsaJoy - s.countMyrock - s.countPlataformasAulas - s.countSuporteEmails);
@@ -98,7 +102,6 @@ async function DashboardContent({ searchParams }: PageProps) {
   const noFilter   = !hasSpecificFilter && !params.sort;
   const ovActive   = params.overdue  === 'true';
   const awActive   = params.awaiting === 'true';
-  const crActive   = params.critical === 'true';
   const catDsa     = params.category === 'dsa_joy';
   const catRock    = params.category === 'myrock';
   const catPlat    = params.category === 'plataformas_aulas';
@@ -109,7 +112,6 @@ async function DashboardContent({ searchParams }: PageProps) {
     const parts: string[] = [];
     if (ovActive)  parts.push('Atrasados');
     if (awActive)  parts.push('Aguardando Nossa Resp.');
-    if (crActive)  parts.push('Críticos');
     if (catDsa)    parts.push('DSA JOY');
     if (catRock)   parts.push('MyRock');
     if (catPlat)   parts.push('Plataformas de Aulas');
@@ -152,13 +154,11 @@ async function DashboardContent({ searchParams }: PageProps) {
         </div>
 
         <div className="col-span-1 sm:col-span-1 xl:col-span-2">
-          <FilterCardWrapper filterKey="critical" filterValue="true" isActive={crActive}>
-            <StatCard label="Críticos" value={s.totalCritical} icon={Zap} variant={s.totalCritical > 0 ? 'critical' : 'success'}
-              tooltip="Tickets com score de prioridade ≥ 70. O score combina: atraso, dias aberto, tempo aguardando nossa resp. e categoria." />
-          </FilterCardWrapper>
+          <StatCard label="Aguardando escola" value={s.totalAwaitingSchool} icon={School} variant={s.totalAwaitingSchool > 0 ? 'warning' : 'success'}
+            tooltip="Tickets com status 'Aguardando Franquia' — a escola precisa responder ou tomar uma ação para avançar." />
         </div>
 
-        <div className="col-span-2 sm:col-span-2 xl:col-span-2">
+        <div className="col-span-1 sm:col-span-1 xl:col-span-2">
           <StatCard label="Resolvidos hoje" value={s.totalResolvedToday} icon={CheckCircle2} variant="success"
             tooltip="Tickets cuja data de resolução (resolved_at) é hoje. Atualizado a cada coleta do scraper." />
         </div>

@@ -352,7 +352,8 @@ export async function getDashboardStats() {
        (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'dsa_joy' AND status NOT IN ('resolvido','cancelado') ${WINDOW}) AS count_dsa_joy,
        (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'myrock' AND status NOT IN ('resolvido','cancelado') ${WINDOW}) AS count_myrock,
        (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'plataformas_aulas' AND status NOT IN ('resolvido','cancelado') ${WINDOW}) AS count_plataformas_aulas,
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'suporte_emails' AND status NOT IN ('resolvido','cancelado') ${WINDOW}) AS count_suporte_emails`
+       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'suporte_emails' AND status NOT IN ('resolvido','cancelado') ${WINDOW}) AS count_suporte_emails,
+       (SELECT COUNT(*) FROM saf_tickets WHERE status = 'aguardando_franquia' ${WINDOW} ${SCOPE_CATS}) AS total_awaiting_school`
   );
 }
 
