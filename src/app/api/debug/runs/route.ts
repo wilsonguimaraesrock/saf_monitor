@@ -7,9 +7,9 @@ export async function GET() {
       `SELECT id, run_type, status, triggered_by,
               tickets_found, tickets_new, tickets_updated,
               duration_ms, error_message,
-              created_at, finished_at
+              started_at, finished_at
        FROM cron_runs
-       ORDER BY created_at DESC
+       ORDER BY started_at DESC
        LIMIT 10`
     );
 
