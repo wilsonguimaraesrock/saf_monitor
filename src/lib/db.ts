@@ -29,10 +29,11 @@ function buildPool(): Pool {
     throw new Error('DATABASE_URL não configurada. Defina no .env.local');
   }
 
-  // Remove sslmode da URL — o SSL é configurado via objeto ssl no Pool,
-  // evitando conflito e o erro 08P01 (protocol_violation)
+  // Remove parâmetros que o PostgreSQL/PgBouncer não aceita via URL
+  // (sslmode e options são configurados via objetos no Pool)
   connectionString = connectionString
-    .replace(/[?&]sslmode=[^&]*/g, (m) => m.startsWith('?') ? '?' : '')
+    .replace(/[?&]sslmode=[^&]*/g,  (m) => m.startsWith('?') ? '?' : '')
+    .replace(/[?&]options=[^&]*/g,  (m) => m.startsWith('?') ? '?' : '')
     .replace(/\?&/, '?')
     .replace(/[?&]$/, '');
 
@@ -62,6 +63,12 @@ function buildPool(): Pool {
     idleTimeoutMillis: 10_000,   // fecha conexões ociosas rapidamente
     connectionTimeoutMillis: 5_000,
     allowExitOnIdle: true,       // libera o event loop em ambientes serverless
+  });
+
+  // Define search_path em cada nova conexão física do pool
+  // (necessário ao usar PgBouncer na porta 25061 — não aceita options= na URL)
+  pool.on('connect', (client) => {
+    client.query("SET search_path TO saf_monitor").catch(() => {});
   });
 
   pool.on('error', (err) => {
