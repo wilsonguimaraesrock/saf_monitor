@@ -5,7 +5,7 @@
 import { Suspense } from 'react';
 import {
   AlertTriangle, Clock, Inbox, Zap, CheckCircle2,
-  Timer, TrendingUp, Gamepad2, Music, BookOpen, Mail, LayoutGrid,
+  Timer, TrendingUp, Gamepad2, Monitor, BookOpen, Mail, LayoutGrid,
 } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { FilterCardWrapper } from '@/components/FilterCardWrapper';
@@ -177,11 +177,11 @@ async function DashboardContent({ searchParams }: PageProps) {
       {/* ── Cards por categoria (filtráveis) ─────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <FilterCardWrapper filterKey="category" filterValue="dsa_joy" isActive={catDsa}>
-          <StatCard label="DSA JOY" value={s.countDsaJoy} icon={Gamepad2} variant="purple"
+          <StatCard label="DSA JOY" value={s.countDsaJoy} icon={Monitor} variant="purple"
             tooltip="Tickets classificados na categoria DSA JOY — problemas relacionados ao sistema de gestão DSA." />
         </FilterCardWrapper>
         <FilterCardWrapper filterKey="category" filterValue="myrock" isActive={catRock}>
-          <StatCard label="MyRock" value={s.countMyrock} icon={Music} variant="orange"
+          <StatCard label="MyRock" value={s.countMyrock} icon={Gamepad2} variant="orange"
             tooltip="Tickets relacionados à plataforma MyRock (app do aluno e franqueado)." />
         </FilterCardWrapper>
         <FilterCardWrapper filterKey="category" filterValue="plataformas_aulas" isActive={catPlat}>
