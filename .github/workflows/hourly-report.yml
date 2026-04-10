@@ -1,0 +1,31 @@
+name: Relatório Horário Telegram
+
+# Roda a cada hora, seg–sex, 8h–20h BRT (11h–23h UTC)
+# A rota /api/cron/report verifica o horário BRT internamente
+# e retorna { skipped: true } se estiver fora da janela.
+on:
+  schedule:
+    - cron: '0 11-23 * * 1-5'
+  workflow_dispatch: # permite disparo manual
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Enviar relatório para o Telegram
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.VERCEL_APP_URL }}/api/cron/report")
+
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "Status HTTP: $STATUS"
+          echo "Resposta: $BODY"
+
+          if [ "$STATUS" != "200" ]; then
+            echo "Erro: status $STATUS"
+            exit 1
+          fi

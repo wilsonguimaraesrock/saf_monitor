@@ -1,0 +1,46 @@
+name: Scraper SAF
+
+# Coleta dados do dfranquias 3x por dia (seg–sex)
+# 8h, 12h e 17h BRT = 11h, 15h, 20h UTC
+# Playwright roda localmente no runner do GitHub Actions
+on:
+  schedule:
+    - cron: '0 11 * * 1-5'
+    - cron: '0 15 * * 1-5'
+    - cron: '0 20 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Instalar Playwright (Chromium)
+        run: npx playwright install chromium --with-deps
+
+      - name: Executar scraper
+        env:
+          DATABASE_URL:     ${{ secrets.DATABASE_URL }}
+          DATABASE_SSL:     'true'
+          SAF_BASE_URL:     ${{ secrets.SAF_BASE_URL }}
+          SAF_LOGIN_URL:    ${{ secrets.SAF_LOGIN_URL }}
+          SAF_LIST_URL:     ${{ secrets.SAF_LIST_URL }}
+          SAF_USERNAME:     ${{ secrets.SAF_USERNAME }}
+          SAF_PASSWORD:     ${{ secrets.SAF_PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          PLAYWRIGHT_HEADLESS: 'true'
+          SCRAPER_MAX_PAGES:   '50'
+          LOG_LEVEL:           'info'
+          NODE_ENV:            'production'
+        run: npm run scraper:run
