@@ -7,10 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "db:migrate": "node --loader ts-node/esm scripts/migrate.ts",
-    "scraper:run": "node --loader ts-node/esm src/scraper/runner.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "scraper:run": "tsx src/scraper/runner.ts",
     "report:send": "tsx scripts/send-report.ts",
-    "scheduler:start": "node --loader ts-node/esm src/scheduler/index.ts",
+    "scheduler:start": "tsx src/scheduler/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
