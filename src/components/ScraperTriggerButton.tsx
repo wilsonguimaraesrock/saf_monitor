@@ -17,8 +17,8 @@ export function ScraperTriggerButton() {
       const res = await fetch('/api/scraper/trigger', { method: 'POST' });
       if (res.ok) {
         setState('success');
-        // Recarrega o painel após 15s (tempo mínimo para o scraper iniciar)
-        setTimeout(() => window.location.reload(), 15_000);
+        // Volta ao idle após 6 min (tempo do scraper terminar)
+        setTimeout(() => setState('idle'), 6 * 60_000);
       } else {
         const { error } = await res.json();
         console.error('Trigger error:', error);
@@ -34,7 +34,7 @@ export function ScraperTriggerButton() {
   const label = {
     idle:    'Atualizar dados',
     loading: 'Disparando...',
-    success: 'Scraper iniciado! (≈15s)',
+    success: 'Coleta iniciada! Aguarde ~5 min',
     error:   'Erro ao disparar',
   }[state];
 
