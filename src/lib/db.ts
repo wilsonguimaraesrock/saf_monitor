@@ -57,10 +57,11 @@ function buildPool(): Pool {
   const pool = new Pool({
     connectionString,
     ssl: ssl || undefined,
-    // Serverless: mantém o pool pequeno — o PgBouncer faz a multiplexação
-    max: 3,
+    // 1 conexão por instância serverless — evita "too many clients"
+    // O globalThis singleton garante que cada instância Vercel usa apenas 1 pool
+    max: 1,
     min: 0,
-    idleTimeoutMillis: 10_000,   // fecha conexões ociosas rapidamente
+    idleTimeoutMillis: 5_000,    // fecha conexões ociosas rapidamente
     connectionTimeoutMillis: 5_000,
     allowExitOnIdle: true,       // libera o event loop em ambientes serverless
   });
