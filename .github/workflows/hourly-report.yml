@@ -30,4 +30,4 @@ jobs:
           TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
           VERCEL_APP_URL:       ${{ secrets.VERCEL_APP_URL }}
           NODE_ENV:             production
-        run: node --loader ts-node/esm scripts/send-report.ts
+        run: npx tsx scripts/send-report.ts

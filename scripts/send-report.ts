@@ -1,128 +1,156 @@
 /**
  * Script autônomo — envia resumo horário de SAFs para o Telegram.
- *
- * Roda direto pelo GitHub Actions (sem passar pela Vercel).
- * Conecta no banco, busca os indicadores e envia a mensagem.
+ * Sem dependências de src/ — usa pg e axios diretamente.
  *
  * Uso:
  *   node --loader ts-node/esm scripts/send-report.ts
  *
- * Variáveis de ambiente necessárias:
+ * Variáveis de ambiente:
  *   DATABASE_URL, DATABASE_SSL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
- *   VERCEL_APP_URL (opcional — aparece no link da mensagem)
+ *   VERCEL_APP_URL (opcional — link no rodapé da mensagem)
  */
 
-import { query, queryOne, getPool } from '../src/lib/db.js';
-import { buildDailySummaryMessage } from '../src/integrations/notifications.js';
+import { config } from 'dotenv';
+import { resolve } from 'path';
+
+// Carrega .env.local (dev) e .env como fallback
+config({ path: resolve(process.cwd(), '.env.local') });
+config({ path: resolve(process.cwd(), '.env') });
+import { Pool } from 'pg';
 import axios from 'axios';
 
-// ── Hora BRT ──────────────────────────────────────────────
-function brTime(): { hour: number; dow: number } {
+// ── BRT ───────────────────────────────────────────────────
+function brTime() {
   const now = new Date(
     new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' })
   );
-  return { hour: now.getHours(), dow: now.getDay() }; // 0=Dom
+  return { hour: now.getHours(), dow: now.getDay(), label: now.toLocaleString('pt-BR') };
 }
 
-// ── Telegram direto (sem deduplicação — é horário fixo) ──
+// ── Banco ─────────────────────────────────────────────────
+function buildPool(): Pool {
+  let cs = process.env.DATABASE_URL;
+  if (!cs) { console.error('DATABASE_URL não definida'); process.exit(1); }
+
+  // Remove parâmetros que o PostgreSQL não reconhece (sslmode, uselibpqcompat…)
+  cs = cs.replace(/[?&]sslmode=[^&]*/g, (m) => m.startsWith('?') ? '?' : '')
+         .replace(/[?&]uselibpqcompat=[^&]*/g, (m) => m.startsWith('?') ? '?' : '')
+         .replace(/\?&/, '?')
+         .replace(/[?&]$/, '');
+
+  const ssl = process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : undefined;
+
+  return new Pool({ connectionString: cs, ssl, max: 2, idleTimeoutMillis: 5_000 });
+}
+
+async function fetchStats(pool: Pool) {
+  const SCOPE  = `AND priority_category IN ('dsa_joy','myrock','plataformas_aulas','suporte_emails')`;
+  const WINDOW = `AND opened_at >= NOW() - INTERVAL '3 months'`;
+  const ACTIVE = `AND status NOT IN ('resolvido','cancelado')`;
+
+  const { rows: [s] } = await pool.query(`
+    SELECT
+      (SELECT COUNT(*) FROM saf_tickets WHERE TRUE ${ACTIVE} ${WINDOW} ${SCOPE})                    AS total_open,
+      (SELECT COUNT(*) FROM saf_tickets WHERE is_overdue ${ACTIVE} ${WINDOW} ${SCOPE})              AS total_overdue,
+      (SELECT COUNT(*) FROM saf_tickets WHERE awaiting_our_response ${ACTIVE} ${WINDOW} ${SCOPE})   AS total_awaiting,
+      (SELECT COUNT(*) FROM saf_tickets WHERE priority_score >= 70 ${ACTIVE} ${WINDOW} ${SCOPE})    AS total_critical,
+      (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'dsa_joy' ${ACTIVE} ${WINDOW})    AS cnt_dsa,
+      (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'myrock' ${ACTIVE} ${WINDOW})     AS cnt_rock,
+      (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'plataformas_aulas' ${ACTIVE} ${WINDOW}) AS cnt_plat,
+      (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'suporte_emails' ${ACTIVE} ${WINDOW})    AS cnt_email,
+      (SELECT COUNT(*) FROM saf_tickets
+       WHERE last_updated_at < NOW() - INTERVAL '7 days' ${ACTIVE})                                 AS stalled
+  `);
+
+  const { rows: oldest } = await pool.query<{ title: string; days_open: number }>(`
+    SELECT title, days_open FROM saf_tickets
+    WHERE TRUE ${ACTIVE} ${WINDOW} ${SCOPE}
+    ORDER BY opened_at ASC NULLS LAST
+    LIMIT 5
+  `);
+
+  return { s, oldest };
+}
+
+// ── Formata mensagem ──────────────────────────────────────
+function buildMessage(
+  s: Record<string, string>,
+  oldest: Array<{ title: string; days_open: number }>,
+  label: string
+): string {
+  const n = (v: string) => Number(v ?? 0);
+  const appUrl = process.env.VERCEL_APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? '';
+
+  const lines: string[] = [
+    `📊 <b>Resumo SAFs — ${label}</b>`,
+    '',
+    `📋 Total abertos: <b>${n(s.total_open)}</b>`,
+    n(s.total_overdue)  > 0 ? `🔴 Atrasados: <b>${n(s.total_overdue)}</b>`               : `✅ Sem tickets atrasados`,
+    n(s.total_awaiting) > 0 ? `⏳ Aguardando nossa resposta: <b>${n(s.total_awaiting)}</b>` : `✅ Nada aguardando resposta`,
+    n(s.total_critical) > 0 ? `🚨 Críticos (score ≥ 70): <b>${n(s.total_critical)}</b>`  : '',
+    '',
+    `📂 <b>Por categoria:</b>`,
+    n(s.cnt_dsa)  > 0 ? `  • DSA JOY: ${n(s.cnt_dsa)}`                   : '',
+    n(s.cnt_rock) > 0 ? `  • MyRock: ${n(s.cnt_rock)}`                    : '',
+    n(s.cnt_plat) > 0 ? `  • Plataformas de Aulas: ${n(s.cnt_plat)}`      : '',
+    n(s.cnt_email)> 0 ? `  • Suporte Emails: ${n(s.cnt_email)}`           : '',
+  ].filter(Boolean);
+
+  if (n(s.stalled) > 0) {
+    lines.push('');
+    lines.push(`⚠️ ${n(s.stalled)} ticket(s) sem movimentação há mais de 7 dias`);
+  }
+
+  if (oldest.length > 0) {
+    lines.push('');
+    lines.push(`🕰️ <b>Tickets mais antigos abertos:</b>`);
+    oldest.forEach((t, i) => {
+      lines.push(`  ${i + 1}. ${t.title.slice(0, 55)} (${t.days_open}d)`);
+    });
+  }
+
+  if (appUrl) {
+    lines.push('');
+    lines.push(`🔗 ${appUrl}`);
+  }
+
+  return lines.join('\n');
+}
+
+// ── Telegram ──────────────────────────────────────────────
 async function sendTelegram(text: string): Promise<void> {
   const token  = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
-
-  if (!token || !chatId) {
-    console.error('TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID não definidos.');
-    process.exit(1);
-  }
+  if (!token || !chatId) { console.error('TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID ausentes'); process.exit(1); }
 
   await axios.post(
     `https://api.telegram.org/bot${token}/sendMessage`,
-    {
-      chat_id: chatId,
-      text,
-      parse_mode: 'HTML',
-      disable_web_page_preview: true,
-    },
+    { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true },
     { timeout: 10_000 }
   );
 }
 
-// ── Queries (mesma lógica do /api/cron/report) ────────────
-const SCOPE = `AND priority_category IN ('dsa_joy','myrock','plataformas_aulas','suporte_emails')`;
-const WINDOW = `AND opened_at >= NOW() - INTERVAL '3 months'`;
-const ACTIVE = `AND status NOT IN ('resolvido','cancelado')`;
-
-async function fetchStats() {
-  const stats = await queryOne<Record<string, string>>(
-    `SELECT
-       (SELECT COUNT(*) FROM saf_tickets WHERE TRUE ${ACTIVE} ${WINDOW} ${SCOPE}) AS total_open,
-       (SELECT COUNT(*) FROM saf_tickets WHERE is_overdue ${ACTIVE} ${WINDOW} ${SCOPE}) AS total_overdue,
-       (SELECT COUNT(*) FROM saf_tickets WHERE awaiting_our_response ${ACTIVE} ${WINDOW} ${SCOPE}) AS total_awaiting,
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_score >= 70 ${ACTIVE} ${WINDOW} ${SCOPE}) AS total_critical,
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'dsa_joy' ${ACTIVE} ${WINDOW}) AS count_dsa_joy,
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'myrock' ${ACTIVE} ${WINDOW}) AS count_myrock,
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'plataformas_aulas' ${ACTIVE} ${WINDOW}) AS count_plataformas_aulas,
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'suporte_emails' ${ACTIVE} ${WINDOW}) AS count_suporte_emails`
-  );
-
-  const oldest = await query<{ title: string; days_open: number }>(
-    `SELECT title, days_open FROM saf_tickets
-     WHERE TRUE ${ACTIVE} ${WINDOW} ${SCOPE}
-     ORDER BY opened_at ASC NULLS LAST
-     LIMIT 5`
-  );
-
-  const stalled = await queryOne<{ count: string }>(
-    `SELECT COUNT(*) AS count FROM saf_tickets
-     WHERE last_updated_at < NOW() - INTERVAL '7 days' ${ACTIVE}`
-  );
-
-  return { stats, oldest, stalledCount: Number(stalled?.count ?? 0) };
-}
-
 // ── Main ──────────────────────────────────────────────────
 async function main() {
-  const { hour, dow } = brTime();
+  const { hour, dow, label } = brTime();
 
-  // Seg–Sex (1–5), 8h–19h BRT
   if (dow === 0 || dow === 6 || hour < 8 || hour >= 20) {
     console.log(`Fora da janela — dow=${dow}, hour=${hour}h BRT. Nada enviado.`);
-    process.exit(0);
+    return;
   }
 
-  console.log(`Buscando dados — ${hour}h BRT, dow=${dow}...`);
+  console.log(`[${label}] Conectando ao banco...`);
+  const pool = buildPool();
 
-  const { stats, oldest, stalledCount } = await fetchStats();
-
-  if (!stats) {
-    console.error('Sem dados no banco.');
-    process.exit(1);
+  try {
+    const { s, oldest } = await fetchStats(pool);
+    const msg = buildMessage(s, oldest, label);
+    console.log('Enviando ao Telegram...');
+    await sendTelegram(msg);
+    console.log('Mensagem enviada.');
+  } finally {
+    await pool.end();
   }
-
-  const payload = {
-    totalOpen:     Number(stats.total_open     ?? 0),
-    totalOverdue:  Number(stats.total_overdue  ?? 0),
-    totalAwaiting: Number(stats.total_awaiting ?? 0),
-    totalCritical: Number(stats.total_critical ?? 0),
-    stalledCount,
-    top5Oldest: oldest.map((t) => ({ title: t.title, daysOpen: Number(t.days_open ?? 0) })),
-    byCategory: {
-      dsaJoy:           Number(stats.count_dsa_joy           ?? 0),
-      myrock:           Number(stats.count_myrock            ?? 0),
-      plataformasAulas: Number(stats.count_plataformas_aulas ?? 0),
-      suporteEmails:    Number(stats.count_suporte_emails    ?? 0),
-    },
-  };
-
-  // Usa a URL do app Vercel no link do rodapé se disponível
-  process.env.NEXT_PUBLIC_APP_URL = process.env.VERCEL_APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? '';
-
-  const msg = buildDailySummaryMessage(payload);
-  console.log('Enviando mensagem ao Telegram...');
-  await sendTelegram(`ℹ️ <b>Resumo Horário SAFs</b>\n\n${msg}`);
-  console.log('Mensagem enviada com sucesso.');
-
-  // Fecha o pool para o processo terminar limpo
-  await getPool().end();
 }
 
 main().catch((err) => {

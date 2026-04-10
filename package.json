@@ -9,7 +9,7 @@
     "lint": "next lint",
     "db:migrate": "node --loader ts-node/esm scripts/migrate.ts",
     "scraper:run": "node --loader ts-node/esm src/scraper/runner.ts",
-    "report:send": "node --loader ts-node/esm scripts/send-report.ts",
+    "report:send": "tsx scripts/send-report.ts",
     "scheduler:start": "node --loader ts-node/esm src/scheduler/index.ts",
     "typecheck": "tsc --noEmit"
   },
@@ -43,6 +43,7 @@
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0"
   }
 }
