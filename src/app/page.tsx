@@ -39,8 +39,7 @@ interface PageProps {
     overdue?: string;
     awaiting?: string;
     critical?: string;
-    dateFrom?: string;
-    dateTo?: string;
+    month?: string;
     sort?: string;
   }>;
 }
@@ -48,15 +47,25 @@ interface PageProps {
 async function DashboardContent({ searchParams }: PageProps) {
   const params = await searchParams;
 
+  // Converte "YYYY-MM" em dateFrom/dateTo para o repositório
+  const monthDateFrom = params.month ? `${params.month}-01` : undefined;
+  const monthDateTo   = params.month
+    ? (() => {
+        const [y, m] = params.month.split('-').map(Number);
+        const last = new Date(y, m, 0).getDate();
+        return `${params.month}-${String(last).padStart(2, '0')}`;
+      })()
+    : undefined;
+
   const filters = {
     status:              params.status,
     category:            params.category,
     franchise:           params.franchise,
-    isOverdue:           params.overdue   === 'true' ? true : undefined,
-    awaitingOurResponse: params.awaiting  === 'true' ? true : undefined,
-    isCritical:          params.critical  === 'true' ? true : undefined,
-    dateFrom:            params.dateFrom,
-    dateTo:              params.dateTo,
+    isOverdue:           params.overdue  === 'true' ? true : undefined,
+    awaitingOurResponse: params.awaiting === 'true' ? true : undefined,
+    isCritical:          params.critical === 'true' ? true : undefined,
+    dateFrom:            monthDateFrom,
+    dateTo:              monthDateTo,
     sortOrder:           (params.sort === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc',
     limit: 200,
   };
@@ -118,7 +127,7 @@ async function DashboardContent({ searchParams }: PageProps) {
     if (catEmail)  parts.push('Suporte Emails');
     if (params.franchise) parts.push(`Franquia: ${params.franchise}`);
     if (params.status)    parts.push(params.status);
-    if (params.dateFrom || params.dateTo) parts.push('Período filtrado');
+    if (params.month) parts.push(`Mês: ${params.month}`);
     const label = parts.length > 0 ? parts.join(' + ') : 'Todos os SAFs';
     const order = sortOrder === 'asc' ? '↑ mais antigos primeiro' : '↓ mais recentes primeiro';
     return `${label} — ${order} (${allTickets.length})`;

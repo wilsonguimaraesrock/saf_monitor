@@ -29,7 +29,7 @@ const INPUT_CLS = `
   dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200
 `.trim();
 
-const ALL_KEYS = ['category', 'status', 'overdue', 'awaiting', 'critical', 'franchise', 'dateFrom', 'dateTo', 'sort'];
+const ALL_KEYS = ['category', 'status', 'overdue', 'awaiting', 'critical', 'franchise', 'month', 'sort'];
 
 export function Filters() {
   const router       = useRouter();
@@ -110,28 +110,14 @@ export function Filters() {
         </label>
       </div>
 
-      {/* Segunda linha: datas + ordem */}
+      {/* Segunda linha: mês + ordem */}
       <div className="flex flex-wrap gap-3 items-center">
-        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
-          <span className="font-medium">Abertura:</span>
-        </div>
-
         <div className="flex items-center gap-1.5">
-          <label className="text-sm text-gray-500 dark:text-slate-400">de</label>
+          <label className="text-sm text-gray-500 dark:text-slate-400 font-medium">Mês de abertura:</label>
           <input
-            type="date"
-            value={searchParams.get('dateFrom') ?? ''}
-            onChange={(e) => update('dateFrom', e.target.value)}
-            className={`${INPUT_CLS} text-sm`}
-          />
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <label className="text-sm text-gray-500 dark:text-slate-400">até</label>
-          <input
-            type="date"
-            value={searchParams.get('dateTo') ?? ''}
-            onChange={(e) => update('dateTo', e.target.value)}
+            type="month"
+            value={searchParams.get('month') ?? ''}
+            onChange={(e) => update('month', e.target.value)}
             className={`${INPUT_CLS} text-sm`}
           />
         </div>
