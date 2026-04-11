@@ -79,7 +79,7 @@ async function DashboardContent({ searchParams }: PageProps) {
 
   const [stats, oldest, overdue, awaiting, critical, trend, clusters, allTickets] =
     await Promise.all([
-      getDashboardStats() as Promise<Record<string, string> | null>,
+      getDashboardStats({ dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
       getOldestTickets(5),
       getOverdueTickets(10),
       getAwaitingTickets(10),

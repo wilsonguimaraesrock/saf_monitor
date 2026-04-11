@@ -339,21 +339,31 @@ export async function getCriticalTickets(limit = 30) {
   );
 }
 
-export async function getDashboardStats() {
+export async function getDashboardStats(opts?: { dateFrom?: string; dateTo?: string }) {
+  const params: unknown[] = [];
+  let p = 1;
+
+  let dateFilter: string;
+  if (opts?.dateFrom && opts?.dateTo) {
+    dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
+    params.push(opts.dateFrom, opts.dateTo);
+  } else {
+    dateFilter = `AND opened_at >= NOW() - INTERVAL '3 months'`;
+  }
+
   return queryOne(
     `SELECT
-       (SELECT COUNT(*) FROM saf_tickets WHERE status NOT IN ('resolvido','cancelado') ${WINDOW} ${SCOPE_CATS})               AS total_open,
-       (SELECT COUNT(*) FROM saf_tickets WHERE is_overdue AND status NOT IN ('resolvido','cancelado') ${WINDOW} ${SCOPE_CATS}) AS total_overdue,
-       (SELECT COUNT(*) FROM saf_tickets WHERE awaiting_our_response AND status NOT IN ('resolvido','cancelado') ${WINDOW} ${SCOPE_CATS}) AS total_awaiting,
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_score >= 70 AND status NOT IN ('resolvido','cancelado') ${WINDOW} ${SCOPE_CATS}) AS total_critical,
+       (SELECT COUNT(*) FROM saf_tickets WHERE status NOT IN ('resolvido','cancelado') ${dateFilter} ${SCOPE_CATS})               AS total_open,
+       (SELECT COUNT(*) FROM saf_tickets WHERE is_overdue AND status NOT IN ('resolvido','cancelado') ${dateFilter} ${SCOPE_CATS}) AS total_overdue,
+       (SELECT COUNT(*) FROM saf_tickets WHERE awaiting_our_response AND status NOT IN ('resolvido','cancelado') ${dateFilter} ${SCOPE_CATS}) AS total_awaiting,
+       (SELECT COUNT(*) FROM saf_tickets WHERE priority_score >= 70 AND status NOT IN ('resolvido','cancelado') ${dateFilter} ${SCOPE_CATS}) AS total_critical,
        (SELECT COUNT(*) FROM saf_tickets WHERE resolved_at::date = CURRENT_DATE ${SCOPE_CATS})                               AS total_resolved_today,
-       (SELECT ROUND(AVG(days_waiting_us)::numeric * 24, 1) FROM saf_tickets WHERE awaiting_our_response ${WINDOW} ${SCOPE_CATS}) AS avg_response_hours,
-       (SELECT ROUND(AVG(days_open)::numeric * 24, 1) FROM saf_tickets WHERE status = 'resolvido' ${WINDOW} ${SCOPE_CATS})   AS avg_resolution_hours,
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'dsa_joy' AND status NOT IN ('resolvido','cancelado') ${WINDOW}) AS count_dsa_joy,
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'myrock' AND status NOT IN ('resolvido','cancelado') ${WINDOW}) AS count_myrock,
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'plataformas_aulas' AND status NOT IN ('resolvido','cancelado') ${WINDOW}) AS count_plataformas_aulas,
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'suporte_emails' AND status NOT IN ('resolvido','cancelado') ${WINDOW}) AS count_suporte_emails,
-       (SELECT COUNT(*) FROM saf_tickets WHERE status = 'aguardando_franquia' ${WINDOW} ${SCOPE_CATS}) AS total_awaiting_school`
+       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'dsa_joy' AND status NOT IN ('resolvido','cancelado') ${dateFilter}) AS count_dsa_joy,
+       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'myrock' AND status NOT IN ('resolvido','cancelado') ${dateFilter}) AS count_myrock,
+       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'plataformas_aulas' AND status NOT IN ('resolvido','cancelado') ${dateFilter}) AS count_plataformas_aulas,
+       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'suporte_emails' AND status NOT IN ('resolvido','cancelado') ${dateFilter}) AS count_suporte_emails,
+       (SELECT COUNT(*) FROM saf_tickets WHERE status = 'aguardando_franquia' ${dateFilter} ${SCOPE_CATS}) AS total_awaiting_school`,
+    params
   );
 }
 
