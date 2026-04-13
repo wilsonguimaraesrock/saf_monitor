@@ -93,8 +93,11 @@ function parseXlsx(filePath: string): RawTicket[] {
         // "Status Atual" é o status atual do ticket
         status:        get('Status Atual', 'Status'),
         franchise:     get('Franquia', 'Franchise'),
-        // "Serviço" é a subcategoria; "Departamento" é a área
-        service:       get('Serviço', 'Servico', 'Service'),
+        // Combina "Departamento" (ex: "DSA JOY") + "Serviço" (ex: "Bugs ou ajustes")
+        // para o classificador conseguir identificar a categoria corretamente.
+        // No scraping HTML o mapeamento usa r.department diretamente — aqui fazemos o mesmo.
+        service: [get('Departamento', 'Departament'), get('Serviço', 'Servico', 'Service')]
+          .filter(Boolean).join(' '),
         responsible:   get('Criado por', 'Responsavel', 'Responsible'),
         openedAt:      get('Criado em', 'Data Abertura', 'Created'),
         dueAt:         get('Prazo', 'Due Date', 'SLA'),
