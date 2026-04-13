@@ -12,7 +12,7 @@
 
 import {
   FlaskConical, Headphones, BookOpen, GraduationCap,
-  TrendingUp, Megaphone, Award, LayoutGrid,
+  TrendingUp, Megaphone, Award, LayoutGrid, Landmark,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -41,7 +41,7 @@ export const SECTORS: Sector[] = [
   {
     slug:   'atendimento-adm',
     name:   'Atendimento ADM',
-    departments: ['Atendimento e Sistema de Gestão', 'Implantação', 'Relacionamento'],
+    departments: ['Atendimento e Sistema de Gestão', 'Implantação', 'Relacionamento', 'Gerencia'],
     icon:   Headphones,
     color:  'cyan',
   },
@@ -80,6 +80,13 @@ export const SECTORS: Sector[] = [
     icon:   Award,
     color:  'critical',
   },
+  {
+    slug:   'financeiro',
+    name:   'Financeiro',
+    departments: ['Financeiro'],
+    icon:   Landmark,
+    color:  'emerald',
+  },
 ];
 
 /** Setor especial "Geral" — aparece apenas na landing e agrega todos os setores */
@@ -111,6 +118,7 @@ export function getSectorTelegramChatIds(slug: string): string[] {
     'comercial':           process.env.TELEGRAM_CHAT_ID_COMERCIAL,
     'mkt':                 process.env.TELEGRAM_CHAT_ID_MKT,
     'treinamentos':        process.env.TELEGRAM_CHAT_ID_TREINAMENTOS,
+    'financeiro':          process.env.TELEGRAM_CHAT_ID_FINANCEIRO,
   };
 
   const ids: string[] = [];
