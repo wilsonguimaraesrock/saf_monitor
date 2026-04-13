@@ -41,7 +41,7 @@ export const SECTORS: Sector[] = [
   {
     slug:   'atendimento-adm',
     name:   'Atendimento ADM',
-    departments: ['Atendimento e sistema de gestão', 'Implantação', 'Pedidos', 'Relacionamento'],
+    departments: ['Atendimento e sistema de gestão', 'Implantação', 'Relacionamento'],
     icon:   Headphones,
     color:  'cyan',
   },
