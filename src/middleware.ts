@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHash } from 'crypto';
 
 const LOGIN_PATH = '/login';
 const COOKIE_NAME = 'saf_session';
 
-/** Token esperado = sha256 da senha. Muda automaticamente se a senha mudar. */
-function expectedToken(): string | null {
-  const pwd = process.env.APP_PASSWORD?.trim();
-  if (!pwd) return null;
-  return createHash('sha256').update(pwd).digest('hex');
+/** sha256 via Web Crypto API — compatível com Edge Runtime */
+async function sha256(text: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const buffer  = await crypto.subtle.digest('SHA-256', encoder.encode(text));
+  return Array.from(new Uint8Array(buffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Rotas que nunca precisam de auth
@@ -26,14 +27,15 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = expectedToken();
+  const pwd = process.env.APP_PASSWORD?.trim();
 
-  // Se APP_PASSWORD não estiver configurada, deixa passar (sem proteção)
-  if (!token) return NextResponse.next();
+  // Se APP_PASSWORD não estiver configurada, deixa passar
+  if (!pwd) return NextResponse.next();
 
-  const sessionCookie = req.cookies.get(COOKIE_NAME)?.value;
+  const expectedToken  = await sha256(pwd);
+  const sessionCookie  = req.cookies.get(COOKIE_NAME)?.value;
 
-  if (sessionCookie !== token) {
+  if (sessionCookie !== expectedToken) {
     const loginUrl = req.nextUrl.clone();
     loginUrl.pathname = LOGIN_PATH;
     loginUrl.searchParams.set('from', pathname);
