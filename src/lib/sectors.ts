@@ -32,8 +32,8 @@ export const SECTORS: Sector[] = [
   {
     slug:   'pd-i',
     name:   'PD&I',
-    // ⚠️ Confirme os nomes exatos no dfranquias — vimos "DSA JOY" no relatório
-    departments: ['DSA JOY', 'MyRock', 'Plataformas de Aulas', 'Suporte E-mails'],
+    // Variantes de capitalização presentes no dfranquias — manter todas
+    departments: ['DSA JOY', 'MyRock', 'My Rock', 'Plataformas de Aulas', 'Plataformas de aulas', 'Suporte E-mails'],
     icon:   FlaskConical,
     color:  'purple',
     showCategoryBreakdown: true,
@@ -41,14 +41,14 @@ export const SECTORS: Sector[] = [
   {
     slug:   'atendimento-adm',
     name:   'Atendimento ADM',
-    departments: ['Atendimento e sistema de gestão', 'Implantação', 'Relacionamento'],
+    departments: ['Atendimento e Sistema de Gestão', 'Implantação', 'Relacionamento'],
     icon:   Headphones,
     color:  'cyan',
   },
   {
     slug:   'material-didatico',
     name:   'Material Didático',
-    departments: ['Material didático', 'Pedidos'],
+    departments: ['Material Didático', 'Material didático', 'Pedidos'],
     icon:   BookOpen,
     color:  'orange',
   },
