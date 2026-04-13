@@ -10,6 +10,7 @@ import { ArrowLeft, AlertTriangle, Clock, CheckCircle2, School, Inbox, HelpCircl
 import { StatCard } from '@/components/StatCard';
 import { FilterCardWrapper } from '@/components/FilterCardWrapper';
 import { RefreshButton } from '@/components/RefreshButton';
+import { ScraperTriggerButton } from '@/components/ScraperTriggerButton';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { TicketTable } from '@/components/TicketTable';
 import { Filters } from '@/components/Filters';
@@ -223,6 +224,7 @@ export default async function SectorPage(props: PageProps) {
           </div>
           <div className="flex items-center gap-2">
             <DarkModeToggle />
+            <ScraperTriggerButton />
             <RefreshButton />
           </div>
         </div>

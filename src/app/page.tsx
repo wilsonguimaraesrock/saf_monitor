@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { AlertTriangle, Clock, LayoutGrid } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { RefreshButton } from '@/components/RefreshButton';
+import { ScraperTriggerButton } from '@/components/ScraperTriggerButton';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { SECTORS } from '@/lib/sectors';
 import { getLandingStats } from '@/repository/sectors';
@@ -132,6 +133,7 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-2">
             <DarkModeToggle />
+            <ScraperTriggerButton />
             <RefreshButton />
           </div>
         </div>
