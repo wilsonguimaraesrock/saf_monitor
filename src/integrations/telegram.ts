@@ -118,13 +118,25 @@ export function formatAwaitingAlert(tickets: {
 export function formatDailySummary(stats: {
   total: number; overdue: number; awaiting: number;
   resolvedToday: number; notOpened: number;
+  categories?: { dsaJoy: number; myrock: number; plataformasAulas: number; suporteEmails: number };
 }, sectorName: string): string {
-  return (
+  let msg =
     `📊 <b>Resumo Diário — ${sectorName}</b>\n\n` +
     `📋 Total abertos: <b>${stats.total}</b>\n` +
     `🚨 Atrasados: <b>${stats.overdue}</b>\n` +
     `⏳ Aguardando nossa resp.: <b>${stats.awaiting}</b>\n` +
     `📭 Ainda não abertos: <b>${stats.notOpened}</b>\n` +
-    `✅ Resolvidos hoje: <b>${stats.resolvedToday}</b>`
-  );
+    `✅ Resolvidos hoje: <b>${stats.resolvedToday}</b>`;
+
+  if (stats.categories) {
+    const c = stats.categories;
+    msg +=
+      `\n\n📂 <b>Por departamento:</b>\n` +
+      `  🖥️ DSA JOY: <b>${c.dsaJoy}</b>\n` +
+      `  🎮 MyRock: <b>${c.myrock}</b>\n` +
+      `  📚 Plataformas de Aulas: <b>${c.plataformasAulas}</b>\n` +
+      `  📧 Suporte E-mails: <b>${c.suporteEmails}</b>`;
+  }
+
+  return msg;
 }

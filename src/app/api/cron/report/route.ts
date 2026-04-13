@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SECTORS } from '@/lib/sectors';
 import { getSectorStats } from '@/repository/sectors';
 import { getSectorTelegramChatIds } from '@/lib/sectors';
+import { getDashboardStats } from '@/repository/tickets';
 import { broadcastToContacts, formatDailySummary } from '@/integrations/telegram';
 import { queryOne } from '@/lib/db';
 import { createChildLogger } from '@/lib/logger';
@@ -57,13 +58,23 @@ export async function GET(req: NextRequest) {
         return;
       }
 
-      const s = {
+      const s: Parameters<typeof formatDailySummary>[0] = {
         total:         Number(stats.total_open            ?? 0),
         overdue:       Number(stats.total_overdue         ?? 0),
         awaiting:      Number(stats.total_awaiting        ?? 0),
         resolvedToday: Number(stats.total_resolved_today  ?? 0),
         notOpened:     Number(stats.total_not_opened      ?? 0),
       };
+
+      if (sector.slug === 'pd-i') {
+        const cat = await getDashboardStats() as Record<string, string> | null;
+        s.categories = {
+          dsaJoy:           Number(cat?.count_dsa_joy           ?? 0),
+          myrock:           Number(cat?.count_myrock            ?? 0),
+          plataformasAulas: Number(cat?.count_plataformas_aulas ?? 0),
+          suporteEmails:    Number(cat?.count_suporte_emails    ?? 0),
+        };
+      }
 
       const text = formatDailySummary(s, sector.name);
       const r = await broadcastToContacts(chatIds, text);
