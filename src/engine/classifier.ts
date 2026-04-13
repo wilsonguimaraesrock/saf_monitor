@@ -53,6 +53,33 @@ const CATEGORY_KEYWORDS: Record<PriorityCategory, string[]> = {
   nao_classificado: [],
 };
 
+// -------------------------------------------------------
+// Mapeamento direto: valor normalizado do campo "Departamento"
+// do dfranquias → categoria. Tem precedência sobre keywords.
+// -------------------------------------------------------
+const DEPARTMENT_CATEGORY_MAP: Record<string, PriorityCategory> = {
+  // DSA JOY
+  'dsa joy':              'dsa_joy',
+  'dsa-joy':              'dsa_joy',
+  'dsajoy':               'dsa_joy',
+  'dsa':                  'dsa_joy',
+  // MyRock
+  'myrock':               'myrock',
+  'my rock':              'myrock',
+  'my-rock':              'myrock',
+  // Plataformas de Aulas
+  'plataformas de aulas': 'plataformas_aulas',
+  'plataformas aulas':    'plataformas_aulas',
+  'plataforma de aulas':  'plataformas_aulas',
+  'plataforma aulas':     'plataformas_aulas',
+  // Suporte E-mails
+  'suporte e-mails':      'suporte_emails',
+  'suporte emails':       'suporte_emails',
+  'suporte e mails':      'suporte_emails',
+  'e-mails':              'suporte_emails',
+  'emails':               'suporte_emails',
+};
+
 // Pré-processa: constrói Set de termos por categoria para O(1) lookup
 const CATEGORY_SETS = Object.entries(CATEGORY_KEYWORDS).reduce(
   (acc, [cat, kws]) => {
@@ -83,13 +110,24 @@ function matchesCategory(haystack: string, category: PriorityCategory): boolean 
 
 /**
  * Classifica um ticket bruto na categoria prioritária.
- * Analisa título, descrição, serviço e histórico de interações.
+ *
+ * Prioridade:
+ *  1. Mapeamento direto pelo campo "Departamento" (fonte de verdade do dfranquias)
+ *  2. Keyword matching no corpus de texto (título, serviço, descrição, updates)
  */
 export function classifyCategory(raw: RawTicket): PriorityCategory {
-  // Corpus de texto para análise (do mais para o menos importante)
+  // 1. Mapeamento direto pelo departamento — mais confiável e à prova de mudança de nomes de serviços
+  if (raw.department) {
+    const normalizedDept = normalizeText(raw.department);
+    const directMatch = DEPARTMENT_CATEGORY_MAP[normalizedDept];
+    if (directMatch) return directMatch;
+  }
+
+  // 2. Fallback: keyword matching no corpus completo
   const corpus = [
     raw.title ?? '',
     raw.service ?? '',
+    raw.department ?? '',
     raw.description ?? '',
     ...(raw.updates?.map((u) => u.content ?? '') ?? []),
   ]

@@ -93,11 +93,10 @@ function parseXlsx(filePath: string): RawTicket[] {
         // "Status Atual" é o status atual do ticket
         status:        get('Status Atual', 'Status'),
         franchise:     get('Franquia', 'Franchise'),
-        // Combina "Departamento" (ex: "DSA JOY") + "Serviço" (ex: "Bugs ou ajustes")
-        // para o classificador conseguir identificar a categoria corretamente.
-        // No scraping HTML o mapeamento usa r.department diretamente — aqui fazemos o mesmo.
-        service: [get('Departamento', 'Departament'), get('Serviço', 'Servico', 'Service')]
-          .filter(Boolean).join(' '),
+        // "Departamento" é a fonte de verdade para categoria (ex: "DSA JOY", "MyRock")
+        department: get('Departamento', 'Departament'),
+        // "Serviço" é a subcategoria (ex: "Bugs ou ajustes") — mantido para referência
+        service:    get('Serviço', 'Servico', 'Service'),
         responsible:   get('Criado por', 'Responsavel', 'Responsible'),
         openedAt:      get('Criado em', 'Data Abertura', 'Created'),
         dueAt:         get('Prazo', 'Due Date', 'SLA'),
@@ -233,15 +232,15 @@ async function collectViaListScraping(page: Page, context: BrowserContext): Prom
     log.info(`  → ${rows.length} tickets`);
     for (const r of rows) {
       allRaw.push({
-        externalId:    r.externalId,
-        number:        r.number,
-        title:         r.title,
-        // Combina statusCurrent + statusResponse para o normalizer decidir
-        status:        r.statusResponse || r.statusCurrent,
-        franchise:     r.franchise,
-        service:       r.department,
-        responsible:   r.responsible,
-        dueAt:         r.dueAt,
+        externalId:  r.externalId,
+        number:      r.number,
+        title:       r.title,
+        status:      r.statusResponse || r.statusCurrent,
+        franchise:   r.franchise,
+        department:  r.department,   // fonte de verdade para categoria
+        service:     r.department,   // mantém compatibilidade com código existente
+        responsible: r.responsible,
+        dueAt:       r.dueAt,
       });
     }
 

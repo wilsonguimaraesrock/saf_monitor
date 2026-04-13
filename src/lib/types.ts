@@ -30,8 +30,9 @@ export interface RawTicket {
   description?: string;
   status?: string;         // texto livre vindo do site (Status Atual do XLSX)
   statusResponse?: string; // coluna "Status resp." da listagem HTML (ex: "Aguardando Franqueadora")
+  department?: string;     // coluna "Departamento" do dfranquias (ex: "DSA JOY", "MyRock") — fonte de verdade para categoria
   franchise?: string;
-  service?: string;
+  service?: string;        // coluna "Serviço" — subcategoria (ex: "Bugs ou ajustes")
   responsible?: string;
   openedAt?: string;       // ISO string ou data bruta
   dueAt?: string;
