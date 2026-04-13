@@ -120,6 +120,7 @@ export function normalizeTicket(raw: RawTicket): SafTicket {
     priorityCategory:    'nao_classificado',  // preenchido pelo classifier
     priorityScore:       0,                   // preenchido pelo scorer
     franchise:           raw.franchise,
+    department:          raw.department,
     service:             raw.service,
     responsible:         raw.responsible,
     openedAt,

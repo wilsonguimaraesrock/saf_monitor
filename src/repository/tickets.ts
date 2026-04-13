@@ -45,16 +45,16 @@ export async function upsertTicket(ticket: SafTicket): Promise<{ isNew: boolean 
       `UPDATE saf_tickets SET
          title = $1, description = $2, status = $3,
          priority_category = $4, priority_score = $5,
-         franchise = $6, service = $7, responsible = $8,
-         opened_at = $9, due_at = $10, last_updated_at = $11,
-         resolved_at = $12, is_overdue = $13, days_overdue = $14,
-         days_open = $15, days_waiting_us = $16,
-         awaiting_our_response = $17, updated_at = NOW()
-       WHERE external_id = $18`,
+         franchise = $6, department = $7, service = $8, responsible = $9,
+         opened_at = $10, due_at = $11, last_updated_at = $12,
+         resolved_at = $13, is_overdue = $14, days_overdue = $15,
+         days_open = $16, days_waiting_us = $17,
+         awaiting_our_response = $18, updated_at = NOW()
+       WHERE external_id = $19`,
       [
         ticket.title, ticket.description, ticket.status,
         ticket.priorityCategory, ticket.priorityScore,
-        ticket.franchise, ticket.service, ticket.responsible,
+        ticket.franchise, ticket.department ?? null, ticket.service, ticket.responsible,
         ticket.openedAt ?? null, ticket.dueAt ?? null, ticket.lastUpdatedAt ?? null,
         ticket.resolvedAt ?? null, ticket.isOverdue, ticket.daysOverdue,
         ticket.daysOpen, ticket.daysWaitingUs,
@@ -67,14 +67,14 @@ export async function upsertTicket(ticket: SafTicket): Promise<{ isNew: boolean 
   await execute(
     `INSERT INTO saf_tickets
        (external_id, number, title, description, status, priority_category,
-        priority_score, franchise, service, responsible, opened_at, due_at,
+        priority_score, franchise, department, service, responsible, opened_at, due_at,
         last_updated_at, resolved_at, is_overdue, days_overdue, days_open,
         days_waiting_us, awaiting_our_response)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
     [
       ticket.externalId, ticket.number, ticket.title, ticket.description,
       ticket.status, ticket.priorityCategory, ticket.priorityScore,
-      ticket.franchise, ticket.service, ticket.responsible,
+      ticket.franchise, ticket.department ?? null, ticket.service, ticket.responsible,
       ticket.openedAt ?? null, ticket.dueAt ?? null, ticket.lastUpdatedAt ?? null,
       ticket.resolvedAt ?? null, ticket.isOverdue, ticket.daysOverdue,
       ticket.daysOpen, ticket.daysWaitingUs, ticket.awaitingOurResponse,

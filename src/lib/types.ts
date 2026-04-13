@@ -61,6 +61,7 @@ export interface SafTicket {
   priorityCategory: PriorityCategory;
   priorityScore: number;   // 0–100
   franchise?: string;
+  department?: string;     // valor exato da coluna Departamento do dfranquias
   service?: string;
   responsible?: string;
   openedAt?: Date;
@@ -75,6 +76,18 @@ export interface SafTicket {
   clusterId?: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// -------------------------------------------------------
+// Contato Telegram por setor
+// -------------------------------------------------------
+export interface SectorContact {
+  id: string;
+  sectorSlug: string;
+  name: string;
+  telegramChatId: string;
+  active: boolean;
+  createdAt: Date;
 }
 
 // -------------------------------------------------------
