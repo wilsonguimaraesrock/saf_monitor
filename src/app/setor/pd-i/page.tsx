@@ -1,6 +1,9 @@
 /**
  * Dashboard PD&I — Server Component.
- * Filtrado pelas categorias priority_category do setor PD&I.
+ *
+ * Totais principais (total, atrasados, aguardando, etc.) usam filtro por
+ * `department` — igual à landing page — para números consistentes.
+ * Breakdown por categoria (DSA JOY, MyRock…) usa priority_category.
  */
 
 import { Suspense } from 'react';
@@ -20,16 +23,20 @@ import { TrendChart } from '@/components/TrendChart';
 import { CategoryChart } from '@/components/CategoryChart';
 import { ClusterList } from '@/components/ClusterList';
 import { Filters } from '@/components/Filters';
+import { getSectorBySlug } from '@/lib/sectors';
+import {
+  getSectorStats,
+  getSectorOverdueTickets,
+  getSectorAwaitingTickets,
+  getSectorOldestTickets,
+  getSectorNotOpenedTickets,
+  getSectorNoResponseTickets,
+  getSectorTicketsFiltered,
+} from '@/repository/sectors';
 import {
   getDashboardStats,
-  getOldestTickets,
-  getOverdueTickets,
-  getAwaitingTickets,
   getCriticalTickets,
-  getNotOpenedTickets,
-  getNoResponseStatusTickets,
   getTrendData,
-  getTicketsFiltered,
 } from '@/repository/tickets';
 import { query } from '@/lib/db';
 
@@ -52,6 +59,9 @@ interface PageProps {
 async function PdiContent({ searchParams }: PageProps) {
   const params = await searchParams;
 
+  const sector = getSectorBySlug('pd-i')!;
+  const depts  = sector.departments;
+
   const monthDateFrom = params.month ? `${params.month}-01` : undefined;
   const monthDateTo   = params.month
     ? (() => {
@@ -67,7 +77,6 @@ async function PdiContent({ searchParams }: PageProps) {
     franchise:           params.franchise,
     isOverdue:           params.overdue      === 'true' ? true : undefined,
     awaitingOurResponse: params.awaiting     === 'true' ? true : undefined,
-    isCritical:          params.critical     === 'true' ? true : undefined,
     noResponseStatus:    params.no_response  === 'true' ? true : undefined,
     dateFrom:            monthDateFrom,
     dateTo:              monthDateTo,
@@ -77,36 +86,40 @@ async function PdiContent({ searchParams }: PageProps) {
 
   const hasSpecificFilter = !!(
     filters.status || filters.category || filters.franchise ||
-    filters.isOverdue || filters.awaitingOurResponse || filters.isCritical ||
+    filters.isOverdue || filters.awaitingOurResponse ||
     filters.noResponseStatus || filters.dateFrom || filters.dateTo
   );
 
-  const [stats, oldest, overdue, awaiting, critical, notOpened, noRespStatus, trend, clusters, allTickets] =
+  // Totais principais — filtro por department (igual à landing)
+  // Breakdown por categoria — filtro por priority_category (mais confiável para DSA JOY / MyRock)
+  const [sectorStats, catStats, oldest, overdue, awaiting, critical, notOpened, noRespStatus, trend, clusters, allTickets] =
     await Promise.all([
+      getSectorStats(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
       getDashboardStats({ dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
-      getOldestTickets(5),
-      getOverdueTickets(10),
-      getAwaitingTickets(10),
+      getSectorOldestTickets(depts, 5),
+      getSectorOverdueTickets(depts, 10),
+      getSectorAwaitingTickets(depts, 10),
       getCriticalTickets(10),
-      getNotOpenedTickets(20),
-      getNoResponseStatusTickets(20),
+      getSectorNotOpenedTickets(depts, 20),
+      getSectorNoResponseTickets(depts, 20),
       getTrendData(14),
       query('SELECT * FROM saf_clusters ORDER BY ticket_count DESC LIMIT 15'),
-      getTicketsFiltered(filters),
+      getSectorTicketsFiltered(depts, filters),
     ]);
 
   const s = {
-    totalOpen:             Number(stats?.total_open             ?? 0),
-    totalOverdue:          Number(stats?.total_overdue          ?? 0),
-    totalAwaiting:         Number(stats?.total_awaiting         ?? 0),
-    totalResolvedToday:    Number(stats?.total_resolved_today   ?? 0),
-    countDsaJoy:           Number(stats?.count_dsa_joy          ?? 0),
-    countMyrock:           Number(stats?.count_myrock           ?? 0),
-    countPlataformasAulas: Number(stats?.count_plataformas_aulas ?? 0),
-    countSuporteEmails:    Number(stats?.count_suporte_emails   ?? 0),
-    totalAwaitingSchool:   Number(stats?.total_awaiting_school   ?? 0),
-    totalNotOpened:        Number(stats?.total_not_opened        ?? 0),
-    totalNoResponseStatus: Number(stats?.total_no_response_status ?? 0),
+    totalOpen:             Number(sectorStats?.total_open             ?? 0),
+    totalOverdue:          Number(sectorStats?.total_overdue          ?? 0),
+    totalAwaiting:         Number(sectorStats?.total_awaiting         ?? 0),
+    totalResolvedToday:    Number(sectorStats?.total_resolved_today   ?? 0),
+    totalAwaitingSchool:   Number(sectorStats?.total_awaiting_school  ?? 0),
+    totalNotOpened:        Number(sectorStats?.total_not_opened       ?? 0),
+    totalNoResponseStatus: Number(sectorStats?.total_no_response_status ?? 0),
+    // Breakdown por categoria (priority_category)
+    countDsaJoy:           Number(catStats?.count_dsa_joy             ?? 0),
+    countMyrock:           Number(catStats?.count_myrock              ?? 0),
+    countPlataformasAulas: Number(catStats?.count_plataformas_aulas   ?? 0),
+    countSuporteEmails:    Number(catStats?.count_suporte_emails      ?? 0),
   };
 
   const countOutros = Math.max(0, s.totalOpen - s.countDsaJoy - s.countMyrock - s.countPlataformasAulas - s.countSuporteEmails);
@@ -114,10 +127,10 @@ async function PdiContent({ searchParams }: PageProps) {
   const noFilter   = !hasSpecificFilter && !params.sort;
   const ovActive   = params.overdue  === 'true';
   const awActive   = params.awaiting === 'true';
-  const catDsa       = params.category === 'dsa_joy';
-  const catRock      = params.category === 'myrock';
-  const catPlat      = params.category === 'plataformas_aulas';
-  const catEmail     = params.category === 'suporte_emails';
+  const catDsa     = params.category === 'dsa_joy';
+  const catRock    = params.category === 'myrock';
+  const catPlat    = params.category === 'plataformas_aulas';
+  const catEmail   = params.category === 'suporte_emails';
   const noRespActive = params.no_response === 'true';
   const statusAberto = params.status === 'aberto';
   const sortOrder    = params.sort === 'asc' ? 'asc' : 'desc';
