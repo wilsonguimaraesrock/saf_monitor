@@ -339,6 +339,30 @@ export async function getCriticalTickets(limit = 30) {
   );
 }
 
+/** Tickets com status = 'aberto': criados mas ainda sem nenhuma resposta/atendimento */
+export async function getNotOpenedTickets(limit = 20) {
+  return query(
+    `SELECT * FROM saf_tickets
+     WHERE status = 'aberto' ${WINDOW} ${SCOPE_CATS}
+     ORDER BY opened_at ASC NULLS LAST
+     LIMIT $1`,
+    [limit]
+  );
+}
+
+/** Tickets ativos sem status de resposta definido (nem aguardando nós nem aguardando escola) */
+export async function getNoResponseStatusTickets(limit = 20) {
+  return query(
+    `SELECT * FROM saf_tickets
+     WHERE awaiting_our_response = false
+       AND status NOT IN ('resolvido','cancelado','aguardando_franquia')
+       ${WINDOW} ${SCOPE_CATS}
+     ORDER BY opened_at ASC NULLS LAST
+     LIMIT $1`,
+    [limit]
+  );
+}
+
 export async function getDashboardStats(opts?: { dateFrom?: string; dateTo?: string }) {
   const params: unknown[] = [];
   let p = 1;
@@ -362,7 +386,9 @@ export async function getDashboardStats(opts?: { dateFrom?: string; dateTo?: str
        (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'myrock' AND status NOT IN ('resolvido','cancelado') ${dateFilter}) AS count_myrock,
        (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'plataformas_aulas' AND status NOT IN ('resolvido','cancelado') ${dateFilter}) AS count_plataformas_aulas,
        (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'suporte_emails' AND status NOT IN ('resolvido','cancelado') ${dateFilter}) AS count_suporte_emails,
-       (SELECT COUNT(*) FROM saf_tickets WHERE status = 'aguardando_franquia' ${dateFilter} ${SCOPE_CATS}) AS total_awaiting_school`,
+       (SELECT COUNT(*) FROM saf_tickets WHERE status = 'aguardando_franquia' ${dateFilter} ${SCOPE_CATS}) AS total_awaiting_school,
+       (SELECT COUNT(*) FROM saf_tickets WHERE status = 'aberto' ${dateFilter} ${SCOPE_CATS}) AS total_not_opened,
+       (SELECT COUNT(*) FROM saf_tickets WHERE awaiting_our_response = false AND status NOT IN ('resolvido','cancelado','aguardando_franquia') ${dateFilter} ${SCOPE_CATS}) AS total_no_response_status`,
     params
   );
 }
@@ -382,6 +408,7 @@ export async function getTicketsFiltered(filters: {
   isOverdue?: boolean;
   awaitingOurResponse?: boolean;
   isCritical?: boolean;
+  noResponseStatus?: boolean;
   dateFrom?: string;
   dateTo?: string;
   sortOrder?: 'asc' | 'desc';
@@ -413,6 +440,10 @@ export async function getTicketsFiltered(filters: {
   if (filters.isOverdue !== undefined)           { conditions.push(`is_overdue = $${p++}`);             params.push(filters.isOverdue); }
   if (filters.awaitingOurResponse !== undefined) { conditions.push(`awaiting_our_response = $${p++}`); params.push(filters.awaitingOurResponse); }
   if (filters.isCritical)                        { conditions.push(`priority_score >= 70`); }
+  if (filters.noResponseStatus) {
+    conditions.push(`awaiting_our_response = false`);
+    conditions.push(`status NOT IN ('aguardando_franquia')`);
+  }
   if (filters.dateFrom)             { conditions.push(`opened_at >= $${p++}::date`);    params.push(filters.dateFrom); }
   if (filters.dateTo)               { conditions.push(`opened_at < ($${p++}::date + INTERVAL '1 day')`); params.push(filters.dateTo); }
 

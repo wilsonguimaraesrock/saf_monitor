@@ -6,6 +6,7 @@ import { Suspense } from 'react';
 import {
   AlertTriangle, Clock, CheckCircle2,
   Gamepad2, Monitor, BookOpen, Mail, LayoutGrid, School,
+  Inbox, HelpCircle,
 } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { FilterCardWrapper } from '@/components/FilterCardWrapper';
@@ -23,6 +24,8 @@ import {
   getOverdueTickets,
   getAwaitingTickets,
   getCriticalTickets,
+  getNotOpenedTickets,
+  getNoResponseStatusTickets,
   getTrendData,
   getTicketsFiltered,
 } from '@/repository/tickets';
@@ -39,6 +42,7 @@ interface PageProps {
     overdue?: string;
     awaiting?: string;
     critical?: string;
+    no_response?: string;
     month?: string;
     sort?: string;
   }>;
@@ -61,9 +65,10 @@ async function DashboardContent({ searchParams }: PageProps) {
     status:              params.status,
     category:            params.category,
     franchise:           params.franchise,
-    isOverdue:           params.overdue  === 'true' ? true : undefined,
-    awaitingOurResponse: params.awaiting === 'true' ? true : undefined,
-    isCritical:          params.critical === 'true' ? true : undefined,
+    isOverdue:           params.overdue      === 'true' ? true : undefined,
+    awaitingOurResponse: params.awaiting     === 'true' ? true : undefined,
+    isCritical:          params.critical     === 'true' ? true : undefined,
+    noResponseStatus:    params.no_response  === 'true' ? true : undefined,
     dateFrom:            monthDateFrom,
     dateTo:              monthDateTo,
     sortOrder:           (params.sort === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc',
@@ -74,16 +79,18 @@ async function DashboardContent({ searchParams }: PageProps) {
   const hasSpecificFilter = !!(
     filters.status || filters.category || filters.franchise ||
     filters.isOverdue || filters.awaitingOurResponse || filters.isCritical ||
-    filters.dateFrom || filters.dateTo
+    filters.noResponseStatus || filters.dateFrom || filters.dateTo
   );
 
-  const [stats, oldest, overdue, awaiting, critical, trend, clusters, allTickets] =
+  const [stats, oldest, overdue, awaiting, critical, notOpened, noRespStatus, trend, clusters, allTickets] =
     await Promise.all([
       getDashboardStats({ dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
       getOldestTickets(5),
       getOverdueTickets(10),
       getAwaitingTickets(10),
       getCriticalTickets(10),
+      getNotOpenedTickets(20),
+      getNoResponseStatusTickets(20),
       getTrendData(14),
       query('SELECT * FROM saf_clusters ORDER BY ticket_count DESC LIMIT 15'),
       // Sempre busca lista principal com ordenação configurável
@@ -102,7 +109,9 @@ async function DashboardContent({ searchParams }: PageProps) {
     countMyrock:           Number(stats?.count_myrock           ?? 0),
     countPlataformasAulas: Number(stats?.count_plataformas_aulas ?? 0),
     countSuporteEmails:    Number(stats?.count_suporte_emails   ?? 0),
-    totalAwaitingSchool:   Number(stats?.total_awaiting_school  ?? 0),
+    totalAwaitingSchool:   Number(stats?.total_awaiting_school   ?? 0),
+    totalNotOpened:        Number(stats?.total_not_opened        ?? 0),
+    totalNoResponseStatus: Number(stats?.total_no_response_status ?? 0),
   };
 
   const countOutros = Math.max(0, s.totalOpen - s.countDsaJoy - s.countMyrock - s.countPlataformasAulas - s.countSuporteEmails);
@@ -111,22 +120,26 @@ async function DashboardContent({ searchParams }: PageProps) {
   const noFilter   = !hasSpecificFilter && !params.sort;
   const ovActive   = params.overdue  === 'true';
   const awActive   = params.awaiting === 'true';
-  const catDsa     = params.category === 'dsa_joy';
-  const catRock    = params.category === 'myrock';
-  const catPlat    = params.category === 'plataformas_aulas';
-  const catEmail   = params.category === 'suporte_emails';
-  const sortOrder  = params.sort === 'asc' ? 'asc' : 'desc';
+  const catDsa       = params.category === 'dsa_joy';
+  const catRock      = params.category === 'myrock';
+  const catPlat      = params.category === 'plataformas_aulas';
+  const catEmail     = params.category === 'suporte_emails';
+  const noRespActive = params.no_response === 'true';
+  const statusAberto = params.status === 'aberto';
+  const sortOrder    = params.sort === 'asc' ? 'asc' : 'desc';
 
   const mainTableTitle = (() => {
     const parts: string[] = [];
-    if (ovActive)  parts.push('Atrasados');
-    if (awActive)  parts.push('Aguardando Nossa Resp.');
-    if (catDsa)    parts.push('DSA JOY');
-    if (catRock)   parts.push('MyRock');
-    if (catPlat)   parts.push('Plataformas de Aulas');
-    if (catEmail)  parts.push('Suporte Emails');
+    if (ovActive)      parts.push('Atrasados');
+    if (awActive)      parts.push('Aguardando Nossa Resp.');
+    if (noRespActive)  parts.push('Sem Status de Resposta');
+    if (statusAberto)  parts.push('Ainda Não Abertos');
+    if (catDsa)        parts.push('DSA JOY');
+    if (catRock)       parts.push('MyRock');
+    if (catPlat)       parts.push('Plataformas de Aulas');
+    if (catEmail)      parts.push('Suporte Emails');
     if (params.franchise) parts.push(`Franquia: ${params.franchise}`);
-    if (params.status)    parts.push(params.status);
+    if (params.status && !statusAberto) parts.push(params.status);
     if (params.month) parts.push(`Mês: ${params.month}`);
     const label = parts.length > 0 ? parts.join(' + ') : 'Todos os SAFs';
     const order = sortOrder === 'asc' ? '↑ mais antigos primeiro' : '↓ mais recentes primeiro';
@@ -171,7 +184,20 @@ async function DashboardContent({ searchParams }: PageProps) {
             tooltip="Tickets cuja data de resolução (resolved_at) é hoje. Atualizado a cada coleta do scraper." />
         </div>
 
+      </div>
 
+      {/* ── Cards de status de resposta (filtráveis) ─────────── */}
+      <div className="grid grid-cols-2 gap-3">
+        <FilterCardWrapper filterKey="status" filterValue="aberto" isActive={statusAberto}>
+          <StatCard label="Ainda não abertos" value={s.totalNotOpened} icon={Inbox}
+            variant={s.totalNotOpened > 0 ? 'warning' : 'success'}
+            tooltip="Tickets com status 'Aberto' — criados mas ainda sem nenhuma resposta ou atendimento do nosso time." />
+        </FilterCardWrapper>
+        <FilterCardWrapper filterKey="no_response" filterValue="true" isActive={noRespActive}>
+          <StatCard label="Sem status de resposta" value={s.totalNoResponseStatus} icon={HelpCircle}
+            variant={s.totalNoResponseStatus > 0 ? 'warning' : 'success'}
+            tooltip="Tickets ativos (Aberto ou Em Andamento) sem status de resposta definido — não se sabe quem deve agir a seguir." />
+        </FilterCardWrapper>
       </div>
 
       {/* ── Cards por categoria (filtráveis) ─────────────────── */}
@@ -226,6 +252,10 @@ async function DashboardContent({ searchParams }: PageProps) {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <TicketTable tickets={oldest   as never} title="SAFs Mais Antigos (ainda abertos)"  emptyMessage="Sem tickets antigos" />
         <TicketTable tickets={critical as never} title="Tickets Críticos (score ≥ 70)"      emptyMessage="Sem tickets críticos" />
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <TicketTable tickets={notOpened   as never} title="Ainda Não Abertos (sem resposta)"       emptyMessage="Nenhum ticket sem resposta" />
+        <TicketTable tickets={noRespStatus as never} title="Sem Status de Resposta (limbo)"         emptyMessage="Todos têm status de resposta definido" />
       </div>
 
       {/* ── Clusters ─────────────────────────────────────────── */}
