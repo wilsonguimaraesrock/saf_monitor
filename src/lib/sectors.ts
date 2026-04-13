@@ -48,7 +48,7 @@ export const SECTORS: Sector[] = [
   {
     slug:   'material-didatico',
     name:   'Material Didático',
-    departments: ['Material didático'],
+    departments: ['Material didático', 'Pedidos'],
     icon:   BookOpen,
     color:  'orange',
   },
@@ -69,8 +69,7 @@ export const SECTORS: Sector[] = [
   {
     slug:   'mkt',
     name:   'MKT',
-    // Compartilha "Relacionamento" e "Pedidos" com Atendimento ADM — esperado
-    departments: ['Relacionamento', 'Pedidos'],
+    departments: ['Relacionamento'],
     icon:   Megaphone,
     color:  'warning',
   },
