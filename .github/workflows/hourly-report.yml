@@ -18,7 +18,7 @@ jobs:
         run: |
           response=$(curl -sf -w "\n%{http_code}" -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.NEXT_PUBLIC_APP_URL }}/api/cron/report")
+            "${{ secrets.VERCEL_APP_URL }}/api/cron/report")
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | head -n-1)
           echo "HTTP $http_code"
