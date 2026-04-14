@@ -5,6 +5,7 @@
  *   - Manhã:   08:00 (segunda–sexta)
  *   - Meio-dia: 13:00 (segunda–sexta)
  *   - Tarde:   17:00 (segunda–sexta)
+ *   - Noite:   19:00 (segunda–sexta)
  *
  * Também expõe runNow() para execução on-demand.
  */
@@ -12,14 +13,9 @@
 import '../lib/env'; // carrega .env.local quando rodado via ts-node
 import cron from 'node-cron';
 import { runScraper } from '../scraper/runner';
-import { sendAlert, buildDailySummaryMessage, buildCriticalAlertMessage } from '../integrations/notifications';
-import {
-  getDashboardStats,
-  getOldestTickets,
-  getCriticalTickets,
-  getOverdueTickets,
-} from '../repository/tickets';
-import { query } from '../lib/db';
+import { sendAlert, buildCriticalAlertMessage } from '../integrations/notifications';
+import { getCriticalTickets, getOverdueTickets } from '../repository/tickets';
+import { runReport } from '../lib/report';
 import { createChildLogger } from '../lib/logger';
 
 const log = createChildLogger('scheduler');
@@ -43,44 +39,13 @@ export async function runNow(triggeredBy = 'scheduler'): Promise<void> {
     return;
   }
 
-  // 2. Monta payload para alerta
-  const stats     = await getDashboardStats() as Record<string, string> | null;
-  const oldest    = await getOldestTickets(5)  as Array<Record<string, unknown>>;
-  const critical  = await getCriticalTickets(10) as Array<Record<string, unknown>>;
-  const overdue   = await getOverdueTickets(50)  as Array<Record<string, unknown>>;
+  // 2. Resumo diário por setor → grupos Telegram de cada equipe
+  await runReport(true);
 
-  // Tickets sem movimentação há > 7 dias
-  const stalled = await query<{ count: string }>(
-    `SELECT COUNT(*) AS count FROM saf_tickets
-     WHERE last_updated_at < NOW() - INTERVAL '7 days'
-     AND status NOT IN ('resolvido','cancelado')`
-  );
+  // 3. Alertas críticos por categoria → chat pessoal do admin
+  const critical = await getCriticalTickets(10) as Array<Record<string, unknown>>;
+  const overdue  = await getOverdueTickets(50)  as Array<Record<string, unknown>>;
 
-  if (!stats) return;
-
-  const payload = {
-    totalOpen:     Number(stats.total_open ?? 0),
-    totalOverdue:  Number(stats.total_overdue ?? 0),
-    totalAwaiting: Number(stats.total_awaiting ?? 0),
-    totalCritical: Number(stats.total_critical ?? 0),
-    stalledCount:  Number(stalled[0]?.count ?? 0),
-    top5Oldest: oldest.map((t) => ({
-      title:    String(t.title ?? ''),
-      daysOpen: Number(t.days_open ?? 0),
-    })),
-    byCategory: {
-      dsaJoy:           Number(stats.count_dsa_joy ?? 0),
-      myrock:           Number(stats.count_myrock ?? 0),
-      plataformasAulas: Number(stats.count_plataformas_aulas ?? 0),
-      suporteEmails:    Number(stats.count_suporte_emails ?? 0),
-    },
-  };
-
-  // 3. Resumo diário
-  const summaryMsg = buildDailySummaryMessage(payload);
-  await sendAlert('daily_summary', 'info', 'Resumo Diário SAFs', summaryMsg);
-
-  // 4. Alertas críticos por categoria
   const criticalByCategory: Record<string, number> = {};
   for (const t of critical) {
     const cat = String(t.priority_category ?? 'outros');
@@ -120,11 +85,13 @@ export function startScheduler(): void {
   const MORNING   = process.env.CRON_MORNING   ?? '0 8 * * 1-5';
   const MIDDAY    = process.env.CRON_MIDDAY    ?? '0 13 * * 1-5';
   const AFTERNOON = process.env.CRON_AFTERNOON ?? '0 17 * * 1-5';
+  const EVENING   = process.env.CRON_EVENING   ?? '0 19 * * 1-5';
 
   for (const [name, expr] of [
     ['manhã', MORNING],
     ['meio-dia', MIDDAY],
     ['tarde', AFTERNOON],
+    ['noite', EVENING],
   ]) {
     if (!cron.validate(expr)) {
       log.error(`Expressão cron inválida para ${name}: "${expr}"`);
