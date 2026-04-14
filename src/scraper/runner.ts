@@ -17,7 +17,8 @@ import { normalizeTicket } from '../engine/normalizer';
 import { classifyCategory } from '../engine/classifier';
 import { calculatePriorityScore } from '../engine/scorer';
 import { clusterTickets } from '../engine/clustering';
-import { upsertTicket, saveSnapshot, saveDailyStats, saveTicketUpdates, createCronRun, finishCronRun, markDisappearedTicketsResolved } from '../repository/tickets';
+import { upsertTicket, saveSnapshot, saveDailyStats, saveTicketUpdates, createCronRun, finishCronRun, markDisappearedTicketsResolved, getTicketsNeedingEnrichment } from '../repository/tickets';
+import { SECTORS } from '../lib/sectors';
 import { createChildLogger } from '../lib/logger';
 import { RawTicket } from '../lib/types';
 
@@ -46,7 +47,7 @@ export async function runScraper(triggeredBy = 'scheduled'): Promise<{
     }
 
     // 2. Processa cada ticket
-    const processedTickets: { externalId: string; score: number }[] = [];
+    const processedTickets: { externalId: string; score: number; isNew: boolean }[] = [];
 
     for (const raw of result.tickets) {
       try {
@@ -59,7 +60,7 @@ export async function runScraper(triggeredBy = 'scheduled'): Promise<{
         if (isNew) ticketsNew++; else ticketsUpdated++;
 
         await saveSnapshot(ticket);
-        processedTickets.push({ externalId: ticket.externalId, score: ticket.priorityScore });
+        processedTickets.push({ externalId: ticket.externalId, score: ticket.priorityScore, isNew });
       } catch (err) {
         log.warn(`Erro ao processar ticket ${raw.externalId}: ${(err as Error).message}`);
       }
@@ -72,17 +73,26 @@ export async function runScraper(triggeredBy = 'scheduled'): Promise<{
       log.info(`${vanished} ticket(s) marcados como resolvidos (sumiram da listagem)`);
     }
 
-    // 4. Enriquece os top 25 tickets por score com histórico de mensagens
-    const TOP_N = 25;
-    const topIds = processedTickets
-      .sort((a, b) => b.score - a.score)
-      .slice(0, TOP_N)
-      .map((t) => t.externalId);
+    // 4. Enriquece tickets com histórico de mensagens
+    //    Até ENRICH_PER_SECTOR tickets sem chat por setor (cobertura uniforme).
+    //    Tickets novos nesta execução entram sempre, independente do cap.
+    const ENRICH_PER_SECTOR = Number(process.env.ENRICH_PER_SECTOR ?? 50);
 
-    if (topIds.length > 0) {
-      log.info(`Enriquecendo ${topIds.length} tickets com histórico de mensagens...`);
+    const unenrichedIds = await getTicketsNeedingEnrichment(SECTORS, ENRICH_PER_SECTOR);
+    const unenrichedSet = new Set(unenrichedIds);
+
+    // Garante tickets novos desta execução mesmo que já estejam cobertos
+    const newIds = processedTickets
+      .filter((t) => t.isNew)
+      .map((t) => t.externalId)
+      .filter((id) => !unenrichedSet.has(id));
+
+    const toEnrich = [...unenrichedIds, ...newIds];
+
+    if (toEnrich.length > 0) {
+      log.info(`Enriquecendo ${toEnrich.length} tickets (${unenrichedIds.length} sem chat por setor ≤${ENRICH_PER_SECTOR}, ${newIds.length} novos)...`);
       try {
-        const updates = await enrichTicketsInBatch(topIds);
+        const updates = await enrichTicketsInBatch(toEnrich);
         let saved = 0;
         for (const [externalId, msgs] of updates.entries()) {
           try {

@@ -201,6 +201,26 @@ export async function getSectorTicketsFiltered(
 }
 
 // -------------------------------------------------------
+// CLUSTERS POR SETOR
+// -------------------------------------------------------
+
+/** Clusters com tickets de pelo menos um dos departamentos do setor */
+export async function getSectorClusters(departments: string[], limit = 15) {
+  return query<{ id: string; label: string; keywords: string[]; ticket_count: number; is_spike: boolean }>(
+    `SELECT sc.id, sc.label, sc.keywords, COUNT(st.id)::int AS ticket_count, sc.is_spike
+     FROM saf_clusters sc
+     JOIN saf_tickets st ON st.cluster_id = sc.id
+     WHERE st.department = ANY($1::text[])
+       AND st.status NOT IN ('resolvido','cancelado')
+     GROUP BY sc.id, sc.label, sc.keywords, sc.is_spike
+     HAVING COUNT(st.id) > 0
+     ORDER BY COUNT(st.id) DESC
+     LIMIT $2`,
+    [departments, limit]
+  );
+}
+
+// -------------------------------------------------------
 // STATS GLOBAIS (todas as landing page)
 // -------------------------------------------------------
 

@@ -13,6 +13,7 @@ import { RefreshButton } from '@/components/RefreshButton';
 import { ScraperTriggerButton } from '@/components/ScraperTriggerButton';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { TicketTable } from '@/components/TicketTable';
+import { ClusterList } from '@/components/ClusterList';
 import { Filters } from '@/components/Filters';
 import { getSectorBySlug } from '@/lib/sectors';
 import {
@@ -24,6 +25,7 @@ import {
   getSectorNoResponseTickets,
   getSectorTicketsFiltered,
   getSectorDeptBreakdown,
+  getSectorClusters,
 } from '@/repository/sectors';
 
 export const dynamic = 'force-dynamic';
@@ -76,7 +78,7 @@ async function SectorContent({ params, searchParams }: PageProps) {
 
   const depts = sector.departments;
 
-  const [stats, overdue, awaiting, oldest, notOpened, noResp, deptBreakdown, allTickets] =
+  const [stats, overdue, awaiting, oldest, notOpened, noResp, deptBreakdown, clusters, allTickets] =
     await Promise.all([
       getSectorStats(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
       getSectorOverdueTickets(depts, 10),
@@ -85,6 +87,7 @@ async function SectorContent({ params, searchParams }: PageProps) {
       getSectorNotOpenedTickets(depts, 20),
       getSectorNoResponseTickets(depts, 20),
       getSectorDeptBreakdown(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }),
+      getSectorClusters(depts, 15),
       getSectorTicketsFiltered(depts, filters),
     ]);
 
@@ -189,6 +192,8 @@ async function SectorContent({ params, searchParams }: PageProps) {
       <div className="grid grid-cols-1 gap-4">
         <TicketTable tickets={noResp as never} title="Sem Status de Resposta (limbo)" emptyMessage="Todos têm status definido" />
       </div>
+
+      <ClusterList clusters={clusters as never} />
 
     </div>
   );

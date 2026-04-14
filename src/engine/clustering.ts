@@ -116,14 +116,13 @@ function matchesPinned(text: string, topic: typeof PINNED_TOPICS[0]): boolean {
 export async function clusterTickets(): Promise<void> {
   log.info('Iniciando clustering de tickets...');
 
-  // Apenas tickets do escopo
+  // Todos os tickets abertos (todos os setores)
   const tickets = await query<{
     id: string; title: string; description: string | null; cluster_id: string | null;
   }>(
     `SELECT id, title, description, cluster_id
      FROM saf_tickets
-     WHERE status NOT IN ('resolvido','cancelado')
-       AND priority_category IN ('dsa_joy','myrock','plataformas_aulas','suporte_emails')`
+     WHERE status NOT IN ('resolvido','cancelado')`
   );
 
   if (tickets.length === 0) {

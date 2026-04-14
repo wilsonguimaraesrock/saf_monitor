@@ -125,6 +125,44 @@ export async function saveTicketUpdates(externalId: string, updates: RawTicketUp
   }
 }
 
+/**
+ * Retorna external_ids de tickets ativos sem histórico de mensagens,
+ * limitando por setor (até `limitPerSector` por setor).
+ * Garante cobertura uniforme entre setores independente do score global.
+ */
+export async function getTicketsNeedingEnrichment(
+  sectors: { slug: string; departments: string[] }[],
+  limitPerSector: number,
+): Promise<string[]> {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  await Promise.all(
+    sectors.map(async ({ departments }) => {
+      const rows = await query<{ external_id: string }>(
+        `SELECT t.external_id
+         FROM saf_tickets t
+         WHERE t.status NOT IN ('resolvido','cancelado')
+           AND t.department = ANY($1::text[])
+           AND NOT EXISTS (
+             SELECT 1 FROM saf_ticket_updates u WHERE u.ticket_id = t.id
+           )
+         ORDER BY t.priority_score DESC
+         LIMIT $2`,
+        [departments, limitPerSector]
+      );
+      for (const r of rows) {
+        if (!seen.has(r.external_id)) {
+          seen.add(r.external_id);
+          result.push(r.external_id);
+        }
+      }
+    })
+  );
+
+  return result;
+}
+
 /** Snapshot diário de um ticket */
 export async function saveSnapshot(ticket: SafTicket): Promise<void> {
   const today = format(new Date(), 'yyyy-MM-dd');
