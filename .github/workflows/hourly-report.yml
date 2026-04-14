@@ -1,29 +1,33 @@
 name: Relatório Horário Telegram
 
-# Roda a cada hora, seg–sex, 8h–20h BRT (11h–23h UTC).
-# Chama o endpoint /api/cron/report na Vercel, que envia:
-#   - report específico para o grupo Telegram de cada setor
-#   - resumo consolidado para o grupo Geral (saf_monitor)
+# Roda a cada hora, seg–sex, 8h–20h BRT (11h–23h UTC)
+# O script verifica o horário BRT internamente e sai sem enviar se fora da janela.
 on:
   schedule:
     - cron: '0 11-23 * * 1-5'
-  workflow_dispatch:
+  workflow_dispatch: # permite disparo manual
 
 jobs:
   send-report:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Disparar report via Vercel
-        run: |
-          response=$(curl -sf -w "\n%{http_code}" -X GET \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.VERCEL_APP_URL }}/api/cron/report")
-          http_code=$(echo "$response" | tail -n1)
-          body=$(echo "$response" | head -n-1)
-          echo "HTTP $http_code"
-          echo "$body"
-          if [ "$http_code" != "200" ]; then
-            echo "Erro: endpoint retornou $http_code"
-            exit 1
-          fi
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Enviar relatório para o Telegram
+        env:
+          DATABASE_URL:         ${{ secrets.DATABASE_URL }}
+          DATABASE_SSL:         'true'
+          TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
+          VERCEL_APP_URL:       ${{ secrets.VERCEL_APP_URL }}
+          NODE_ENV:             production
+        run: npx tsx scripts/send-report.ts
