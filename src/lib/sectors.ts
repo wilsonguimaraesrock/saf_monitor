@@ -125,9 +125,7 @@ export function getSectorTelegramChatIds(slug: string): string[] {
   const sectorId = envMap[slug];
   if (sectorId?.trim()) ids.push(sectorId.trim());
 
-  // Sempre inclui o grupo Geral (se configurado)
-  const geral = process.env.TELEGRAM_CHAT_ID_GERAL?.trim();
-  if (geral && !ids.includes(geral)) ids.push(geral);
-
+  // GERAL recebe apenas o resumo consolidado (no final de runReport),
+  // não cada report individual de setor — evita flood no grupo.
   return ids;
 }
