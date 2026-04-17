@@ -26,6 +26,7 @@ import { Filters } from '@/components/Filters';
 import { getSectorBySlug } from '@/lib/sectors';
 import {
   getSectorStats,
+  getSectorCategoryStats,
   getSectorOverdueTickets,
   getSectorAwaitingTickets,
   getSectorOldestTickets,
@@ -34,7 +35,6 @@ import {
   getSectorTicketsFiltered,
 } from '@/repository/sectors';
 import {
-  getDashboardStats,
   getCriticalTickets,
   getTrendData,
 } from '@/repository/tickets';
@@ -95,7 +95,7 @@ async function PdiContent({ searchParams }: PageProps) {
   const [sectorStats, catStats, oldest, overdue, awaiting, critical, notOpened, noRespStatus, trend, clusters, allTickets] =
     await Promise.all([
       getSectorStats(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
-      getDashboardStats({ dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
+      getSectorCategoryStats(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
       getSectorOldestTickets(depts, 5),
       getSectorOverdueTickets(depts, 10),
       getSectorAwaitingTickets(depts, 10),

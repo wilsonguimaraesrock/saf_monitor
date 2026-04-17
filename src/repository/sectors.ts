@@ -53,6 +53,34 @@ export async function getSectorStats(
   );
 }
 
+/** Contagem de tickets abertos por priority_category, filtrado por department */
+export async function getSectorCategoryStats(
+  departments: string[],
+  opts?: { dateFrom?: string; dateTo?: string }
+) {
+  const params: unknown[] = [departments];
+  let p = 2;
+
+  let dateFilter: string;
+  if (opts?.dateFrom && opts?.dateTo) {
+    dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
+    params.push(opts.dateFrom, opts.dateTo);
+  } else {
+    dateFilter = `AND opened_at >= NOW() - INTERVAL '3 months'`;
+  }
+
+  const deptFilter = `AND department = ANY($1::text[])`;
+
+  return queryOne(
+    `SELECT
+       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'dsa_joy'           AND status NOT IN ('resolvido','cancelado') ${dateFilter} ${deptFilter}) AS count_dsa_joy,
+       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'myrock'            AND status NOT IN ('resolvido','cancelado') ${dateFilter} ${deptFilter}) AS count_myrock,
+       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'plataformas_aulas' AND status NOT IN ('resolvido','cancelado') ${dateFilter} ${deptFilter}) AS count_plataformas_aulas,
+       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'suporte_emails'    AND status NOT IN ('resolvido','cancelado') ${dateFilter} ${deptFilter}) AS count_suporte_emails`,
+    params
+  );
+}
+
 /** Contagem de tickets por departamento (para breakdown dentro do setor) */
 export async function getSectorDeptBreakdown(
   departments: string[],
