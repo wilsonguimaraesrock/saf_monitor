@@ -84,11 +84,20 @@ export function SectorChatwootLiveSection({
       try {
         const res = await fetch(`/api/chatwoot/live?sector=${encodeURIComponent(sectorSlug)}`, {
           cache: 'no-store',
+          credentials: 'include',
           signal: controller.signal,
+          headers: {
+            accept: 'application/json',
+          },
         });
 
         if (!res.ok) {
           throw new Error(`Falha ao atualizar Chatwoot (${res.status})`);
+        }
+
+        const contentType = res.headers.get('content-type') ?? '';
+        if (!contentType.includes('application/json')) {
+          throw new Error(`Resposta inesperada do Chatwoot live: ${contentType || 'sem content-type'}`);
         }
 
         const data = await res.json() as LiveChatwootResponse;
@@ -118,7 +127,14 @@ export function SectorChatwootLiveSection({
       }
     };
 
-    scheduleRefresh();
+    startTransition(() => {
+      setPanelData(initialPanelData);
+      setOpenConversations(initialOpenConversations);
+      setRefreshedAt(initialRefreshedAt);
+      setHasPollingError(false);
+    });
+
+    void refreshChatwootData();
     window.addEventListener('focus', handleWindowFocus);
     document.addEventListener('visibilitychange', handleWindowFocus);
 
@@ -129,7 +145,7 @@ export function SectorChatwootLiveSection({
       window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('visibilitychange', handleWindowFocus);
     };
-  }, [sectorSlug]);
+  }, [sectorSlug, initialOpenConversations, initialPanelData, initialRefreshedAt]);
 
   return (
     <div className="space-y-6">
@@ -159,12 +175,10 @@ export function SectorChatwootLiveSection({
         title={`SLA WhatsApp — ${inboxName}`}
       />
 
-      {openConversations.length > 0 && (
-        <ChatwootConversationTable
-          conversations={openConversations}
-          title={`Conversas Abertas — WhatsApp ${inboxName}`}
-        />
-      )}
+      <ChatwootConversationTable
+        conversations={openConversations}
+        title={`Conversas Abertas — WhatsApp ${inboxName}`}
+      />
     </div>
   );
 }

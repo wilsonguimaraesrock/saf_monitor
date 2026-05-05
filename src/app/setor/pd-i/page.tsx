@@ -194,6 +194,7 @@ async function PdiContent({ searchParams }: PageProps) {
       </div>
 
       <SectorChatwootLiveSection
+        key={sector.slug}
         sectorSlug={sector.slug}
         inboxName={chatwoot.inboxName}
         initialPanelData={chatwootData}

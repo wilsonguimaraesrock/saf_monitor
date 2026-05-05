@@ -239,12 +239,13 @@ async function SectorContent({ params, searchParams }: PageProps) {
 
       {chatwoot ? (
         <SectorChatwootLiveSection
+          key={sector.slug}
           sectorSlug={sector.slug}
           inboxName={chatwoot.inboxName}
           initialPanelData={chatwootData}
           initialOpenConversations={openConversations}
           initialRefreshedAt={new Date().toISOString()}
-        >
+      >
           <SlaPanel sla={slaStats} />
         </SectorChatwootLiveSection>
       ) : (
