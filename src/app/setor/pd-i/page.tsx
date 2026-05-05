@@ -164,7 +164,7 @@ async function PdiContent({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <FilterCardWrapper clearAll isActive={noFilter}>
           <StatCard label="Todos" value={s.totalOpen} icon={LayoutGrid} variant="default" subtitle="tickets abertos" />
         </FilterCardWrapper>
@@ -175,9 +175,6 @@ async function PdiContent({ searchParams }: PageProps) {
           <StatCard label="Aguard. nossa resp." value={s.totalAwaiting} icon={Clock} variant={s.totalAwaiting > 0 ? 'warning' : 'success'} />
         </FilterCardWrapper>
         <StatCard label="Resolvidos hoje" value={s.totalResolvedToday} icon={CheckCircle2} variant="success" />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
         <StatCard label="Aguardando escola" value={s.totalAwaitingSchool} icon={School} variant={s.totalAwaitingSchool > 0 ? 'warning' : 'success'} />
       </div>
 
