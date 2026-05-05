@@ -27,7 +27,7 @@ export function DarkModeToggle() {
       onClick={toggle}
       title={isDark ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
       className="flex items-center justify-center w-9 h-9 rounded-lg transition-colors
-        text-gray-400 hover:text-gray-700 hover:bg-gray-100
+        text-white/90 hover:text-white hover:bg-white/10
         dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800"
     >
       {isDark ? <Sun size={17} /> : <Moon size={17} />}

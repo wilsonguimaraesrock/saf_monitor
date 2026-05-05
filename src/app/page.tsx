@@ -12,10 +12,61 @@ import { ScraperTriggerButton } from '@/components/ScraperTriggerButton';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { SECTORS } from '@/lib/sectors';
 import { getSectorDisplayDepartments } from '@/lib/sectors';
+import type { SectorColor } from '@/lib/sectors';
 import { getLandingStats } from '@/repository/sectors';
 import { queryOne } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
+
+const LANDING_ACCENT_STYLES: Record<SectorColor, {
+  bar: string;
+  iconWrap: string;
+  iconWrapHover: string;
+  icon: string;
+}> = {
+  default: {
+    bar: 'bg-slate-400 dark:bg-slate-500',
+    iconWrap: 'bg-slate-100 dark:bg-slate-800',
+    iconWrapHover: 'group-hover:bg-slate-200 dark:group-hover:bg-slate-700',
+    icon: 'text-slate-600 dark:text-slate-300',
+  },
+  critical: {
+    bar: 'bg-red-500 dark:bg-red-500',
+    iconWrap: 'bg-red-100 dark:bg-red-950/40',
+    iconWrapHover: 'group-hover:bg-red-200 dark:group-hover:bg-red-900/50',
+    icon: 'text-red-600 dark:text-red-300',
+  },
+  warning: {
+    bar: 'bg-amber-500 dark:bg-amber-500',
+    iconWrap: 'bg-amber-100 dark:bg-amber-950/40',
+    iconWrapHover: 'group-hover:bg-amber-200 dark:group-hover:bg-amber-900/50',
+    icon: 'text-amber-600 dark:text-amber-300',
+  },
+  purple: {
+    bar: 'bg-purple-500 dark:bg-purple-500',
+    iconWrap: 'bg-purple-100 dark:bg-purple-950/40',
+    iconWrapHover: 'group-hover:bg-purple-200 dark:group-hover:bg-purple-900/50',
+    icon: 'text-purple-600 dark:text-purple-300',
+  },
+  orange: {
+    bar: 'bg-orange-500 dark:bg-orange-500',
+    iconWrap: 'bg-orange-100 dark:bg-orange-950/40',
+    iconWrapHover: 'group-hover:bg-orange-200 dark:group-hover:bg-orange-900/50',
+    icon: 'text-orange-600 dark:text-orange-300',
+  },
+  cyan: {
+    bar: 'bg-cyan-500 dark:bg-cyan-500',
+    iconWrap: 'bg-cyan-100 dark:bg-cyan-950/40',
+    iconWrapHover: 'group-hover:bg-cyan-200 dark:group-hover:bg-cyan-900/50',
+    icon: 'text-cyan-600 dark:text-cyan-300',
+  },
+  emerald: {
+    bar: 'bg-emerald-500 dark:bg-emerald-500',
+    iconWrap: 'bg-emerald-100 dark:bg-emerald-950/40',
+    iconWrapHover: 'group-hover:bg-emerald-200 dark:group-hover:bg-emerald-900/50',
+    icon: 'text-emerald-600 dark:text-emerald-300',
+  },
+};
 
 async function LandingContent() {
   // Monta mapa slug → departments para getLandingStats
@@ -66,7 +117,7 @@ async function LandingContent() {
           {SECTORS.map((sector) => {
             const stats  = sectorStats[sector.slug] ?? { total: 0, overdue: 0, awaiting: 0 };
             const Icon   = sector.icon;
-            const hasAlert = stats.overdue > 0;
+            const accent = LANDING_ACCENT_STYLES[sector.color];
 
             return (
               <Link
@@ -75,13 +126,13 @@ async function LandingContent() {
                 className="group block rounded-2xl border bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 shadow-sm hover:shadow-md hover:scale-[1.01] transition-all duration-150 overflow-hidden"
               >
                 {/* Barra de acento */}
-                <div className={`h-1 ${hasAlert ? 'bg-red-500' : 'bg-blue-400'}`} />
+                <div className={`h-1 ${accent.bar}`} />
 
                 <div className="p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-xl bg-gray-100 dark:bg-slate-800 group-hover:bg-gray-200 dark:group-hover:bg-slate-700 transition-colors">
-                        <Icon size={18} className="text-gray-600 dark:text-slate-300" />
+                      <div className={`p-2 rounded-xl transition-colors ${accent.iconWrap} ${accent.iconWrapHover}`}>
+                        <Icon size={18} className={accent.icon} />
                       </div>
                       <div>
                         <p className="font-bold text-gray-900 dark:text-slate-100 text-sm">{sector.name}</p>
