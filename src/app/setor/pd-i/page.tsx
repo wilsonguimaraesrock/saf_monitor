@@ -38,6 +38,7 @@ import {
 } from '@/repository/sectors';
 import { getChatwootPanelData, getOpenConversations } from '@/integrations/chatwoot';
 import { ChatwootPanel } from '@/components/ChatwootPanel';
+import { ChatwootSlaPanel } from '@/components/ChatwootSlaPanel';
 import { ChatwootConversationTable } from '@/components/ChatwootConversationTable';
 import {
   getCriticalTickets,
@@ -211,9 +212,11 @@ async function PdiContent({ searchParams }: PageProps) {
         </FilterCardWrapper>
       </div>
 
+      {chatwootData && <ChatwootPanel data={chatwootData} />}
+
       <SlaPanel sla={slaStats} />
 
-      {chatwootData && <ChatwootPanel data={chatwootData} />}
+      <ChatwootSlaPanel conversations={openConversations} panelData={chatwootData} />
 
       {openConversations.length > 0 && (
         <ChatwootConversationTable
