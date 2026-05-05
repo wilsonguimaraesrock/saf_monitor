@@ -23,6 +23,7 @@ import { TrendChart } from '@/components/TrendChart';
 import { CategoryChart } from '@/components/CategoryChart';
 import { ClusterList } from '@/components/ClusterList';
 import { Filters } from '@/components/Filters';
+import { SlaPanel } from '@/components/SlaPanel';
 import { getSectorBySlug } from '@/lib/sectors';
 import {
   getSectorStats,
@@ -33,7 +34,9 @@ import {
   getSectorNotOpenedTickets,
   getSectorNoResponseTickets,
   getSectorTicketsFiltered,
+  getSectorSlaStats,
 } from '@/repository/sectors';
+import { getReportSummary } from '@/integrations/chatwoot';
 import {
   getCriticalTickets,
   getTrendData,
@@ -92,7 +95,7 @@ async function PdiContent({ searchParams }: PageProps) {
 
   // Totais principais — filtro por department (igual à landing)
   // Breakdown por categoria — filtro por priority_category (mais confiável para DSA JOY / MyRock)
-  const [sectorStats, catStats, oldest, overdue, awaiting, critical, notOpened, noRespStatus, trend, clusters, allTickets] =
+  const [sectorStats, catStats, oldest, overdue, awaiting, critical, notOpened, noRespStatus, trend, clusters, allTickets, slaStats, chatwootReport] =
     await Promise.all([
       getSectorStats(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
       getSectorCategoryStats(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
@@ -105,6 +108,8 @@ async function PdiContent({ searchParams }: PageProps) {
       getTrendData(14),
       query('SELECT * FROM saf_clusters ORDER BY ticket_count DESC LIMIT 15'),
       getSectorTicketsFiltered(depts, filters),
+      getSectorSlaStats(depts),
+      getReportSummary({}),
     ]);
 
   const s = {
@@ -202,6 +207,11 @@ async function PdiContent({ searchParams }: PageProps) {
           <StatCard label="Suporte Emails" value={s.countSuporteEmails} icon={Mail} variant="emerald" />
         </FilterCardWrapper>
       </div>
+
+      <SlaPanel
+        sla={slaStats}
+        chatwootFirstResponseSec={chatwootReport?.avg_first_response_time ?? undefined}
+      />
 
       <div className="card">
         <Filters />

@@ -15,6 +15,7 @@ import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { TicketTable } from '@/components/TicketTable';
 import { ClusterList } from '@/components/ClusterList';
 import { Filters } from '@/components/Filters';
+import { SlaPanel } from '@/components/SlaPanel';
 import { getSectorBySlug } from '@/lib/sectors';
 import {
   getSectorStats,
@@ -26,6 +27,7 @@ import {
   getSectorTicketsFiltered,
   getSectorDeptBreakdown,
   getSectorClusters,
+  getSectorSlaStats,
 } from '@/repository/sectors';
 
 export const dynamic = 'force-dynamic';
@@ -78,7 +80,7 @@ async function SectorContent({ params, searchParams }: PageProps) {
 
   const depts = sector.departments;
 
-  const [stats, overdue, awaiting, oldest, notOpened, noResp, deptBreakdown, clusters, allTickets] =
+  const [stats, overdue, awaiting, oldest, notOpened, noResp, deptBreakdown, clusters, allTickets, slaStats] =
     await Promise.all([
       getSectorStats(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
       getSectorOverdueTickets(depts, 10),
@@ -89,6 +91,7 @@ async function SectorContent({ params, searchParams }: PageProps) {
       getSectorDeptBreakdown(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }),
       getSectorClusters(depts, 15),
       getSectorTicketsFiltered(depts, filters),
+      getSectorSlaStats(depts),
     ]);
 
   const s = {
@@ -171,6 +174,9 @@ async function SectorContent({ params, searchParams }: PageProps) {
           </div>
         </div>
       )}
+
+      {/* ── SLA ────────────────────────────────────────────── */}
+      <SlaPanel sla={slaStats} />
 
       {/* ── Filtros ────────────────────────────────────────── */}
       <div className="card">

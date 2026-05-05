@@ -229,6 +229,99 @@ export async function getSectorTicketsFiltered(
 }
 
 // -------------------------------------------------------
+// SLA POR SETOR
+// -------------------------------------------------------
+
+export interface SectorSlaStats {
+  slaRate: number;               // 0–100 (% resolvidos no prazo)
+  atRisk: number;                // tickets abertos vencendo em até 48h
+  avgResolutionDays: number;     // média de dias para resolução (últimos 90 dias)
+  avgFirstResponseHours: number; // tempo médio até primeira resposta nossa (horas)
+  noDeadline: number;            // tickets abertos sem due_at
+}
+
+export async function getSectorSlaStats(departments: string[]): Promise<SectorSlaStats> {
+  const [mainRow, firstRespRow] = await Promise.all([
+    queryOne<{
+      sla_rate: string;
+      at_risk: string;
+      avg_resolution_days: string;
+      no_deadline: string;
+    }>(
+      `SELECT
+         ROUND(
+           100.0 * COUNT(*) FILTER (
+             WHERE status = 'resolvido'
+               AND due_at IS NOT NULL
+               AND resolved_at IS NOT NULL
+               AND resolved_at <= due_at
+               AND opened_at >= NOW() - INTERVAL '90 days'
+           ) / NULLIF(COUNT(*) FILTER (
+             WHERE status = 'resolvido'
+               AND due_at IS NOT NULL
+               AND resolved_at IS NOT NULL
+               AND opened_at >= NOW() - INTERVAL '90 days'
+           ), 0)
+         , 0) AS sla_rate,
+
+         COUNT(*) FILTER (
+           WHERE status NOT IN ('resolvido','cancelado')
+             AND due_at IS NOT NULL
+             AND due_at BETWEEN NOW() AND NOW() + INTERVAL '48 hours'
+         ) AS at_risk,
+
+         ROUND(
+           AVG(EXTRACT(EPOCH FROM (resolved_at - opened_at)) / 86400.0)
+           FILTER (
+             WHERE status = 'resolvido'
+               AND resolved_at IS NOT NULL
+               AND opened_at IS NOT NULL
+               AND opened_at >= NOW() - INTERVAL '90 days'
+           )
+         , 1) AS avg_resolution_days,
+
+         COUNT(*) FILTER (
+           WHERE status NOT IN ('resolvido','cancelado')
+             AND due_at IS NULL
+             AND opened_at >= NOW() - INTERVAL '3 months'
+         ) AS no_deadline
+
+       FROM saf_tickets
+       WHERE department = ANY($1::text[])`,
+      [departments]
+    ),
+
+    // Tempo médio até a primeira resposta nossa (is_ours = true)
+    queryOne<{ avg_first_response_hours: string }>(
+      `SELECT
+         ROUND(
+           AVG(EXTRACT(EPOCH FROM (first_resp.occurred_at - t.opened_at)) / 3600.0)
+         , 1) AS avg_first_response_hours
+       FROM saf_tickets t
+       JOIN LATERAL (
+         SELECT occurred_at
+         FROM saf_ticket_updates u
+         WHERE u.ticket_id = t.id AND u.is_ours = true
+         ORDER BY occurred_at ASC
+         LIMIT 1
+       ) first_resp ON true
+       WHERE t.department = ANY($1::text[])
+         AND t.opened_at >= NOW() - INTERVAL '90 days'
+         AND t.opened_at IS NOT NULL`,
+      [departments]
+    ),
+  ]);
+
+  return {
+    slaRate:               Number(mainRow?.sla_rate               ?? 0),
+    atRisk:                Number(mainRow?.at_risk                ?? 0),
+    avgResolutionDays:     Number(mainRow?.avg_resolution_days    ?? 0),
+    avgFirstResponseHours: Number(firstRespRow?.avg_first_response_hours ?? 0),
+    noDeadline:            Number(mainRow?.no_deadline            ?? 0),
+  };
+}
+
+// -------------------------------------------------------
 // CLUSTERS POR SETOR
 // -------------------------------------------------------
 
