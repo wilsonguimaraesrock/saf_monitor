@@ -2,15 +2,28 @@ const BASE_URL = process.env.CHATWOOT_BASE_URL?.replace(/\/$/, '');
 const ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID ?? '1';
 const TOKEN = process.env.CHATWOOT_API_TOKEN;
 
-async function chatwootFetch<T>(path: string): Promise<T> {
+export interface ChatwootRequestOptions {
+  cache?: RequestCache;
+  revalidate?: number | false;
+}
+
+async function chatwootFetch<T>(
+  path: string,
+  options: ChatwootRequestOptions = {}
+): Promise<T> {
   if (!BASE_URL || !TOKEN) {
     throw new Error('CHATWOOT_BASE_URL e CHATWOOT_API_TOKEN são obrigatórios');
   }
+
+  const { cache, revalidate = 60 } = options;
   const url = `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}${path}`;
+
   const res = await fetch(url, {
     headers: { api_access_token: TOKEN },
-    next: { revalidate: 60 },
+    ...(cache ? { cache } : {}),
+    ...(!cache && typeof revalidate === 'number' ? { next: { revalidate } } : {}),
   });
+
   if (!res.ok) {
     throw new Error(`Chatwoot ${path} → ${res.status} ${res.statusText}`);
   }
@@ -56,11 +69,15 @@ export interface ChatwootPanelData {
   csatTotal: number;
 }
 
-async function getCsatStats(inboxId: number): Promise<{ avg: number | null; total: number }> {
+async function getCsatStats(
+  inboxId: number,
+  options?: ChatwootRequestOptions
+): Promise<{ avg: number | null; total: number }> {
   try {
     const since = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
     const data = await chatwootFetch<Array<{ rating: number }>>(
-      `/csat_survey_responses?inbox_id=${inboxId}&since=${since}&page=1`
+      `/csat_survey_responses?inbox_id=${inboxId}&since=${since}&page=1`,
+      options
     );
     if (!Array.isArray(data) || data.length === 0) return { avg: null, total: 0 };
     const sum = data.reduce((acc, item) => acc + Number(item.rating), 0);
@@ -73,24 +90,30 @@ async function getCsatStats(inboxId: number): Promise<{ avg: number | null; tota
   }
 }
 
-async function getConversationMeta(inboxId: number, status: string): Promise<ConversationMeta> {
+async function getConversationMeta(
+  inboxId: number,
+  status: string,
+  options?: ChatwootRequestOptions
+): Promise<ConversationMeta> {
   const data = await chatwootFetch<{ data: { meta: ConversationMeta } }>(
-    `/conversations?status=${status}&inbox_id=${inboxId}`
+    `/conversations?status=${status}&inbox_id=${inboxId}`,
+    options
   );
   return data?.data?.meta ?? { all_count: 0, assigned_count: 0, unassigned_count: 0, mine_count: 0 };
 }
 
 export async function getChatwootPanelData(
   inboxId: number,
-  inboxName: string
+  inboxName: string,
+  options?: ChatwootRequestOptions
 ): Promise<ChatwootPanelData | null> {
   try {
     const [openMeta, pendingMeta, resolvedMeta, snoozedMeta, csat] = await Promise.all([
-      getConversationMeta(inboxId, 'open'),
-      getConversationMeta(inboxId, 'pending'),
-      getConversationMeta(inboxId, 'resolved'),
-      getConversationMeta(inboxId, 'snoozed'),
-      getCsatStats(inboxId),
+      getConversationMeta(inboxId, 'open', options),
+      getConversationMeta(inboxId, 'pending', options),
+      getConversationMeta(inboxId, 'resolved', options),
+      getConversationMeta(inboxId, 'snoozed', options),
+      getCsatStats(inboxId, options),
     ]);
     return {
       inboxId,
@@ -122,7 +145,8 @@ export interface ChatwootConversation {
 
 export async function getOpenConversations(
   inboxId: number,
-  limit = 50
+  limit = 50,
+  options?: ChatwootRequestOptions
 ): Promise<ChatwootConversation[]> {
   try {
     const data = await chatwootFetch<{
@@ -140,7 +164,7 @@ export async function getOpenConversations(
           last_non_activity_message: { content: string } | null;
         }>;
       };
-    }>(`/conversations?status=open&inbox_id=${inboxId}&page=1`);
+    }>(`/conversations?status=open&inbox_id=${inboxId}&page=1`, options);
 
     const payload = data?.data?.payload ?? [];
     return payload.slice(0, limit).map((c) => ({

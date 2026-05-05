@@ -4,7 +4,7 @@
  */
 
 import { Suspense } from 'react';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowLeft, AlertTriangle, Clock, CheckCircle2, LayoutGrid } from 'lucide-react';
@@ -17,7 +17,13 @@ import { TicketTable } from '@/components/TicketTable';
 import { ClusterList } from '@/components/ClusterList';
 import { Filters } from '@/components/Filters';
 import { SlaPanel } from '@/components/SlaPanel';
-import { getSectorBySlug } from '@/lib/sectors';
+import { SectorChatwootLiveSection } from '@/components/SectorChatwootLiveSection';
+import {
+  getLegacySectorRedirect,
+  getSectorBySlug,
+  getSectorDisplayDepartments,
+  getSectorSubdepartment,
+} from '@/lib/sectors';
 import {
   getSectorStats,
   getSectorOverdueTickets,
@@ -30,6 +36,7 @@ import {
   getSectorClusters,
   getSectorSlaStats,
 } from '@/repository/sectors';
+import { getChatwootPanelData, getOpenConversations } from '@/integrations/chatwoot';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,14 +50,26 @@ interface PageProps {
     no_response?: string;
     month?: string;
     sort?: string;
+    subdepartment?: string;
   }>;
 }
 
 async function SectorContent({ params, searchParams }: PageProps) {
   const { slug }  = await params;
   const sp        = await searchParams;
+  const legacyRedirect = getLegacySectorRedirect(slug);
+  if (legacyRedirect) {
+    const params = new URLSearchParams();
+    Object.entries(sp).forEach(([key, value]) => {
+      if (typeof value === 'string' && value) params.set(key, value);
+    });
+    if (legacyRedirect.subdepartment) params.set('subdepartment', legacyRedirect.subdepartment);
+    redirect(`/setor/${legacyRedirect.slug}?${params.toString()}`);
+  }
+
   const sector    = getSectorBySlug(slug);
   if (!sector) notFound();
+  const selectedSubdepartment = getSectorSubdepartment(sector, sp.subdepartment);
 
   const monthDateFrom = sp.month ? `${sp.month}-01` : undefined;
   const monthDateTo   = sp.month
@@ -74,14 +93,29 @@ async function SectorContent({ params, searchParams }: PageProps) {
   };
 
   const hasSpecificFilter = !!(
-    filters.status || filters.franchise || filters.isOverdue ||
+    sp.subdepartment || filters.status || filters.franchise || filters.isOverdue ||
     filters.awaitingOurResponse || filters.noResponseStatus ||
     filters.dateFrom || filters.dateTo
   );
 
-  const depts = sector.departments;
+  const depts = selectedSubdepartment?.departments ?? sector.departments;
+  const chatwoot = sector.chatwoot;
 
-  const [stats, overdue, awaiting, oldest, notOpened, noResp, deptBreakdown, clusters, allTickets, slaStats] =
+  const [
+    stats,
+    overdue,
+    awaiting,
+    oldest,
+    notOpened,
+    noResp,
+    deptBreakdown,
+    clusters,
+    allTickets,
+    slaStats,
+    chatwootData,
+    openConversations,
+    subdepartmentStats,
+  ] =
     await Promise.all([
       getSectorStats(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
       getSectorOverdueTickets(depts, 10),
@@ -93,6 +127,26 @@ async function SectorContent({ params, searchParams }: PageProps) {
       getSectorClusters(depts, 15),
       getSectorTicketsFiltered(depts, filters),
       getSectorSlaStats(depts),
+      chatwoot
+        ? getChatwootPanelData(chatwoot.inboxId, chatwoot.inboxName)
+        : Promise.resolve(null),
+      chatwoot
+        ? getOpenConversations(chatwoot.inboxId)
+        : Promise.resolve([]),
+      sector.subdepartments?.length
+        ? Promise.all(
+            sector.subdepartments.map(async (sub) => ({
+              slug: sub.slug,
+              name: sub.name,
+              icon: sub.icon,
+              color: sub.color,
+              stats: await getSectorStats(sub.departments, {
+                dateFrom: monthDateFrom,
+                dateTo: monthDateTo,
+              }) as Record<string, string> | null,
+            }))
+          )
+        : Promise.resolve([]),
     ]);
 
   const s = {
@@ -118,6 +172,7 @@ async function SectorContent({ params, searchParams }: PageProps) {
     if (awActive)      parts.push('Aguardando Nossa Resp.');
     if (noRespActive)  parts.push('Sem Status de Resposta');
     if (statusAberto)  parts.push('Ainda Não Abertos');
+    if (selectedSubdepartment) parts.push(selectedSubdepartment.name);
     if (sp.franchise)  parts.push(`Franquia: ${sp.franchise}`);
     if (sp.status && !statusAberto) parts.push(sp.status);
     if (sp.month) parts.push(`Mês: ${sp.month}`);
@@ -125,8 +180,6 @@ async function SectorContent({ params, searchParams }: PageProps) {
     const order = sortOrder === 'asc' ? '↑ mais antigos primeiro' : '↓ mais recentes primeiro';
     return `${label} — ${order} (${allTickets.length})`;
   })();
-
-  const SectorIcon = sector.icon;
 
   return (
     <div className="space-y-6">
@@ -145,8 +198,29 @@ async function SectorContent({ params, searchParams }: PageProps) {
         <StatCard label="Resolvidos hoje" value={s.totalResolvedToday} icon={CheckCircle2} variant="success" />
       </div>
 
+      {subdepartmentStats.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {subdepartmentStats.map((sub) => (
+            <FilterCardWrapper
+              key={sub.slug}
+              filterKey="subdepartment"
+              filterValue={sub.slug}
+              isActive={sp.subdepartment === sub.slug}
+            >
+              <StatCard
+                label={sub.name}
+                value={Number(sub.stats?.total_open ?? 0)}
+                icon={sub.icon}
+                variant={sub.color}
+                subtitle="subdepartamento"
+              />
+            </FilterCardWrapper>
+          ))}
+        </div>
+      )}
+
       {/* ── Breakdown por departamento ─────────────────────── */}
-      {(deptBreakdown as { department: string; total: string }[]).length > 1 && (
+      {!sector.subdepartments && (deptBreakdown as { department: string; total: string }[]).length > 1 && (
         <div className="card">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-3">
             Por departamento
@@ -163,8 +237,19 @@ async function SectorContent({ params, searchParams }: PageProps) {
         </div>
       )}
 
-      {/* ── SLA ────────────────────────────────────────────── */}
-      <SlaPanel sla={slaStats} />
+      {chatwoot ? (
+        <SectorChatwootLiveSection
+          sectorSlug={sector.slug}
+          inboxName={chatwoot.inboxName}
+          initialPanelData={chatwootData}
+          initialOpenConversations={openConversations}
+          initialRefreshedAt={new Date().toISOString()}
+        >
+          <SlaPanel sla={slaStats} />
+        </SectorChatwootLiveSection>
+      ) : (
+        <SlaPanel sla={slaStats} />
+      )}
 
       {/* ── Filtros ────────────────────────────────────────── */}
       <div className="card">
@@ -195,6 +280,17 @@ async function SectorContent({ params, searchParams }: PageProps) {
 
 export default async function SectorPage(props: PageProps) {
   const { slug } = await props.params;
+  const sp = await props.searchParams;
+  const legacyRedirect = getLegacySectorRedirect(slug);
+  if (legacyRedirect) {
+    const params = new URLSearchParams();
+    Object.entries(sp).forEach(([key, value]) => {
+      if (typeof value === 'string' && value) params.set(key, value);
+    });
+    if (legacyRedirect.subdepartment) params.set('subdepartment', legacyRedirect.subdepartment);
+    redirect(`/setor/${legacyRedirect.slug}?${params.toString()}`);
+  }
+
   const sector   = getSectorBySlug(slug);
   if (!sector) notFound();
 
@@ -227,7 +323,7 @@ export default async function SectorPage(props: PageProps) {
                   </h1>
                 </div>
                 <p className="text-xs text-orange-100 dark:text-slate-600">
-                  {sector.departments.join(' · ')}
+                  {getSectorDisplayDepartments(sector).join(' · ')}
                 </p>
               </div>
             </div>

@@ -11,6 +11,7 @@ import { RefreshButton } from '@/components/RefreshButton';
 import { ScraperTriggerButton } from '@/components/ScraperTriggerButton';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { SECTORS } from '@/lib/sectors';
+import { getSectorDisplayDepartments } from '@/lib/sectors';
 import { getLandingStats } from '@/repository/sectors';
 import { queryOne } from '@/lib/db';
 
@@ -85,7 +86,7 @@ async function LandingContent() {
                       <div>
                         <p className="font-bold text-gray-900 dark:text-slate-100 text-sm">{sector.name}</p>
                         <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5 truncate max-w-[180px]">
-                          {sector.departments.join(', ')}
+                          {getSectorDisplayDepartments(sector).join(', ')}
                         </p>
                       </div>
                     </div>

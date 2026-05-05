@@ -1,3 +1,5 @@
+'use client';
+
 import { MessageCircle, UserX, Clock, CheckCircle2, BellOff, Star } from 'lucide-react';
 import type { ChatwootPanelData } from '@/integrations/chatwoot';
 

@@ -4,13 +4,13 @@ import { useState, useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { clsx } from 'clsx';
 
-const AUTO_REFRESH_MS = 10 * 60 * 1000; // 10 minutos
+const AUTO_REFRESH_MS = 5 * 60 * 1000; // 5 minutos
 
 export function RefreshButton() {
   const [loading, setLoading]         = useState(false);
   const [countdown, setCountdown]     = useState(AUTO_REFRESH_MS / 1000);
 
-  // Auto-refresh a cada 10 minutos
+  // Auto-refresh a cada 5 minutos
   useEffect(() => {
     const refreshAt = Date.now() + AUTO_REFRESH_MS;
 

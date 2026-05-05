@@ -16,17 +16,52 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
+export type SectorColor =
+  'purple' | 'cyan' | 'orange' | 'emerald' | 'warning' | 'default' | 'critical';
+
+export interface SectorSubdepartment {
+  slug: string;
+  name: string;
+  departments: string[];
+  icon: LucideIcon;
+  color: SectorColor;
+}
+
+export interface SectorChatwootConfig {
+  inboxId: number;
+  inboxName: string;
+}
+
 export interface Sector {
   slug: string;
   name: string;
   /** Valores exatos do campo Departamento no dfranquias */
   departments: string[];
+  /** Rótulos amigáveis para header/landing, sem duplicatas e aliases internos */
+  displayDepartments?: string[];
   icon: LucideIcon;
   /** Tailwind color key usado nos StatCards e badges */
-  color: 'purple' | 'cyan' | 'orange' | 'emerald' | 'warning' | 'default' | 'critical';
+  color: SectorColor;
+  /** Agrupamentos internos usados como subdepartamentos no dashboard */
+  subdepartments?: SectorSubdepartment[];
+  /** Inbox correspondente no Chatwoot */
+  chatwoot?: SectorChatwootConfig;
   /** Se true, mostra breakdown por priority_category (DSA JOY, MyRock, etc.) */
   showCategoryBreakdown?: boolean;
 }
+
+const OPERATIONS_ADM_DEPARTMENTS = [
+  'Atendimento e Sistema de Gestão',
+  'Implantação',
+  'Relacionamento',
+  'Gerencia',
+];
+
+const OPERATIONS_MATERIAL_DEPARTMENTS = [
+  'Material Didático',
+  'Material didático',
+  'Pedidos',
+];
 
 export const SECTORS: Sector[] = [
   {
@@ -34,23 +69,36 @@ export const SECTORS: Sector[] = [
     name:   'PD&I',
     // Variantes de capitalização presentes no dfranquias — manter todas
     departments: ['DSA JOY', 'MyRock', 'My Rock', 'Plataformas de Aulas', 'Plataformas de aulas', 'Suporte E-mails'],
+    displayDepartments: ['DSA JOY', 'MyRock', 'Plataformas de Aulas', 'Suporte E-mails'],
     icon:   FlaskConical,
     color:  'purple',
+    chatwoot: { inboxId: 9, inboxName: 'Tecnologia' },
     showCategoryBreakdown: true,
   },
   {
-    slug:   'atendimento-adm',
-    name:   'Atendimento ADM',
-    departments: ['Atendimento e Sistema de Gestão', 'Implantação', 'Relacionamento', 'Gerencia'],
+    slug:   'operacoes',
+    name:   'Operações',
+    departments: [...OPERATIONS_ADM_DEPARTMENTS, ...OPERATIONS_MATERIAL_DEPARTMENTS],
+    displayDepartments: ['Atendimento ADM', 'Material Didático'],
     icon:   Headphones,
     color:  'cyan',
-  },
-  {
-    slug:   'material-didatico',
-    name:   'Material Didático',
-    departments: ['Material Didático', 'Material didático', 'Pedidos'],
-    icon:   BookOpen,
-    color:  'orange',
+    subdepartments: [
+      {
+        slug: 'atendimento-adm',
+        name: 'Atendimento ADM',
+        departments: OPERATIONS_ADM_DEPARTMENTS,
+        icon: Headphones,
+        color: 'cyan',
+      },
+      {
+        slug: 'material-didatico',
+        name: 'Material Didático',
+        departments: OPERATIONS_MATERIAL_DEPARTMENTS,
+        icon: BookOpen,
+        color: 'orange',
+      },
+    ],
+    chatwoot: { inboxId: 8, inboxName: 'Operações' },
   },
   {
     slug:   'pedagogico',
@@ -58,6 +106,7 @@ export const SECTORS: Sector[] = [
     departments: ["Adults 60'", 'Pedagógico'],
     icon:   GraduationCap,
     color:  'emerald',
+    chatwoot: { inboxId: 5, inboxName: 'Pedagógico' },
   },
   {
     slug:   'comercial',
@@ -65,20 +114,25 @@ export const SECTORS: Sector[] = [
     departments: ['Comercial'],
     icon:   TrendingUp,
     color:  'default',
+    chatwoot: { inboxId: 6, inboxName: 'Comercial' },
   },
   {
     slug:   'mkt',
     name:   'MKT',
     departments: ['Relacionamento'],
+    displayDepartments: ['Marketing'],
     icon:   Megaphone,
     color:  'warning',
+    chatwoot: { inboxId: 7, inboxName: 'Marketing' },
   },
   {
     slug:   'treinamentos',
     name:   'Treinamentos',
     departments: ['Rockfeller Academy'],
+    displayDepartments: ['Rock Academy'],
     icon:   Award,
     color:  'critical',
+    chatwoot: { inboxId: 10, inboxName: 'Rock Academy' },
   },
   {
     slug:   'financeiro',
@@ -86,6 +140,7 @@ export const SECTORS: Sector[] = [
     departments: ['Financeiro'],
     icon:   Landmark,
     color:  'emerald',
+    chatwoot: { inboxId: 4, inboxName: 'Financeiro' },
   },
 ];
 
@@ -100,6 +155,25 @@ export function getSectorBySlug(slug: string): Sector | undefined {
   return SECTORS.find((s) => s.slug === slug);
 }
 
+export function getSectorDisplayDepartments(sector: Sector): string[] {
+  return sector.displayDepartments ?? sector.departments;
+}
+
+export function getSectorSubdepartment(sector: Sector, slug?: string): SectorSubdepartment | undefined {
+  if (!slug) return undefined;
+  return sector.subdepartments?.find((sub) => sub.slug === slug);
+}
+
+export function getLegacySectorRedirect(slug: string): { slug: string; subdepartment?: string } | null {
+  if (slug === 'atendimento-adm') {
+    return { slug: 'operacoes', subdepartment: 'atendimento-adm' };
+  }
+  if (slug === 'material-didatico') {
+    return { slug: 'operacoes', subdepartment: 'material-didatico' };
+  }
+  return null;
+}
+
 /** Retorna todos os departments de todos os setores (sem duplicatas) */
 export function getAllDepartments(): string[] {
   return [...new Set(SECTORS.flatMap((s) => s.departments))];
@@ -110,15 +184,27 @@ export function getAllDepartments(): string[] {
  * Inclui automaticamente o chat ID do grupo "Geral" se configurado.
  */
 export function getSectorTelegramChatIds(slug: string): string[] {
+  if (slug === 'operacoes') {
+    const operationsId = process.env.TELEGRAM_CHAT_ID_OPERACOES?.trim();
+    if (operationsId) return [operationsId];
+
+    return [...new Set(
+      [
+        process.env.TELEGRAM_CHAT_ID_ATENDIMENTO_ADM,
+        process.env.TELEGRAM_CHAT_ID_MATERIAL_DIDATICO,
+      ]
+        .map((value) => value?.trim())
+        .filter((value): value is string => !!value)
+    )];
+  }
+
   const envMap: Record<string, string | undefined> = {
-    'pd-i':                process.env.TELEGRAM_CHAT_ID_PDI,
-    'atendimento-adm':     process.env.TELEGRAM_CHAT_ID_ATENDIMENTO_ADM,
-    'material-didatico':   process.env.TELEGRAM_CHAT_ID_MATERIAL_DIDATICO,
-    'pedagogico':          process.env.TELEGRAM_CHAT_ID_PEDAGOGICO,
-    'comercial':           process.env.TELEGRAM_CHAT_ID_COMERCIAL,
-    'mkt':                 process.env.TELEGRAM_CHAT_ID_MKT,
-    'treinamentos':        process.env.TELEGRAM_CHAT_ID_TREINAMENTOS,
-    'financeiro':          process.env.TELEGRAM_CHAT_ID_FINANCEIRO,
+    'pd-i':          process.env.TELEGRAM_CHAT_ID_PDI,
+    'pedagogico':    process.env.TELEGRAM_CHAT_ID_PEDAGOGICO,
+    'comercial':     process.env.TELEGRAM_CHAT_ID_COMERCIAL,
+    'mkt':           process.env.TELEGRAM_CHAT_ID_MKT,
+    'treinamentos':  process.env.TELEGRAM_CHAT_ID_TREINAMENTOS,
+    'financeiro':    process.env.TELEGRAM_CHAT_ID_FINANCEIRO,
   };
 
   const ids: string[] = [];

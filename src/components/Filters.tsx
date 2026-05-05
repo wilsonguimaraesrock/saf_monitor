@@ -29,7 +29,7 @@ const INPUT_CLS = `
   dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200
 `.trim();
 
-const ALL_KEYS = ['category', 'status', 'overdue', 'awaiting', 'critical', 'franchise', 'month', 'sort'];
+const ALL_KEYS = ['category', 'status', 'overdue', 'awaiting', 'critical', 'franchise', 'month', 'sort', 'subdepartment'];
 
 export function Filters() {
   const router       = useRouter();

@@ -1,3 +1,5 @@
+'use client';
+
 import { UserCheck, Clock, TriangleAlert, Timer } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
 import type { ChatwootPanelData } from '@/integrations/chatwoot';
@@ -5,6 +7,7 @@ import type { ChatwootPanelData } from '@/integrations/chatwoot';
 interface Props {
   conversations: ChatwootConversation[];
   panelData: ChatwootPanelData | null;
+  title?: string;
 }
 
 function formatDuration(sec: number): string {
@@ -14,7 +17,11 @@ function formatDuration(sec: number): string {
   return `${(sec / 86400).toFixed(1)}d`;
 }
 
-export function ChatwootSlaPanel({ conversations, panelData }: Props) {
+export function ChatwootSlaPanel({
+  conversations,
+  panelData,
+  title = 'SLA WhatsApp',
+}: Props) {
   const nowSec = Math.floor(Date.now() / 1000);
 
   const waitingTimes = conversations
@@ -44,7 +51,7 @@ export function ChatwootSlaPanel({ conversations, panelData }: Props) {
   return (
     <div className="card">
       <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-3">
-        SLA WhatsApp — Tecnologia
+        {title}
       </p>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

@@ -25,6 +25,7 @@ import { CategoryChart } from '@/components/CategoryChart';
 import { ClusterList } from '@/components/ClusterList';
 import { Filters } from '@/components/Filters';
 import { SlaPanel } from '@/components/SlaPanel';
+import { SectorChatwootLiveSection } from '@/components/SectorChatwootLiveSection';
 import { getSectorBySlug } from '@/lib/sectors';
 import {
   getSectorStats,
@@ -38,9 +39,6 @@ import {
   getSectorSlaStats,
 } from '@/repository/sectors';
 import { getChatwootPanelData, getOpenConversations } from '@/integrations/chatwoot';
-import { ChatwootPanel } from '@/components/ChatwootPanel';
-import { ChatwootSlaPanel } from '@/components/ChatwootSlaPanel';
-import { ChatwootConversationTable } from '@/components/ChatwootConversationTable';
 import {
   getCriticalTickets,
   getTrendData,
@@ -68,6 +66,7 @@ async function PdiContent({ searchParams }: PageProps) {
 
   const sector = getSectorBySlug('pd-i')!;
   const depts  = sector.departments;
+  const chatwoot = sector.chatwoot!;
 
   const monthDateFrom = params.month ? `${params.month}-01` : undefined;
   const monthDateTo   = params.month
@@ -113,8 +112,8 @@ async function PdiContent({ searchParams }: PageProps) {
       query('SELECT * FROM saf_clusters ORDER BY ticket_count DESC LIMIT 15'),
       getSectorTicketsFiltered(depts, filters),
       getSectorSlaStats(depts),
-      getChatwootPanelData(9, 'Tecnologia'),
-      getOpenConversations(9),
+      getChatwootPanelData(chatwoot.inboxId, chatwoot.inboxName),
+      getOpenConversations(chatwoot.inboxId),
     ]);
 
   const s = {
@@ -194,18 +193,15 @@ async function PdiContent({ searchParams }: PageProps) {
         </FilterCardWrapper>
       </div>
 
-      {chatwootData && <ChatwootPanel data={chatwootData} />}
-
-      <SlaPanel sla={slaStats} />
-
-      <ChatwootSlaPanel conversations={openConversations} panelData={chatwootData} />
-
-      {openConversations.length > 0 && (
-        <ChatwootConversationTable
-          conversations={openConversations}
-          title="Conversas Abertas — WhatsApp Tecnologia"
-        />
-      )}
+      <SectorChatwootLiveSection
+        sectorSlug={sector.slug}
+        inboxName={chatwoot.inboxName}
+        initialPanelData={chatwootData}
+        initialOpenConversations={openConversations}
+        initialRefreshedAt={new Date().toISOString()}
+      >
+        <SlaPanel sla={slaStats} />
+      </SectorChatwootLiveSection>
 
       <div className="card">
         <Filters />

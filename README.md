@@ -76,8 +76,7 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 | Slug | Nome | Departamentos (dfranquias) |
 |---|---|---|
 | `pd-i` | PD&I | DSA JOY, MyRock, My Rock, Plataformas de Aulas, Suporte E-mails |
-| `atendimento-adm` | Atendimento ADM | Atendimento e Sistema de Gestão, Implantação, Relacionamento, Gerencia |
-| `material-didatico` | Material Didático | Material Didático, Material didático, Pedidos |
+| `operacoes` | Operações | Atendimento e Sistema de Gestão, Implantação, Relacionamento, Gerencia, Material Didático, Material didático, Pedidos |
 | `pedagogico` | Pedagógico | Adults 60', Pedagógico |
 | `comercial` | Comercial | Comercial |
 | `mkt` | MKT | Relacionamento |
@@ -98,11 +97,19 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 
 ### Chatwoot (WhatsApp)
 
-- Usado apenas no setor **PD&I**, inbox **Tecnologia** (ID 9)
+- Usado nos setores mapeados em `src/lib/sectors.ts`:
+  - `pd-i` → inbox **Tecnologia** (ID 9)
+  - `operacoes` → inbox **Operações** (ID 8)
+  - `pedagogico` → inbox **Pedagógico** (ID 5)
+  - `comercial` → inbox **Comercial** (ID 6)
+  - `mkt` → inbox **Marketing** (ID 7)
+  - `treinamentos` → inbox **Rock Academy** (ID 10)
+  - `financeiro` → inbox **Financeiro** (ID 4)
+- O dashboard faz polling em `/api/chatwoot/live?sector={slug}` a cada 30s para atualizar cards e conversas abertas sem recarregar a página inteira
 - Endpoints utilizados:
-  - `GET /conversations?status=open&inbox_id=9` — conversas abertas (campo `assignee` está em `meta.assignee`)
-  - `GET /conversations?status={status}&inbox_id=9` — contagens por status (open/pending/resolved/snoozed)
-  - `GET /csat_survey_responses?inbox_id=9&since={unix}` — avaliações CSAT (últimos 30 dias, rating 1–5)
+  - `GET /conversations?status=open&inbox_id={id}` — conversas abertas (campo `assignee` está em `meta.assignee`)
+  - `GET /conversations?status={status}&inbox_id={id}` — contagens por status (open/pending/resolved/snoozed)
+  - `GET /csat_survey_responses?inbox_id={id}&since={unix}` — avaliações CSAT (últimos 30 dias, rating 1–5)
 - **Requer token com papel de Administrador** no Chatwoot (Settings → Agents → promover para Administrator)
 - Configuração: `src/integrations/chatwoot.ts`
 
@@ -180,13 +187,14 @@ PostgreSQL (Digital Ocean). Tabelas principais:
 | `TELEGRAM_BOT_TOKEN` | Token do bot |
 | `TELEGRAM_CHAT_ID` | Chat ID do grupo Geral |
 | `TELEGRAM_CHAT_ID_PDI` | Chat ID do grupo PD&I |
-| `TELEGRAM_CHAT_ID_ATENDIMENTO_ADM` | Chat ID Atendimento ADM |
-| `TELEGRAM_CHAT_ID_MATERIAL_DIDATICO` | Chat ID Material Didático |
+| `TELEGRAM_CHAT_ID_OPERACOES` | Chat ID do grupo Operações |
 | `TELEGRAM_CHAT_ID_PEDAGOGICO` | Chat ID Pedagógico |
 | `TELEGRAM_CHAT_ID_COMERCIAL` | Chat ID Comercial |
 | `TELEGRAM_CHAT_ID_MKT` | Chat ID MKT |
 | `TELEGRAM_CHAT_ID_TREINAMENTOS` | Chat ID Treinamentos |
 | `TELEGRAM_CHAT_ID_FINANCEIRO` | Chat ID Financeiro |
+
+> Se `TELEGRAM_CHAT_ID_OPERACOES` não estiver configurado, o código usa os grupos legados `TELEGRAM_CHAT_ID_ATENDIMENTO_ADM` e `TELEGRAM_CHAT_ID_MATERIAL_DIDATICO` como fallback.
 
 ### Autenticação (dashboard)
 

@@ -1,3 +1,5 @@
+'use client';
+
 import { ExternalLink, UserX } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
 
