@@ -241,6 +241,9 @@ export interface SectorSlaStats {
 }
 
 export async function getSectorSlaStats(departments: string[]): Promise<SectorSlaStats> {
+  // SLA medido a partir de maio/2026
+  const SLA_START = `'2026-05-01'`;
+
   const [mainRow, firstRespRow] = await Promise.all([
     queryOne<{
       sla_rate: string;
@@ -255,12 +258,12 @@ export async function getSectorSlaStats(departments: string[]): Promise<SectorSl
                AND due_at IS NOT NULL
                AND resolved_at IS NOT NULL
                AND resolved_at <= due_at
-               AND opened_at >= NOW() - INTERVAL '90 days'
+               AND opened_at >= ${SLA_START}
            ) / NULLIF(COUNT(*) FILTER (
              WHERE status = 'resolvido'
                AND due_at IS NOT NULL
                AND resolved_at IS NOT NULL
-               AND opened_at >= NOW() - INTERVAL '90 days'
+               AND opened_at >= ${SLA_START}
            ), 0)
          , 0) AS sla_rate,
 
@@ -276,14 +279,14 @@ export async function getSectorSlaStats(departments: string[]): Promise<SectorSl
              WHERE status = 'resolvido'
                AND resolved_at IS NOT NULL
                AND opened_at IS NOT NULL
-               AND opened_at >= NOW() - INTERVAL '90 days'
+               AND opened_at >= ${SLA_START}
            )
          , 1) AS avg_resolution_days,
 
          COUNT(*) FILTER (
            WHERE status NOT IN ('resolvido','cancelado')
              AND due_at IS NULL
-             AND opened_at >= NOW() - INTERVAL '3 months'
+             AND opened_at >= ${SLA_START}
          ) AS no_deadline
 
        FROM saf_tickets
@@ -291,7 +294,7 @@ export async function getSectorSlaStats(departments: string[]): Promise<SectorSl
       [departments]
     ),
 
-    // Tempo médio até a primeira resposta nossa (is_ours = true)
+    // Tempo médio até a primeira resposta nossa (is_ours = true), desde maio/2026
     queryOne<{ avg_first_response_hours: string }>(
       `SELECT
          ROUND(
@@ -306,7 +309,7 @@ export async function getSectorSlaStats(departments: string[]): Promise<SectorSl
          LIMIT 1
        ) first_resp ON true
        WHERE t.department = ANY($1::text[])
-         AND t.opened_at >= NOW() - INTERVAL '90 days'
+         AND t.opened_at >= ${SLA_START}
          AND t.opened_at IS NOT NULL`,
       [departments]
     ),

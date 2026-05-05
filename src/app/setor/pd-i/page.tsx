@@ -36,7 +36,8 @@ import {
   getSectorTicketsFiltered,
   getSectorSlaStats,
 } from '@/repository/sectors';
-import { getReportSummary } from '@/integrations/chatwoot';
+import { getChatwootPanelData } from '@/integrations/chatwoot';
+import { ChatwootPanel } from '@/components/ChatwootPanel';
 import {
   getCriticalTickets,
   getTrendData,
@@ -95,7 +96,7 @@ async function PdiContent({ searchParams }: PageProps) {
 
   // Totais principais — filtro por department (igual à landing)
   // Breakdown por categoria — filtro por priority_category (mais confiável para DSA JOY / MyRock)
-  const [sectorStats, catStats, oldest, overdue, awaiting, critical, notOpened, noRespStatus, trend, clusters, allTickets, slaStats, chatwootReport] =
+  const [sectorStats, catStats, oldest, overdue, awaiting, critical, notOpened, noRespStatus, trend, clusters, allTickets, slaStats, chatwootData] =
     await Promise.all([
       getSectorStats(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
       getSectorCategoryStats(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
@@ -109,7 +110,7 @@ async function PdiContent({ searchParams }: PageProps) {
       query('SELECT * FROM saf_clusters ORDER BY ticket_count DESC LIMIT 15'),
       getSectorTicketsFiltered(depts, filters),
       getSectorSlaStats(depts),
-      getReportSummary({}),
+      getChatwootPanelData(9, 'Tecnologia'),
     ]);
 
   const s = {
@@ -208,10 +209,9 @@ async function PdiContent({ searchParams }: PageProps) {
         </FilterCardWrapper>
       </div>
 
-      <SlaPanel
-        sla={slaStats}
-        chatwootFirstResponseSec={chatwootReport?.avg_first_response_time ?? undefined}
-      />
+      <SlaPanel sla={slaStats} />
+
+      {chatwootData && <ChatwootPanel data={chatwootData} />}
 
       <div className="card">
         <Filters />

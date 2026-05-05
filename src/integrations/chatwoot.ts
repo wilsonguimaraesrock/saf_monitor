@@ -37,21 +37,53 @@ export interface ChatwootTeam {
   description: string;
 }
 
-export interface ChatwootConversationSummary {
-  open: number;
-  pending: number;
-  resolved: number;
-  all: number;
+interface ConversationMeta {
+  all_count: number;
+  assigned_count: number;
+  unassigned_count: number;
+  mine_count: number;
 }
 
-export interface ChatwootReportSummary {
-  avg_first_response_time: number;
-  avg_resolution_time: number;
-  account_id: number;
-  resolutions_count: number;
-  incoming_messages_count: number;
-  outgoing_messages_count: number;
-  conversations_count: number;
+export interface ChatwootPanelData {
+  inboxId: number;
+  inboxName: string;
+  open: number;
+  unassigned: number;
+  pending: number;
+  resolved: number;
+  snoozed: number;
+}
+
+async function getConversationMeta(inboxId: number, status: string): Promise<ConversationMeta> {
+  const data = await chatwootFetch<{ data: { meta: ConversationMeta } }>(
+    `/conversations?status=${status}&inbox_id=${inboxId}`
+  );
+  return data?.data?.meta ?? { all_count: 0, assigned_count: 0, unassigned_count: 0, mine_count: 0 };
+}
+
+export async function getChatwootPanelData(
+  inboxId: number,
+  inboxName: string
+): Promise<ChatwootPanelData | null> {
+  try {
+    const [openMeta, pendingMeta, resolvedMeta, snoozedMeta] = await Promise.all([
+      getConversationMeta(inboxId, 'open'),
+      getConversationMeta(inboxId, 'pending'),
+      getConversationMeta(inboxId, 'resolved'),
+      getConversationMeta(inboxId, 'snoozed'),
+    ]);
+    return {
+      inboxId,
+      inboxName,
+      open:       openMeta.all_count,
+      unassigned: openMeta.unassigned_count,
+      pending:    pendingMeta.all_count,
+      resolved:   resolvedMeta.all_count,
+      snoozed:    snoozedMeta.all_count,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function getInboxes(): Promise<ChatwootInbox[]> {
@@ -67,45 +99,4 @@ export async function getLabels(): Promise<ChatwootLabel[]> {
 export async function getTeams(): Promise<ChatwootTeam[]> {
   const data = await chatwootFetch<ChatwootTeam[]>('/teams');
   return Array.isArray(data) ? data : [];
-}
-
-export async function getConversationStats(params: {
-  inboxId?: number;
-  teamId?: number;
-  labels?: string[];
-}): Promise<ChatwootConversationSummary> {
-  const counts: ChatwootConversationSummary = { open: 0, pending: 0, resolved: 0, all: 0 };
-
-  for (const status of ['open', 'pending', 'resolved'] as const) {
-    const qs = new URLSearchParams({ status });
-    if (params.inboxId) qs.set('inbox_id', String(params.inboxId));
-    if (params.teamId) qs.set('team_id', String(params.teamId));
-    if (params.labels?.length) qs.set('labels[]', params.labels[0]);
-
-    const data = await chatwootFetch<{ data: { meta: { all_count: number } } }>(
-      `/conversations?${qs}`
-    );
-    counts[status] = data?.data?.meta?.all_count ?? 0;
-  }
-
-  counts.all = counts.open + counts.pending + counts.resolved;
-  return counts;
-}
-
-export async function getReportSummary(params: {
-  inboxId?: number;
-  teamId?: number;
-  since?: number;
-  until?: number;
-}): Promise<ChatwootReportSummary | null> {
-  try {
-    const qs = new URLSearchParams({ type: 'account' });
-    if (params.inboxId) { qs.set('type', 'inbox'); qs.set('id', String(params.inboxId)); }
-    if (params.teamId)  { qs.set('type', 'team');  qs.set('id', String(params.teamId));  }
-    if (params.since)   qs.set('since', String(params.since));
-    if (params.until)   qs.set('until', String(params.until));
-    return await chatwootFetch<ChatwootReportSummary>(`/reports/summary?${qs}`);
-  } catch {
-    return null;
-  }
 }

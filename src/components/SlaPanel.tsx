@@ -1,10 +1,8 @@
-import { ShieldCheck, TriangleAlert, Timer, CalendarX, MessageCircle, Reply } from 'lucide-react';
+import { ShieldCheck, TriangleAlert, Timer, CalendarX, Reply } from 'lucide-react';
 import type { SectorSlaStats } from '@/repository/sectors';
 
 interface Props {
   sla: SectorSlaStats;
-  /** Tempo médio de primeira resposta no Chatwoot (segundos). Exibido apenas para PD&I. */
-  chatwootFirstResponseSec?: number;
 }
 
 function formatHours(hours: number): string {
@@ -14,14 +12,7 @@ function formatHours(hours: number): string {
   return `${(hours / 24).toFixed(1)}d`;
 }
 
-function formatSeconds(sec: number): string {
-  if (sec <= 0) return '—';
-  const min = sec / 60;
-  if (min < 60) return `${Math.round(min)}min`;
-  return `${(min / 60).toFixed(1)}h`;
-}
-
-export function SlaPanel({ sla, chatwootFirstResponseSec }: Props) {
+export function SlaPanel({ sla }: Props) {
   const rateColor =
     sla.slaRate >= 80 ? 'text-emerald-600 dark:text-emerald-400' :
     sla.slaRate >= 50 ? 'text-amber-600 dark:text-amber-400' :
@@ -32,8 +23,7 @@ export function SlaPanel({ sla, chatwootFirstResponseSec }: Props) {
     sla.slaRate >= 50 ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800' :
                         'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800';
 
-  const hasChatwoot = typeof chatwootFirstResponseSec === 'number';
-  const cols = hasChatwoot ? 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-5';
+  const cols = 'grid-cols-2 sm:grid-cols-5';
 
   return (
     <div className="card">
@@ -96,20 +86,6 @@ export function SlaPanel({ sla, chatwootFirstResponseSec }: Props) {
           </span>
           <span className="text-xs text-gray-400 dark:text-slate-500">tempo médio até responder</span>
         </div>
-
-        {/* 1ª resposta Chatwoot — só para PD&I */}
-        {hasChatwoot && (
-          <div className="rounded-xl border p-4 flex flex-col gap-1 bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700">
-            <div className="flex items-center gap-1.5">
-              <MessageCircle size={14} className="text-green-500" />
-              <span className="text-xs text-gray-500 dark:text-slate-400">1ª resposta WhatsApp</span>
-            </div>
-            <span className="text-2xl font-bold tabular-nums text-green-600 dark:text-green-400">
-              {formatSeconds(chatwootFirstResponseSec!)}
-            </span>
-            <span className="text-xs text-gray-400 dark:text-slate-500">tempo médio no Chatwoot</span>
-          </div>
-        )}
 
         {/* Sem prazo */}
         <div className={`rounded-xl border p-4 flex flex-col gap-1 ${
