@@ -14,7 +14,7 @@ interface StatCardProps {
 
 // Light mode: gradientes sólidos. Dark mode: fundo escuro translúcido.
 const CARD_STYLES: Record<string, string> = {
-  default:  'bg-gray-100 border-gray-300 dark:bg-slate-900 dark:border-slate-800',
+  default:  'bg-gradient-to-br from-gray-200 to-gray-300 border-gray-400 dark:bg-slate-900 dark:border-slate-800',
   critical: 'bg-gradient-to-br from-red-500 to-red-700     border-red-600     dark:from-red-950/40     dark:to-red-950/10     dark:border-red-900/40',
   warning:  'bg-gradient-to-br from-amber-400 to-amber-600  border-amber-500   dark:from-amber-950/40  dark:to-amber-950/10  dark:border-amber-900/40',
   success:  'bg-gradient-to-br from-emerald-500 to-emerald-700 border-emerald-600 dark:from-emerald-950/40 dark:to-emerald-950/10 dark:border-emerald-900/40',
