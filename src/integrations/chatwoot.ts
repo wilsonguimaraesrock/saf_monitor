@@ -110,8 +110,10 @@ export async function getOpenConversations(
           status: string;
           waiting_since: number;
           labels: string[];
-          assignee: { name: string } | null;
-          meta: { sender: { name: string; phone_number: string } };
+          meta: {
+            sender: { name: string; phone_number: string };
+            assignee: { name: string } | null;
+          };
           custom_attributes: Record<string, string>;
           last_non_activity_message: { content: string } | null;
         }>;
@@ -125,7 +127,7 @@ export async function getOpenConversations(
       contactPhone:   c.meta?.sender?.phone_number ?? '',
       unitName:       c.custom_attributes?.unitName ?? '',
       labels:         c.labels ?? [],
-      assigneeName:   c.assignee?.name ?? null,
+      assigneeName:   c.meta?.assignee?.name ?? null,
       lastMessage:    c.last_non_activity_message?.content ?? '',
       waitingSinceSec: c.waiting_since ?? 0,
       chatwootUrl: `${BASE_URL}/app/accounts/${ACCOUNT_ID}/conversations/${c.id}`,

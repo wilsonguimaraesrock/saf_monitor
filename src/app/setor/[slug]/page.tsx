@@ -6,7 +6,7 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, AlertTriangle, Clock, CheckCircle2, School, Inbox, HelpCircle, LayoutGrid } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Clock, CheckCircle2, LayoutGrid } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { FilterCardWrapper } from '@/components/FilterCardWrapper';
 import { RefreshButton } from '@/components/RefreshButton';
@@ -131,7 +131,7 @@ async function SectorContent({ params, searchParams }: PageProps) {
     <div className="space-y-6">
 
       {/* ── Cards principais ───────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <FilterCardWrapper clearAll isActive={noFilter}>
           <StatCard label="Todos" value={s.totalOpen} icon={LayoutGrid} variant="default" subtitle="tickets abertos" />
         </FilterCardWrapper>
@@ -141,20 +141,7 @@ async function SectorContent({ params, searchParams }: PageProps) {
         <FilterCardWrapper filterKey="awaiting" filterValue="true" isActive={awActive}>
           <StatCard label="Aguard. nossa resp." value={s.totalAwaiting} icon={Clock} variant={s.totalAwaiting > 0 ? 'warning' : 'success'} />
         </FilterCardWrapper>
-        <StatCard label="Aguardando escola" value={s.totalAwaitingSchool} icon={School} variant={s.totalAwaitingSchool > 0 ? 'warning' : 'success'} />
-        <FilterCardWrapper filterKey="status" filterValue="aberto" isActive={statusAberto}>
-          <StatCard label="Não respondidos" value={s.totalNotOpened} icon={Inbox} variant={s.totalNotOpened > 0 ? 'warning' : 'success'} />
-        </FilterCardWrapper>
         <StatCard label="Resolvidos hoje" value={s.totalResolvedToday} icon={CheckCircle2} variant="success" />
-      </div>
-
-      {/* ── Sem status de resposta ─────────────────────────── */}
-      <div className="grid grid-cols-1 gap-3">
-        <FilterCardWrapper filterKey="no_response" filterValue="true" isActive={noRespActive}>
-          <StatCard label="Sem status de resposta (limbo)" value={s.totalNoResponseStatus} icon={HelpCircle}
-            variant={s.totalNoResponseStatus > 0 ? 'warning' : 'success'}
-            tooltip="Tickets ativos sem status de resposta definido — não se sabe quem deve agir a seguir." />
-        </FilterCardWrapper>
       </div>
 
       {/* ── Breakdown por departamento ─────────────────────── */}

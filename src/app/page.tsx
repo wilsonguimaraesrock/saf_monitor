@@ -4,7 +4,7 @@
 
 import { Suspense } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Clock, LayoutGrid } from 'lucide-react';
+import { AlertTriangle, Clock, LayoutGrid, ShieldCheck } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { RefreshButton } from '@/components/RefreshButton';
 import { ScraperTriggerButton } from '@/components/ScraperTriggerButton';
@@ -106,6 +106,34 @@ async function LandingContent() {
                         {stats.awaiting} aguardando
                       </span>
                     </div>
+                  </div>
+
+                  {/* SLA row */}
+                  <div className="flex gap-4 mt-3 pt-3 border-t border-gray-100 dark:border-slate-800">
+                    <div className="flex items-center gap-1.5">
+                      <ShieldCheck size={13} className={
+                        stats.slaRate >= 80 ? 'text-emerald-500' :
+                        stats.slaRate >= 60 ? 'text-amber-500' :
+                        stats.slaRate > 0   ? 'text-red-500' :
+                        'text-gray-300 dark:text-slate-600'
+                      } />
+                      <span className={`text-sm font-semibold tabular-nums ${
+                        stats.slaRate >= 80 ? 'text-emerald-600 dark:text-emerald-400' :
+                        stats.slaRate >= 60 ? 'text-amber-600 dark:text-amber-400' :
+                        stats.slaRate > 0   ? 'text-red-600 dark:text-red-400' :
+                        'text-gray-400 dark:text-slate-500'
+                      }`}>
+                        {stats.slaRate > 0 ? `${stats.slaRate}% SLA` : '— SLA'}
+                      </span>
+                    </div>
+                    {stats.atRisk > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <Clock size={13} className="text-orange-500" />
+                        <span className="text-sm font-semibold tabular-nums text-orange-600 dark:text-orange-400">
+                          {stats.atRisk} em risco
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </Link>

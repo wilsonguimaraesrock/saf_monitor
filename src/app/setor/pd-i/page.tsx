@@ -11,7 +11,7 @@ import Link from 'next/link';
 import {
   AlertTriangle, Clock, CheckCircle2,
   Gamepad2, Monitor, BookOpen, Mail, LayoutGrid, School,
-  Inbox, HelpCircle, ArrowLeft, FlaskConical,
+  ArrowLeft, FlaskConical,
 } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { FilterCardWrapper } from '@/components/FilterCardWrapper';
@@ -164,37 +164,21 @@ async function PdiContent({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-10 gap-3">
-        <div className="col-span-1 sm:col-span-1 xl:col-span-2">
-          <FilterCardWrapper clearAll isActive={noFilter}>
-            <StatCard label="Todos" value={s.totalOpen} icon={LayoutGrid} variant="default" subtitle="tickets abertos" />
-          </FilterCardWrapper>
-        </div>
-        <div className="col-span-1 sm:col-span-1 xl:col-span-2">
-          <FilterCardWrapper filterKey="overdue" filterValue="true" isActive={ovActive}>
-            <StatCard label="Atrasados" value={s.totalOverdue} icon={AlertTriangle} variant={s.totalOverdue > 0 ? 'critical' : 'success'} />
-          </FilterCardWrapper>
-        </div>
-        <div className="col-span-1 sm:col-span-1 xl:col-span-2">
-          <FilterCardWrapper filterKey="awaiting" filterValue="true" isActive={awActive}>
-            <StatCard label="Aguard. nossa resp." value={s.totalAwaiting} icon={Clock} variant={s.totalAwaiting > 0 ? 'warning' : 'success'} />
-          </FilterCardWrapper>
-        </div>
-        <div className="col-span-1 sm:col-span-1 xl:col-span-2">
-          <StatCard label="Aguardando escola" value={s.totalAwaitingSchool} icon={School} variant={s.totalAwaitingSchool > 0 ? 'warning' : 'success'} />
-        </div>
-        <div className="col-span-1 sm:col-span-1 xl:col-span-2">
-          <StatCard label="Resolvidos hoje" value={s.totalResolvedToday} icon={CheckCircle2} variant="success" />
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <FilterCardWrapper clearAll isActive={noFilter}>
+          <StatCard label="Todos" value={s.totalOpen} icon={LayoutGrid} variant="default" subtitle="tickets abertos" />
+        </FilterCardWrapper>
+        <FilterCardWrapper filterKey="overdue" filterValue="true" isActive={ovActive}>
+          <StatCard label="Atrasados" value={s.totalOverdue} icon={AlertTriangle} variant={s.totalOverdue > 0 ? 'critical' : 'success'} />
+        </FilterCardWrapper>
+        <FilterCardWrapper filterKey="awaiting" filterValue="true" isActive={awActive}>
+          <StatCard label="Aguard. nossa resp." value={s.totalAwaiting} icon={Clock} variant={s.totalAwaiting > 0 ? 'warning' : 'success'} />
+        </FilterCardWrapper>
+        <StatCard label="Resolvidos hoje" value={s.totalResolvedToday} icon={CheckCircle2} variant="success" />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <FilterCardWrapper filterKey="status" filterValue="aberto" isActive={statusAberto}>
-          <StatCard label="Ainda não abertos" value={s.totalNotOpened} icon={Inbox} variant={s.totalNotOpened > 0 ? 'warning' : 'success'} />
-        </FilterCardWrapper>
-        <FilterCardWrapper filterKey="no_response" filterValue="true" isActive={noRespActive}>
-          <StatCard label="Sem status de resposta" value={s.totalNoResponseStatus} icon={HelpCircle} variant={s.totalNoResponseStatus > 0 ? 'warning' : 'success'} />
-        </FilterCardWrapper>
+        <StatCard label="Aguardando escola" value={s.totalAwaitingSchool} icon={School} variant={s.totalAwaitingSchool > 0 ? 'warning' : 'success'} />
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
