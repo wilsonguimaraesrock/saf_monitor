@@ -174,8 +174,8 @@ async function PdiContent({ searchParams }: PageProps) {
         <FilterCardWrapper filterKey="awaiting" filterValue="true" isActive={awActive}>
           <StatCard label="Aguard. nossa resp." value={s.totalAwaiting} icon={Clock} variant={s.totalAwaiting > 0 ? 'warning' : 'success'} />
         </FilterCardWrapper>
-        <StatCard label="Resolvidos hoje" value={s.totalResolvedToday} icon={CheckCircle2} variant="success" />
         <StatCard label="Aguardando escola" value={s.totalAwaitingSchool} icon={School} variant={s.totalAwaitingSchool > 0 ? 'warning' : 'success'} />
+        <StatCard label="Resolvidos hoje" value={s.totalResolvedToday} icon={CheckCircle2} variant="success" />
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

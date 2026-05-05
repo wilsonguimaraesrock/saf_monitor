@@ -52,6 +52,25 @@ export interface ChatwootPanelData {
   pending: number;
   resolved: number;
   snoozed: number;
+  csatAvg: number | null;
+  csatTotal: number;
+}
+
+async function getCsatStats(inboxId: number): Promise<{ avg: number | null; total: number }> {
+  try {
+    const since = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
+    const data = await chatwootFetch<Array<{ rating: number }>>(
+      `/csat_survey_responses?inbox_id=${inboxId}&since=${since}&page=1`
+    );
+    if (!Array.isArray(data) || data.length === 0) return { avg: null, total: 0 };
+    const sum = data.reduce((acc, item) => acc + Number(item.rating), 0);
+    return {
+      total: data.length,
+      avg: Math.round((sum / data.length) * 10) / 10,
+    };
+  } catch {
+    return { avg: null, total: 0 };
+  }
 }
 
 async function getConversationMeta(inboxId: number, status: string): Promise<ConversationMeta> {
@@ -66,11 +85,12 @@ export async function getChatwootPanelData(
   inboxName: string
 ): Promise<ChatwootPanelData | null> {
   try {
-    const [openMeta, pendingMeta, resolvedMeta, snoozedMeta] = await Promise.all([
+    const [openMeta, pendingMeta, resolvedMeta, snoozedMeta, csat] = await Promise.all([
       getConversationMeta(inboxId, 'open'),
       getConversationMeta(inboxId, 'pending'),
       getConversationMeta(inboxId, 'resolved'),
       getConversationMeta(inboxId, 'snoozed'),
+      getCsatStats(inboxId),
     ]);
     return {
       inboxId,
@@ -80,6 +100,8 @@ export async function getChatwootPanelData(
       pending:    pendingMeta.all_count,
       resolved:   resolvedMeta.all_count,
       snoozed:    snoozedMeta.all_count,
+      csatAvg:    csat.avg,
+      csatTotal:  csat.total,
     };
   } catch {
     return null;

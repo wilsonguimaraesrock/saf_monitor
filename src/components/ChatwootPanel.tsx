@@ -1,4 +1,4 @@
-import { MessageCircle, UserX, Clock, CheckCircle2, BellOff } from 'lucide-react';
+import { MessageCircle, UserX, Clock, CheckCircle2, BellOff, Star } from 'lucide-react';
 import type { ChatwootPanelData } from '@/integrations/chatwoot';
 
 interface Props {
@@ -15,7 +15,7 @@ export function ChatwootPanel({ data }: Props) {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
 
         {/* Abertas */}
         <div className={`rounded-xl border p-4 flex flex-col gap-1 ${
@@ -100,6 +100,40 @@ export function ChatwootPanel({ data }: Props) {
           </span>
           <span className="text-xs text-gray-400 dark:text-slate-500">snoozed</span>
         </div>
+
+        {/* Avaliação média CSAT */}
+        {(() => {
+          const avg = data.csatAvg;
+          const colorClass =
+            avg === null          ? 'text-gray-400 dark:text-slate-500' :
+            avg >= 4.0            ? 'text-emerald-600 dark:text-emerald-400' :
+            avg >= 3.0            ? 'text-amber-600 dark:text-amber-400' :
+                                    'text-red-600 dark:text-red-400';
+          const bgClass =
+            avg === null          ? 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700' :
+            avg >= 4.0            ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800' :
+            avg >= 3.0            ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800' :
+                                    'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800';
+          const iconClass =
+            avg === null          ? 'text-gray-400 dark:text-slate-500' :
+            avg >= 4.0            ? 'text-emerald-500' :
+            avg >= 3.0            ? 'text-amber-500' :
+                                    'text-red-500';
+          return (
+            <div className={`rounded-xl border p-4 flex flex-col gap-1 ${bgClass}`}>
+              <div className="flex items-center gap-1.5">
+                <Star size={13} className={iconClass} />
+                <span className="text-xs text-gray-500 dark:text-slate-400">Avaliação média</span>
+              </div>
+              <span className={`text-2xl font-bold tabular-nums ${colorClass}`}>
+                {avg !== null ? avg.toFixed(1) : '—'}
+              </span>
+              <span className="text-xs text-gray-400 dark:text-slate-500">
+                {data.csatTotal > 0 ? `${data.csatTotal} avaliação${data.csatTotal > 1 ? 'ões' : ''}` : 'sem dados'}
+              </span>
+            </div>
+          );
+        })()}
 
       </div>
     </div>
