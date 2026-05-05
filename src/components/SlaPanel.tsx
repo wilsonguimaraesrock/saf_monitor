@@ -34,7 +34,7 @@ export function SlaPanel({ sla }: Props) {
       <div className={`grid ${cols} gap-3`}>
 
         {/* % no SLA */}
-        <div className={`h-full rounded-xl border p-4 flex flex-col gap-1 ${rateBg}`}>
+        <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${rateBg}`}>
           <div className="flex items-center gap-1.5">
             <ShieldCheck size={14} className={rateColor} />
             <span className="text-xs text-gray-500 dark:text-slate-400">Cumprimento SLA</span>
@@ -46,7 +46,7 @@ export function SlaPanel({ sla }: Props) {
         </div>
 
         {/* Em risco */}
-        <div className={`h-full rounded-xl border p-4 flex flex-col gap-1 ${
+        <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${
           sla.atRisk > 0
             ? 'bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-800'
             : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'
@@ -88,7 +88,7 @@ export function SlaPanel({ sla }: Props) {
         </div>
 
         {/* Sem prazo */}
-        <div className={`h-full rounded-xl border p-4 flex flex-col gap-1 ${
+        <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${
           sla.noDeadline > 0
             ? 'bg-yellow-50 dark:bg-yellow-950/40 border-yellow-200 dark:border-yellow-800'
             : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'

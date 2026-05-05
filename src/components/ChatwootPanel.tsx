@@ -20,7 +20,7 @@ export function ChatwootPanel({ data }: Props) {
       <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
 
         {/* Abertas */}
-        <div className={`h-full rounded-xl border p-4 flex flex-col gap-1 ${
+        <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${
           data.open > 0
             ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800'
             : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'
@@ -38,7 +38,7 @@ export function ChatwootPanel({ data }: Props) {
         </div>
 
         {/* Não atribuídas */}
-        <div className={`h-full rounded-xl border p-4 flex flex-col gap-1 ${
+        <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${
           data.unassigned > 0
             ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800'
             : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'
@@ -56,7 +56,7 @@ export function ChatwootPanel({ data }: Props) {
         </div>
 
         {/* Pendentes */}
-        <div className={`h-full rounded-xl border p-4 flex flex-col gap-1 ${
+        <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${
           data.pending > 0
             ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800'
             : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'
@@ -86,7 +86,7 @@ export function ChatwootPanel({ data }: Props) {
         </div>
 
         {/* Adiadas */}
-        <div className={`h-full rounded-xl border p-4 flex flex-col gap-1 ${
+        <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${
           data.snoozed > 0
             ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600'
             : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'
@@ -122,7 +122,7 @@ export function ChatwootPanel({ data }: Props) {
             avg >= 3.0            ? 'text-amber-500' :
                                     'text-red-500';
           return (
-            <div className={`h-full rounded-xl border p-4 flex flex-col gap-1 ${bgClass}`}>
+            <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${bgClass}`}>
               <div className="flex items-center gap-1.5">
                 <Star size={13} className={iconClass} />
                 <span className="text-xs text-gray-500 dark:text-slate-400">Avaliação média</span>
