@@ -50,7 +50,7 @@ export function ChatwootSlaPanel({ conversations, panelData }: Props) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
 
         {/* % atribuídas */}
-        <div className={`rounded-xl border p-4 flex flex-col gap-1 ${assignBg}`}>
+        <div className={`h-full rounded-xl border p-4 flex flex-col gap-1 ${assignBg}`}>
           <div className="flex items-center gap-1.5">
             <UserCheck size={14} className={assignColor} />
             <span className="text-xs text-gray-500 dark:text-slate-400">Taxa de atribuição</span>
@@ -62,7 +62,7 @@ export function ChatwootSlaPanel({ conversations, panelData }: Props) {
         </div>
 
         {/* Aguardando > 1h */}
-        <div className={`rounded-xl border p-4 flex flex-col gap-1 ${
+        <div className={`h-full rounded-xl border p-4 flex flex-col gap-1 ${
           over1h > 0
             ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800'
             : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'
@@ -80,7 +80,7 @@ export function ChatwootSlaPanel({ conversations, panelData }: Props) {
         </div>
 
         {/* Aguardando > 24h */}
-        <div className={`rounded-xl border p-4 flex flex-col gap-1 ${
+        <div className={`h-full rounded-xl border p-4 flex flex-col gap-1 ${
           over24h > 0
             ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800'
             : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'

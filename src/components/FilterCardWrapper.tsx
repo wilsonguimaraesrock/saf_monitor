@@ -45,7 +45,7 @@ export function FilterCardWrapper({
       onClick={handleClick}
       onKeyDown={(e) => e.key === 'Enter' && handleClick()}
       className={clsx(
-        'cursor-pointer rounded-2xl transition-all duration-150 outline-none',
+        'h-full cursor-pointer rounded-2xl transition-all duration-150 outline-none',
         'hover:scale-[1.02] active:scale-[0.98]',
         isActive
           ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-slate-950 shadow-lg shadow-blue-500/10'
