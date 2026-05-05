@@ -6,6 +6,7 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowLeft, AlertTriangle, Clock, CheckCircle2, LayoutGrid } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { FilterCardWrapper } from '@/components/FilterCardWrapper';
@@ -203,21 +204,32 @@ export default async function SectorPage(props: PageProps) {
     <main className="min-h-screen">
       <header className="sticky top-0 z-20 bg-gradient-to-r from-orange-500 to-amber-500 border-b border-orange-600 dark:from-slate-900 dark:to-slate-900 dark:border-slate-800">
         <div className="max-w-screen-2xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="text-orange-100 hover:text-white dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="text-orange-100 hover:text-white dark:text-slate-400 dark:hover:text-slate-200 transition-colors shrink-0">
               <ArrowLeft size={18} />
             </Link>
-            <span className="live-dot" />
-            <div>
-              <div className="flex items-center gap-2">
-                <SectorIcon size={14} className="text-orange-200 dark:text-gray-500" />
-                <h1 className="text-base font-bold text-white dark:text-slate-100 leading-tight">
-                  {sector.name} — Monitoramento de SAFs
-                </h1>
+            <Image
+              src="/logo-rockfeller-branca.png"
+              alt="Rockfeller"
+              width={794}
+              height={77}
+              className="h-7 w-auto"
+              priority
+            />
+            <div className="w-px h-6 bg-orange-300/50 dark:bg-slate-700" />
+            <div className="flex items-center gap-2">
+              <span className="live-dot" />
+              <div>
+                <div className="flex items-center gap-2">
+                  <SectorIcon size={14} className="text-orange-200 dark:text-gray-500" />
+                  <h1 className="text-base font-bold text-white dark:text-slate-100 leading-tight">
+                    {sector.name} — Monitoramento de SAFs
+                  </h1>
+                </div>
+                <p className="text-xs text-orange-100 dark:text-slate-600">
+                  {sector.departments.join(' · ')}
+                </p>
               </div>
-              <p className="text-xs text-orange-100 dark:text-slate-600">
-                {sector.departments.join(' · ')}
-              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
