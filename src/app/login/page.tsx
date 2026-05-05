@@ -40,7 +40,7 @@ function LoginForm() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-950">
+    <main className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-slate-950">
       <div className="w-full max-w-sm">
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-gray-200 dark:border-slate-800 p-8">
 

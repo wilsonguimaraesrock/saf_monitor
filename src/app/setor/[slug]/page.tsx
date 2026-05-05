@@ -213,7 +213,7 @@ export default async function SectorPage(props: PageProps) {
               alt="Rockfeller"
               width={794}
               height={77}
-              className="h-7 w-auto"
+              className="h-[1.225rem] w-auto"
               priority
             />
             <div className="w-px h-6 bg-orange-300/50 dark:bg-slate-700" />

@@ -157,7 +157,7 @@ export default function LandingPage() {
               alt="Rockfeller"
               width={794}
               height={77}
-              className="h-7 w-auto"
+              className="h-3.5 w-auto"
               priority
             />
             <div className="w-px h-6 bg-orange-300/50 dark:bg-slate-700" />
