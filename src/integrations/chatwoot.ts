@@ -86,6 +86,55 @@ export async function getChatwootPanelData(
   }
 }
 
+export interface ChatwootConversation {
+  id: number;
+  contactName: string;
+  contactPhone: string;
+  unitName: string;
+  labels: string[];
+  assigneeName: string | null;
+  lastMessage: string;
+  waitingSinceSec: number;
+  chatwootUrl: string;
+}
+
+export async function getOpenConversations(
+  inboxId: number,
+  limit = 50
+): Promise<ChatwootConversation[]> {
+  try {
+    const data = await chatwootFetch<{
+      data: {
+        payload: Array<{
+          id: number;
+          status: string;
+          waiting_since: number;
+          labels: string[];
+          assignee: { name: string } | null;
+          meta: { sender: { name: string; phone_number: string } };
+          custom_attributes: Record<string, string>;
+          last_non_activity_message: { content: string } | null;
+        }>;
+      };
+    }>(`/conversations?status=open&inbox_id=${inboxId}&page=1`);
+
+    const payload = data?.data?.payload ?? [];
+    return payload.slice(0, limit).map((c) => ({
+      id: c.id,
+      contactName:    c.meta?.sender?.name ?? '—',
+      contactPhone:   c.meta?.sender?.phone_number ?? '',
+      unitName:       c.custom_attributes?.unitName ?? '',
+      labels:         c.labels ?? [],
+      assigneeName:   c.assignee?.name ?? null,
+      lastMessage:    c.last_non_activity_message?.content ?? '',
+      waitingSinceSec: c.waiting_since ?? 0,
+      chatwootUrl: `${BASE_URL}/app/accounts/${ACCOUNT_ID}/conversations/${c.id}`,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function getInboxes(): Promise<ChatwootInbox[]> {
   const data = await chatwootFetch<{ payload: ChatwootInbox[] }>('/inboxes');
   return data.payload ?? [];

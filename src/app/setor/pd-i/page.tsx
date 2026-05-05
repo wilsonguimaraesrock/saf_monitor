@@ -36,8 +36,9 @@ import {
   getSectorTicketsFiltered,
   getSectorSlaStats,
 } from '@/repository/sectors';
-import { getChatwootPanelData } from '@/integrations/chatwoot';
+import { getChatwootPanelData, getOpenConversations } from '@/integrations/chatwoot';
 import { ChatwootPanel } from '@/components/ChatwootPanel';
+import { ChatwootConversationTable } from '@/components/ChatwootConversationTable';
 import {
   getCriticalTickets,
   getTrendData,
@@ -96,7 +97,7 @@ async function PdiContent({ searchParams }: PageProps) {
 
   // Totais principais — filtro por department (igual à landing)
   // Breakdown por categoria — filtro por priority_category (mais confiável para DSA JOY / MyRock)
-  const [sectorStats, catStats, oldest, overdue, awaiting, critical, notOpened, noRespStatus, trend, clusters, allTickets, slaStats, chatwootData] =
+  const [sectorStats, catStats, oldest, overdue, awaiting, critical, notOpened, noRespStatus, trend, clusters, allTickets, slaStats, chatwootData, openConversations] =
     await Promise.all([
       getSectorStats(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
       getSectorCategoryStats(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
@@ -111,6 +112,7 @@ async function PdiContent({ searchParams }: PageProps) {
       getSectorTicketsFiltered(depts, filters),
       getSectorSlaStats(depts),
       getChatwootPanelData(9, 'Tecnologia'),
+      getOpenConversations(9),
     ]);
 
   const s = {
@@ -212,6 +214,13 @@ async function PdiContent({ searchParams }: PageProps) {
       <SlaPanel sla={slaStats} />
 
       {chatwootData && <ChatwootPanel data={chatwootData} />}
+
+      {openConversations.length > 0 && (
+        <ChatwootConversationTable
+          conversations={openConversations}
+          title="Conversas Abertas — WhatsApp Tecnologia"
+        />
+      )}
 
       <div className="card">
         <Filters />
