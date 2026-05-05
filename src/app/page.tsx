@@ -148,15 +148,15 @@ async function LandingContent() {
 export default function LandingPage() {
   return (
     <main className="min-h-screen">
-      <header className="sticky top-0 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-gray-200 dark:border-slate-800">
+      <header className="sticky top-0 z-20 bg-gradient-to-r from-orange-500 to-amber-500 border-b border-orange-600 dark:from-slate-900 dark:to-slate-900 dark:border-slate-800">
         <div className="max-w-screen-2xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <span className="live-dot" />
             <div>
-              <h1 className="text-base font-bold text-gray-900 dark:text-slate-100 leading-tight">
+              <h1 className="text-base font-bold text-white dark:text-slate-100 leading-tight">
                 Monitoramento de SAFs — Rockfeller
               </h1>
-              <p className="text-xs text-gray-400 dark:text-slate-600">Visão geral por setor</p>
+              <p className="text-xs text-orange-100 dark:text-slate-600">Visão geral por setor</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
