@@ -83,7 +83,7 @@ const ACCENT_BAR: Record<string, string> = {
 export function StatCard({ label, value, icon: Icon, variant = 'default', subtitle, compact, tooltip }: StatCardProps) {
   const inner = (
     <div className={clsx(
-      'relative h-full rounded-2xl border shadow-sm overflow-hidden',
+      'relative h-full rounded-2xl border shadow-md dark:shadow-sm overflow-hidden',
       compact ? 'p-3' : 'p-5',
       CARD_STYLES[variant]
     )}>
