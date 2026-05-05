@@ -29,6 +29,13 @@ Deployado em Vercel · banco PostgreSQL (Digital Ocean) · notificações via Te
 - **Coleta de dados** — scraper Playwright roda via GitHub Actions a cada hora (seg–sex, 8h–20h BRT) e popula o banco
 - **Relatórios Telegram** — enviados 4×/dia via Vercel Crons e a cada hora via GitHub Actions
 
+### UI
+
+- Header laranja gradiente (`from-orange-500 to-amber-500`) com logo Rockfeller branca em todas as páginas; dark mode mantém fundo slate-900
+- Cards de indicadores com cores sólidas em gradiente no light mode e altura uniforme (`h-full`)
+- Card "Todos" com fundo cinza gradiente no light mode
+- SLA medido a partir de 2026-05-01; exibido em todas as páginas de setor e na landing
+
 ---
 
 ## Arquitetura
@@ -93,17 +100,20 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 
 - Usado apenas no setor **PD&I**, inbox **Tecnologia** (ID 9)
 - Endpoints utilizados:
-  - `GET /conversations?status=open&inbox_id=9` — conversas abertas
+  - `GET /conversations?status=open&inbox_id=9` — conversas abertas (campo `assignee` está em `meta.assignee`)
   - `GET /conversations?status={status}&inbox_id=9` — contagens por status (open/pending/resolved/snoozed)
-  - `GET /csat_survey_responses?inbox_id=9&since={unix}` — avaliações CSAT (últimos 30 dias)
-- **Requer token com papel de Administrador** no Chatwoot
+  - `GET /csat_survey_responses?inbox_id=9&since={unix}` — avaliações CSAT (últimos 30 dias, rating 1–5)
+- **Requer token com papel de Administrador** no Chatwoot (Settings → Agents → promover para Administrator)
 - Configuração: `src/integrations/chatwoot.ts`
 
-Indicadores exibidos:
+Indicadores exibidos no painel "Atendimentos WhatsApp":
 - Conversas abertas, não atribuídas, pendentes, resolvidas, adiadas
 - **Avaliação média CSAT** (escala 1–5, colorida: ≥4.0 verde / ≥3.0 amarelo / <3.0 vermelho)
-- SLA WhatsApp: taxa de atribuição, aguardando >1h, aguardando >24h, espera média
-- Tabela de conversas abertas com etiquetas coloridas e link direto para o Chatwoot
+
+Painel "SLA WhatsApp":
+- Taxa de atribuição (%), aguardando >1h, aguardando >24h, espera média
+
+Tabela de conversas abertas com etiquetas coloridas (hash determinístico → cor Tailwind) e link direto para o Chatwoot.
 
 ### Telegram
 
@@ -131,6 +141,8 @@ PostgreSQL (Digital Ocean). Tabelas principais:
 - Medição começa em tickets criados a partir de **2026-05-01** (`SLA_START` em `src/repository/sectors.ts`)
 - Taxa SLA = tickets resolvidos dentro do prazo (`resolved_at <= due_at`) ÷ total resolvidos com prazo
 - Em risco = tickets abertos com `due_at` entre agora e +48h
+- Exibido em cada dashboard de setor (`SlaPanel`) e resumido na landing page (% + em risco por card de setor)
+- 1ª resposta SAF calculada via `LATERAL JOIN` em `saf_ticket_updates` (primeira atualização com `is_ours = true`)
 
 ---
 
@@ -214,6 +226,12 @@ Chamam `/api/cron/report` e enviam relatório Telegram:
 Secrets necessários no repositório GitHub: `DATABASE_URL`, `DATABASE_SSL`, `SAF_*`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `VERCEL_APP_URL`.
 
 ---
+
+## Assets estáticos
+
+| Arquivo | Localização | Uso |
+|---|---|---|
+| `logo-rockfeller-branca.png` | `public/` | Logo branca exibida no header de todas as páginas |
 
 ## Rodando localmente
 
