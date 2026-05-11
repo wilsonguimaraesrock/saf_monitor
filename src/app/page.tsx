@@ -5,7 +5,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { AlertTriangle, BarChart3, Clock, LayoutGrid, MessageSquare, ShieldCheck, Star } from 'lucide-react';
+import { AlertTriangle, Clock, LayoutGrid, MessageSquare, ShieldCheck, Star } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { RefreshButton } from '@/components/RefreshButton';
 import { ScraperTriggerButton } from '@/components/ScraperTriggerButton';
@@ -284,13 +284,6 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Link
-              href="/dashboard"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 dark:bg-slate-800 dark:hover:bg-slate-700 text-white dark:text-slate-300 text-sm font-medium transition-colors"
-            >
-              <BarChart3 size={14} />
-              <span>Dashboard</span>
-            </Link>
             <DarkModeToggle />
             <ScraperTriggerButton />
             <RefreshButton />
