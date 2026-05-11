@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { MessageSquare, UserX } from 'lucide-react';
+import { MessageSquare, UserX, History } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
 import { ChatwootConversationModal } from './ChatwootConversationModal';
 
@@ -27,6 +27,7 @@ function labelColor(label: string): string {
 interface Props {
   conversations: ChatwootConversation[];
   title?: string;
+  onBacklog?: () => void;
 }
 
 function waitingLabel(waitingSinceSec: number): string {
@@ -54,17 +55,28 @@ function cleanMessage(content: string): string {
     .slice(0, 80);
 }
 
-export function ChatwootConversationTable({ conversations, title = 'Conversas Abertas' }: Props) {
+export function ChatwootConversationTable({ conversations, title = 'Conversas Abertas', onBacklog }: Props) {
   const [selected, setSelected] = useState<ChatwootConversation | null>(null);
 
   return (
     <>
     <ChatwootConversationModal conversation={selected} onClose={() => setSelected(null)} />
     <div className="card overflow-hidden p-0">
-      <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-800">
+      <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wide">
           {title} ({conversations.length})
         </h2>
+        {onBacklog && (
+          <button
+            onClick={onBacklog}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+              bg-slate-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300
+              hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700"
+          >
+            <History size={13} />
+            Backlog do mês
+          </button>
+        )}
       </div>
 
       {conversations.length === 0 ? (

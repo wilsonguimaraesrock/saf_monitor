@@ -200,6 +200,7 @@ export function SectorChatwootLiveSection({
       <ChatwootConversationTable
         conversations={openConversations}
         title={`Conversas Abertas — WhatsApp ${inboxName}`}
+        onBacklog={() => setBacklogOpen(true)}
       />
     </div>
   );
