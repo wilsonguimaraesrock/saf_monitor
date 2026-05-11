@@ -5,7 +5,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { AlertTriangle, Clock, LayoutGrid, MessageSquare, ShieldCheck, Star } from 'lucide-react';
+import { AlertTriangle, BarChart3, Clock, LayoutGrid, MessageSquare, ShieldCheck, Star } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { RefreshButton } from '@/components/RefreshButton';
 import { ScraperTriggerButton } from '@/components/ScraperTriggerButton';
@@ -157,7 +157,7 @@ async function LandingContent() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-100 shrink-0">
+                    <span className="text-4xl font-bold tabular-nums text-gray-900 dark:text-slate-100 shrink-0">
                       {stats.total}
                     </span>
                   </div>
@@ -165,13 +165,13 @@ async function LandingContent() {
                   <div className="flex gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-slate-800">
                     <div className="flex items-center gap-1.5">
                       <AlertTriangle size={13} className={stats.overdue > 0 ? 'text-red-500' : 'text-gray-300 dark:text-slate-600'} />
-                      <span className={`text-sm font-semibold tabular-nums ${stats.overdue > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'}`}>
+                      <span className={`text-base font-semibold tabular-nums ${stats.overdue > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'}`}>
                         {stats.overdue} atrasados
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Clock size={13} className={stats.awaiting > 0 ? 'text-amber-500' : 'text-gray-300 dark:text-slate-600'} />
-                      <span className={`text-sm font-semibold tabular-nums ${stats.awaiting > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-slate-500'}`}>
+                      <span className={`text-base font-semibold tabular-nums ${stats.awaiting > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-slate-500'}`}>
                         {stats.awaiting} aguardando
                       </span>
                     </div>
@@ -186,7 +186,7 @@ async function LandingContent() {
                         stats.slaRate > 0   ? 'text-red-500' :
                         'text-gray-300 dark:text-slate-600'
                       } />
-                      <span className={`text-sm font-semibold tabular-nums ${
+                      <span className={`text-base font-semibold tabular-nums ${
                         stats.slaRate >= 80 ? 'text-emerald-600 dark:text-emerald-400' :
                         stats.slaRate >= 60 ? 'text-amber-600 dark:text-amber-400' :
                         stats.slaRate > 0   ? 'text-red-600 dark:text-red-400' :
@@ -198,7 +198,7 @@ async function LandingContent() {
                     {stats.atRisk > 0 && (
                       <div className="flex items-center gap-1.5">
                         <Clock size={13} className="text-orange-500" />
-                        <span className="text-sm font-semibold tabular-nums text-orange-600 dark:text-orange-400">
+                        <span className="text-base font-semibold tabular-nums text-orange-600 dark:text-orange-400">
                           {stats.atRisk} em risco
                         </span>
                       </div>
@@ -217,7 +217,7 @@ async function LandingContent() {
                         </div>
                         <div className="flex items-center gap-1.5">
                           <MessageSquare size={12} className={cw.open > 0 ? 'text-blue-500' : 'text-gray-300 dark:text-slate-600'} />
-                          <span className={`text-sm font-semibold tabular-nums ${cw.open > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500'}`}>
+                          <span className={`text-base font-semibold tabular-nums ${cw.open > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500'}`}>
                             {cw.open} abertas
                           </span>
                         </div>
@@ -228,7 +228,7 @@ async function LandingContent() {
                               cw.avgWaitMin > 30 ? 'text-amber-500' :
                               'text-emerald-500'
                             } />
-                            <span className={`text-sm font-semibold tabular-nums ${
+                            <span className={`text-base font-semibold tabular-nums ${
                               cw.avgWaitMin > 60 ? 'text-red-600 dark:text-red-400' :
                               cw.avgWaitMin > 30 ? 'text-amber-600 dark:text-amber-400' :
                               'text-emerald-600 dark:text-emerald-400'
@@ -240,7 +240,7 @@ async function LandingContent() {
                         {cw.csatAvg !== null && (
                           <div className="flex items-center gap-1.5">
                             <Star size={12} className="text-amber-400 fill-amber-400" />
-                            <span className="text-sm font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                            <span className="text-base font-semibold tabular-nums text-amber-600 dark:text-amber-400">
                               {cw.csatAvg}
                             </span>
                           </div>
@@ -284,6 +284,13 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 dark:bg-slate-800 dark:hover:bg-slate-700 text-white dark:text-slate-300 text-sm font-medium transition-colors"
+            >
+              <BarChart3 size={14} />
+              <span>Dashboard</span>
+            </Link>
             <DarkModeToggle />
             <ScraperTriggerButton />
             <RefreshButton />

@@ -105,7 +105,7 @@ export function StatCard({ label, value, icon: Icon, variant = 'default', subtit
           </div>
           <p className={clsx(
             'font-bold tabular-nums',
-            compact ? 'text-xl mt-1' : 'text-4xl mt-2',
+            compact ? 'text-2xl mt-1' : 'text-5xl mt-2',
             VALUE_STYLES[variant]
           )}>
             {value}

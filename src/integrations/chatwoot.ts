@@ -231,6 +231,24 @@ export async function getChatwootLandingStats(inboxId: number): Promise<Chatwoot
   }
 }
 
+export async function getCsatForPeriod(
+  inboxId: number,
+  since: number,
+  until: number
+): Promise<{ avg: number | null; total: number }> {
+  try {
+    const data = await chatwootFetch<Array<{ rating: number }>>(
+      `/csat_survey_responses?inbox_id=${inboxId}&since=${since}&until=${until}&page=1`,
+      { cache: 'no-store' }
+    );
+    if (!Array.isArray(data) || data.length === 0) return { avg: null, total: 0 };
+    const sum = data.reduce((acc, item) => acc + Number(item.rating), 0);
+    return { total: data.length, avg: Math.round((sum / data.length) * 10) / 10 };
+  } catch {
+    return { avg: null, total: 0 };
+  }
+}
+
 export async function getInboxes(): Promise<ChatwootInbox[]> {
   const data = await chatwootFetch<{ payload: ChatwootInbox[] }>('/inboxes');
   return data.payload ?? [];
