@@ -1,10 +1,12 @@
 'use client';
 
 import { startTransition, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { History } from 'lucide-react';
 import type { ChatwootConversation, ChatwootPanelData } from '@/integrations/chatwoot';
 import { ChatwootPanel } from '@/components/ChatwootPanel';
 import { ChatwootSlaPanel } from '@/components/ChatwootSlaPanel';
 import { ChatwootConversationTable } from '@/components/ChatwootConversationTable';
+import { ChatwootBacklogModal } from '@/components/ChatwootBacklogModal';
 
 const LIVE_REFRESH_MS = 30 * 1000;
 
@@ -36,6 +38,7 @@ export function SectorChatwootLiveSection({
   const [refreshedAt, setRefreshedAt] = useState(initialRefreshedAt);
   const [isPolling, setIsPolling] = useState(false);
   const [hasPollingError, setHasPollingError] = useState(false);
+  const [backlogOpen, setBacklogOpen] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -149,6 +152,14 @@ export function SectorChatwootLiveSection({
 
   return (
     <div className="space-y-6">
+      {backlogOpen && (
+        <ChatwootBacklogModal
+          inboxId={panelData?.inboxId ?? null}
+          inboxName={inboxName}
+          onClose={() => setBacklogOpen(false)}
+        />
+      )}
+
       <div className="flex items-center justify-between gap-3 text-xs text-gray-400 dark:text-slate-500">
         <span className="inline-flex items-center gap-2">
           <span
@@ -162,7 +173,18 @@ export function SectorChatwootLiveSection({
           />
           {hasPollingError ? 'Chatwoot ao vivo em reconexao' : 'Chatwoot ao vivo'}
         </span>
-        <span>Atualizado as {refreshedLabel} · intervalo de 30s</span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setBacklogOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+              bg-slate-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300
+              hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700"
+          >
+            <History size={13} />
+            Backlog do mês
+          </button>
+          <span>Atualizado as {refreshedLabel} · intervalo de 30s</span>
+        </div>
       </div>
 
       {panelData && <ChatwootPanel data={panelData} />}

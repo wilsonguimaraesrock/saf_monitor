@@ -9,13 +9,19 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { content } = await req.json();
+  const { content, username, password } = await req.json();
 
   if (!content?.trim()) {
     return NextResponse.json({ error: 'Mensagem vazia' }, { status: 400 });
   }
 
-  // Busca o external_id (ID numérico do dfranquias) pelo UUID interno
+  if (!username?.trim() || !password?.trim()) {
+    return NextResponse.json(
+      { error: 'Credenciais do dfranquias não informadas' },
+      { status: 401 }
+    );
+  }
+
   const ticket = await queryOne<{ external_id: string }>(
     `SELECT external_id FROM saf_tickets WHERE id = $1`,
     [id]
@@ -26,7 +32,7 @@ export async function POST(
   }
 
   try {
-    await sendDfranquiasReply(ticket.external_id, content.trim());
+    await sendDfranquiasReply(ticket.external_id, content.trim(), username.trim(), password);
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json(

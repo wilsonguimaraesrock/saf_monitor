@@ -4,36 +4,30 @@
  *
  * Estratégia:
  *  1. Login via POST /login com fetch (captura PHPSESSID)
- *  2. Caches a sessão em memória por 25 min (expira antes do servidor)
+ *  2. Cache de sessão por usuário em Map (25 min TTL cada)
  *  3. Para cada reply: GET /saf/{id}/show → extrai reply[_token] → POST
+ *
+ * Credenciais do servidor (SAF_USERNAME/SAF_PASSWORD) são usadas apenas
+ * pelo scraper para listar SAFs. Replies usam credenciais por atendente.
  */
 
-const BASE_URL   = process.env.SAF_BASE_URL  ?? 'https://app.dfranquias.com.br';
-const LOGIN_URL  = `${BASE_URL}/login`;
-const USERNAME   = process.env.SAF_USERNAME  ?? '';
-const PASSWORD   = process.env.SAF_PASSWORD  ?? '';
+const BASE_URL  = process.env.SAF_BASE_URL ?? 'https://app.dfranquias.com.br';
+const LOGIN_URL = `${BASE_URL}/login`;
 
-// Sessão em memória — sobrevive dentro de uma instância serverless (25 min TTL)
-let cachedCookie = '';
-let cookieExpiry = 0;
+// Cache por usuário: username → { cookie, expiry }
+const sessionCache = new Map<string, { cookie: string; expiry: number }>();
 
 // ──────────────────────────────────────────────────────────────────────
 // Login via fetch
 // ──────────────────────────────────────────────────────────────────────
-async function doLogin(): Promise<string> {
-  if (!USERNAME || !PASSWORD) {
-    throw new Error('SAF_USERNAME e SAF_PASSWORD não configurados');
-  }
-
-  // 1. GET login page — captura PHPSESSID inicial + campos ocultos (CSRF etc)
+async function doLogin(username: string, password: string): Promise<string> {
+  // 1. GET login page — captura PHPSESSID inicial + campos ocultos
   const getRes = await fetch(LOGIN_URL, { redirect: 'follow' });
   const setCookie = getRes.headers.get('set-cookie') ?? '';
   const html = await getRes.text();
 
-  // Extrai cookie de sessão inicial
   const initSession = (setCookie.match(/PHPSESSID=([^;]+)/) ?? [])[1] ?? '';
 
-  // Extrai campos hidden do formulário (ex: _token, _csrf_token)
   const hiddenFields: Record<string, string> = {};
   for (const [, name, value] of html.matchAll(/type="hidden"[^>]*name="([^"]+)"[^>]*value="([^"]*)"/g)) {
     hiddenFields[name] = value;
@@ -45,8 +39,8 @@ async function doLogin(): Promise<string> {
   // 2. POST credentials
   const body = new URLSearchParams({
     ...hiddenFields,
-    username: USERNAME,
-    password: PASSWORD,
+    username,
+    password,
   });
 
   const postRes = await fetch(LOGIN_URL, {
@@ -60,27 +54,34 @@ async function doLogin(): Promise<string> {
     redirect: 'manual',
   });
 
-  // Pega o PHPSESSID do Set-Cookie da resposta de login
   const respCookies = postRes.headers.get('set-cookie') ?? '';
   const sessionMatch = respCookies.match(/PHPSESSID=([^;]+)/);
-
-  // Se não veio novo cookie, tenta reusar o inicial (algumas implementações não re-emitem)
   const sessionId = sessionMatch?.[1] ?? initSession;
+
   if (!sessionId) {
     throw new Error('Login dfranquias falhou — nenhum PHPSESSID recebido');
+  }
+
+  // Verifica se o login realmente funcionou (dfranquias redireciona para / em caso de sucesso)
+  const location = postRes.headers.get('location') ?? '';
+  if (location.includes('/login') || postRes.status === 200) {
+    // Ficou na página de login — credenciais incorretas
+    throw new Error('Usuário ou senha incorretos no dfranquias');
   }
 
   return `PHPSESSID=${sessionId}`;
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Obtém sessão válida (com cache)
+// Obtém sessão válida (com cache por usuário)
 // ──────────────────────────────────────────────────────────────────────
-async function getSession(): Promise<string> {
-  if (cachedCookie && Date.now() < cookieExpiry) return cachedCookie;
-  cachedCookie = await doLogin();
-  cookieExpiry = Date.now() + 25 * 60 * 1000; // 25 min
-  return cachedCookie;
+async function getSession(username: string, password: string): Promise<string> {
+  const cached = sessionCache.get(username);
+  if (cached && Date.now() < cached.expiry) return cached.cookie;
+
+  const cookie = await doLogin(username, password);
+  sessionCache.set(username, { cookie, expiry: Date.now() + 25 * 60 * 1000 });
+  return cookie;
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -95,7 +96,6 @@ async function getReplyToken(safId: string, cookie: string): Promise<string> {
 
   const html = await res.text();
 
-  // Procura o token no hidden input do formulário de reply
   const match =
     html.match(/name="reply\[_token\]"[^>]*value="([^"]+)"/) ??
     html.match(/value="([^"]+)"[^>]*name="reply\[_token\]"/);
@@ -105,10 +105,15 @@ async function getReplyToken(safId: string, cookie: string): Promise<string> {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Envia reply para um SAF no dfranquias
+// Envia reply para um SAF no dfranquias usando credenciais do atendente
 // ──────────────────────────────────────────────────────────────────────
-export async function sendDfranquiasReply(safId: string, message: string): Promise<void> {
-  const cookie = await getSession();
+export async function sendDfranquiasReply(
+  safId: string,
+  message: string,
+  username: string,
+  password: string,
+): Promise<void> {
+  const cookie = await getSession(username, password);
   const token  = await getReplyToken(safId, cookie);
 
   const body = new URLSearchParams({
@@ -125,25 +130,23 @@ export async function sendDfranquiasReply(safId: string, message: string): Promi
       'User-Agent': 'Mozilla/5.0',
     },
     body: body.toString(),
-    redirect: 'manual', // não seguir redirect — sucesso = 302
+    redirect: 'manual',
   });
 
-  // dfranquias redireciona de volta para o show após reply com sucesso
-  if (res.status !== 302 && res.status !== 200 && res.status !== 303) {
-    // Se recebemos a própria página de volta, pode ainda ter dado certo
-    if (res.status >= 400) {
-      // Sessão pode ter expirado — limpa e lança erro para retry
-      cachedCookie = '';
-      cookieExpiry = 0;
-      throw new Error(`Reply falhou: ${res.status}`);
-    }
+  if (res.status >= 400) {
+    // Sessão expirada — invalida cache e lança erro
+    sessionCache.delete(username);
+    throw new Error(`Reply falhou: ${res.status}`);
   }
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Invalida sessão manualmente (útil se receber 401/403 em outro lugar)
+// Invalida sessão de um usuário específico
 // ──────────────────────────────────────────────────────────────────────
-export function clearDfranquiasSession(): void {
-  cachedCookie = '';
-  cookieExpiry = 0;
+export function clearDfranquiasSession(username?: string): void {
+  if (username) {
+    sessionCache.delete(username);
+  } else {
+    sessionCache.clear();
+  }
 }

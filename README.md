@@ -26,6 +26,9 @@ Deployado em Vercel · banco PostgreSQL (Digital Ocean) · notificações via Te
 - **Landing page** — resumo de todos os setores: total de SAFs abertos, atrasados, aguardando resposta e SLA (%) por setor
 - **Dashboard por setor** — filtros, tabelas de tickets, SLA, breakdown por departamento e clusters de assunto
 - **Dashboard PD&I** — igual ao genérico + indicadores de atendimentos WhatsApp via Chatwoot (cards, SLA WhatsApp, tabela de conversas abertas, avaliação CSAT média)
+- **Chat nativo Chatwoot** — modal de conversa completo: histórico de mensagens, envio de texto/áudio/imagem, botão Resolver e link externo para o Chatwoot
+- **Backlog mensal Chatwoot** — botão "Backlog do mês" na área WhatsApp exibe histórico de todas as conversas do mês com status, agente e nota CSAT; navegação por mês
+- **Resposta a SAFs pelo dashboard** — atendentes respondem tickets do dfranquias diretamente no modal de ticket, com autenticação individual (credenciais por atendente salvas em localStorage)
 - **Coleta de dados** — scraper Playwright roda via GitHub Actions a cada hora (seg–sex, 8h–20h BRT) e popula o banco
 - **Relatórios Telegram** — enviados 4×/dia via Vercel Crons e a cada hora via GitHub Actions
 
@@ -89,11 +92,20 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 
 ## Integrações
 
-### dfranquias (scraper)
+### dfranquias (scraper + respostas)
 
 - Playwright autentica em `SAF_LOGIN_URL` e coleta tickets de `SAF_LIST_URL`
 - Roda via **GitHub Actions** (`.github/workflows/scraper.yml`) a cada hora nos dias úteis das 8h às 20h BRT
 - Também pode ser disparado manualmente pelo botão na UI (`ScraperTriggerButton`) via `/api/scraper/trigger`
+
+**Resposta a SAFs pelo dashboard:**
+- Atendentes podem responder tickets diretamente do modal de ticket (`TicketModal`)
+- Cada atendente usa suas **próprias credenciais do dfranquias** (não a conta compartilhada do scraper)
+- As credenciais são salvas no `localStorage` do navegador sob a chave `dfranquias_credentials`
+- O modal exibe um formulário de login na primeira abertura; ícone de chave no header permite trocar de conta
+- O servidor mantém sessões `PHPSESSID` em cache por usuário (25 min TTL, `Map` por username) em `src/lib/dfranquias-client.ts`
+- `SAF_USERNAME` / `SAF_PASSWORD` são usados **exclusivamente pelo scraper** — não para replies
+- Rota: `POST /api/tickets/[id]/reply` — recebe `{ content, username, password }`, busca `external_id` no banco, chama `sendDfranquiasReply(safId, message, username, password)`
 
 ### Chatwoot (WhatsApp)
 
@@ -106,12 +118,44 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
   - `treinamentos` → inbox **Rock Academy** (ID 10)
   - `financeiro` → inbox **Financeiro** (ID 4)
 - O dashboard faz polling em `/api/chatwoot/live?sector={slug}` a cada 30s para atualizar cards e conversas abertas sem recarregar a página inteira
-- Endpoints utilizados:
-  - `GET /conversations?status=open&inbox_id={id}` — conversas abertas (campo `assignee` está em `meta.assignee`)
-  - `GET /conversations?status={status}&inbox_id={id}` — contagens por status (open/pending/resolved/snoozed)
-  - `GET /csat_survey_responses?inbox_id={id}&since={unix}` — avaliações CSAT (últimos 30 dias, rating 1–5)
 - **Requer token com papel de Administrador** no Chatwoot (Settings → Agents → promover para Administrator)
 - Configuração: `src/integrations/chatwoot.ts`
+
+**Endpoints da API Chatwoot utilizados:**
+
+| Endpoint | Uso |
+|---|---|
+| `GET /conversations?status=open&inbox_id={id}` | Conversas abertas ao vivo |
+| `GET /conversations?status={status}&inbox_id={id}` | Contagens por status |
+| `GET /conversations?status={status}&inbox_id={id}&page={n}` | Paginação para backlog |
+| `GET /csat_survey_responses?inbox_id={id}&since={unix}` | CSAT 30 dias / mês |
+| `GET /messages` via `/api/chatwoot/conversation/[id]` | Histórico da conversa |
+| `POST /messages` via `/api/chatwoot/conversation/[id]` | Envio de mensagem/áudio/imagem |
+| `POST /toggle_status` via `PATCH /api/chatwoot/conversation/[id]` | Resolver conversa |
+| `GET /agents` + `GET /inboxes` via `/api/chatwoot/transfer` | Agentes e caixas de entrada |
+
+**Rotas internas da API Next.js (Chatwoot):**
+
+| Rota | Método | Função |
+|---|---|---|
+| `/api/chatwoot/live` | GET | Polling 30s — dados ao vivo por setor |
+| `/api/chatwoot/conversation/[id]` | GET | Histórico de mensagens |
+| `/api/chatwoot/conversation/[id]` | POST | Enviar mensagem (texto ou multipart) |
+| `/api/chatwoot/conversation/[id]` | PATCH | Resolver conversa |
+| `/api/chatwoot/conversation/[id]` | PUT | Transferir agente |
+| `/api/chatwoot/transfer` | GET | Listar agentes e inboxes |
+| `/api/chatwoot/backlog` | GET | Conversas do mês com CSAT (`?inboxId=X&month=YYYY-MM`) |
+
+**Componentes Chatwoot:**
+
+| Componente | Função |
+|---|---|
+| `SectorChatwootLiveSection` | Container ao vivo com polling, status e botão "Backlog do mês" |
+| `ChatwootPanel` | Cards de métricas: abertos, pendentes, resolvidos, CSAT |
+| `ChatwootSlaPanel` | SLA: atribuição %, espera >1h, >24h, média |
+| `ChatwootConversationTable` | Tabela de conversas abertas, abre modal ao clicar |
+| `ChatwootConversationModal` | Chat nativo: histórico, texto, áudio, imagem, Resolver |
+| `ChatwootBacklogModal` | Backlog mensal: todas as conversas com status e CSAT; navegação prev/next mês |
 
 Indicadores exibidos no painel "Atendimentos WhatsApp":
 - Conversas abertas, não atribuídas, pendentes, resolvidas, adiadas
@@ -120,7 +164,14 @@ Indicadores exibidos no painel "Atendimentos WhatsApp":
 Painel "SLA WhatsApp":
 - Taxa de atribuição (%), aguardando >1h, aguardando >24h, espera média
 
-Tabela de conversas abertas com etiquetas coloridas (hash determinístico → cor Tailwind) e link direto para o Chatwoot.
+Tabela de conversas abertas com etiquetas coloridas (hash determinístico → cor Tailwind); clique na linha abre o modal de chat nativo.
+
+**Backlog do mês:**
+- Botão "Backlog do mês" no canto superior da seção WhatsApp
+- Busca conversas de todos os status (open/resolved/pending/snoozed) do mês selecionado
+- Exibe nota CSAT por conversa (estrelas 1–5) e feedback textual quando disponível
+- Navegação entre meses (mês atual é o limite superior)
+- Clicar em uma conversa abre o modal de chat nativo para responder
 
 ### Telegram
 
@@ -166,11 +217,13 @@ PostgreSQL (Digital Ocean). Tabelas principais:
 
 | Variável | Descrição |
 |---|---|
-| `SAF_BASE_URL` | URL base do dfranquias |
+| `SAF_BASE_URL` | URL base do dfranquias (ex: `https://app.dfranquias.com.br`) |
 | `SAF_LOGIN_URL` | Página de login |
 | `SAF_LIST_URL` | Listagem de SAFs |
-| `SAF_USERNAME` | Usuário |
-| `SAF_PASSWORD` | Senha |
+| `SAF_USERNAME` | Usuário da **conta compartilhada** — usado apenas pelo scraper |
+| `SAF_PASSWORD` | Senha da **conta compartilhada** — usado apenas pelo scraper |
+
+> Replies de atendentes usam credenciais individuais armazenadas no `localStorage` do navegador — não precisam de variável de ambiente.
 
 ### Chatwoot
 
