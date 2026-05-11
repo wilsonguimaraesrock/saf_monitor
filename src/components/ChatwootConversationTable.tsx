@@ -70,8 +70,7 @@ export function ChatwootConversationTable({ conversations, title = 'Conversas Ab
           <button
             onClick={onBacklog}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-              bg-slate-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300
-              hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700"
+              bg-orange-500 hover:bg-orange-600 text-white transition-colors"
           >
             <History size={13} />
             Backlog do mês
