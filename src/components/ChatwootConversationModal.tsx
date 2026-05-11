@@ -70,9 +70,9 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
   // Transfer
   const [showTransfer, setShowTransfer] = useState(false);
   const [agents, setAgents] = useState<Array<{ id: number; name: string }>>([]);
-  const [teams, setTeams] = useState<Array<{ id: number; name: string }>>([]);
+  const [inboxes, setInboxes] = useState<Array<{ id: number; name: string }>>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
-  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
+  const [selectedInboxId, setSelectedInboxId] = useState<string>('');
   const [transferring, setTransferring] = useState(false);
   const [transferError, setTransferError] = useState('');
   const [transferDone, setTransferDone] = useState(false);
@@ -113,7 +113,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     if (!res.ok) return;
     const data = await res.json();
     setAgents(data.agents ?? []);
-    setTeams(data.teams ?? []);
+    setInboxes(data.inboxes ?? []);
   }, []);
 
   useEffect(() => {
@@ -142,7 +142,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     setConfirmResolve(false);
     setShowTransfer(false);
     setSelectedAgentId('');
-    setSelectedTeamId('');
+    setSelectedInboxId('');
     setTransferError('');
     setTransferDone(false);
     transferLoadedRef.current = false;
@@ -282,8 +282,8 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
 
   async function handleTransfer() {
     if (!conversation || transferring) return;
-    if (!selectedAgentId && !selectedTeamId) {
-      setTransferError('Selecione um agente ou departamento.');
+    if (!selectedAgentId && !selectedInboxId) {
+      setTransferError('Selecione um agente ou canal.');
       return;
     }
     setTransferring(true);
@@ -291,7 +291,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     try {
       const body: Record<string, number> = {};
       if (selectedAgentId) body.agentId = Number(selectedAgentId);
-      if (selectedTeamId) body.teamId = Number(selectedTeamId);
+      if (selectedInboxId) body.inboxId = Number(selectedInboxId);
       const res = await fetch(`/api/chatwoot/conversation/${conversation.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -459,10 +459,10 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 dark:text-slate-500 mb-1">Departamento</label>
+                  <label className="block text-xs text-gray-500 dark:text-slate-500 mb-1">Canal</label>
                   <select
-                    value={selectedTeamId}
-                    onChange={(e) => setSelectedTeamId(e.target.value)}
+                    value={selectedInboxId}
+                    onChange={(e) => setSelectedInboxId(e.target.value)}
                     className="w-full rounded-lg px-3 py-2 text-sm
                       bg-white dark:bg-slate-800
                       border border-gray-200 dark:border-slate-700
@@ -470,8 +470,8 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                       focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     <option value="">— manter atual —</option>
-                    {teams.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
+                    {inboxes.map((i) => (
+                      <option key={i.id} value={i.id}>{i.name}</option>
                     ))}
                   </select>
                 </div>
@@ -482,7 +482,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
               <div className="flex justify-end mt-3">
                 <button
                   onClick={handleTransfer}
-                  disabled={transferring || (!selectedAgentId && !selectedTeamId)}
+                  disabled={transferring || (!selectedAgentId && !selectedInboxId)}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
                     bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 dark:disabled:bg-slate-700
                     text-white disabled:text-gray-400 transition-colors"

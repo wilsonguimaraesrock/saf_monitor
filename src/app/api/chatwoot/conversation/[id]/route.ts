@@ -115,7 +115,7 @@ export async function PUT(
   }
 
   const { id } = await params;
-  const { agentId, teamId } = await req.json();
+  const { agentId, inboxId } = await req.json();
 
   const results: Record<string, unknown> = {};
 
@@ -135,20 +135,20 @@ export async function PUT(
     results.agent = await res.json();
   }
 
-  // Atribui equipe/departamento via PATCH na conversa
-  if (teamId !== undefined) {
+  // Transfere para outro canal (inbox) via PATCH na conversa
+  if (inboxId !== undefined) {
     const res = await fetch(
       `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}`,
       {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...chatwootHeaders() },
-        body: JSON.stringify({ team_id: teamId }),
+        body: JSON.stringify({ inbox_id: inboxId }),
       }
     );
     if (!res.ok) {
-      return NextResponse.json({ error: `Erro ao atribuir equipe: ${res.status}` }, { status: res.status });
+      return NextResponse.json({ error: `Erro ao transferir canal: ${res.status}` }, { status: res.status });
     }
-    results.team = await res.json();
+    results.inbox = await res.json();
   }
 
   return NextResponse.json(results);
