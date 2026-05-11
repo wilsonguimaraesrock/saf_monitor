@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   X, ExternalLink, Send, UserX, Phone, Building2, Tag,
-  RefreshCw, CheckCircle, Image as ImageIcon, Mic, MicOff,
+  RefreshCw, CheckCircle, Image as ImageIcon, Mic, MicOff, ArrowLeftRight, ChevronDown,
 } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
 
@@ -67,6 +67,17 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
   const [resolving, setResolving] = useState(false);
   const [confirmResolve, setConfirmResolve] = useState(false);
 
+  // Transfer
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [agents, setAgents] = useState<Array<{ id: number; name: string }>>([]);
+  const [teams, setTeams] = useState<Array<{ id: number; name: string }>>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
+  const [transferring, setTransferring] = useState(false);
+  const [transferError, setTransferError] = useState('');
+  const [transferDone, setTransferDone] = useState(false);
+  const transferLoadedRef = useRef(false);
+
   // Image
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -94,6 +105,21 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     setMessages(visible);
   }, []);
 
+  // Carrega agentes/equipes (uma vez por sessão de modal)
+  const loadTransferData = useCallback(async () => {
+    if (transferLoadedRef.current) return;
+    transferLoadedRef.current = true;
+    const res = await fetch('/api/chatwoot/transfer');
+    if (!res.ok) return;
+    const data = await res.json();
+    setAgents(data.agents ?? []);
+    setTeams(data.teams ?? []);
+  }, []);
+
+  useEffect(() => {
+    if (showTransfer) loadTransferData();
+  }, [showTransfer, loadTransferData]);
+
   // Fecha com Escape
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
@@ -114,6 +140,12 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     setReply('');
     setSendError('');
     setConfirmResolve(false);
+    setShowTransfer(false);
+    setSelectedAgentId('');
+    setSelectedTeamId('');
+    setTransferError('');
+    setTransferDone(false);
+    transferLoadedRef.current = false;
     clearImage();
     setLoading(true);
     fetchMessages(conversation.id).finally(() => setLoading(false));
@@ -248,6 +280,37 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     }
   }
 
+  async function handleTransfer() {
+    if (!conversation || transferring) return;
+    if (!selectedAgentId && !selectedTeamId) {
+      setTransferError('Selecione um agente ou departamento.');
+      return;
+    }
+    setTransferring(true);
+    setTransferError('');
+    try {
+      const body: Record<string, number> = {};
+      if (selectedAgentId) body.agentId = Number(selectedAgentId);
+      if (selectedTeamId) body.teamId = Number(selectedTeamId);
+      const res = await fetch(`/api/chatwoot/conversation/${conversation.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        setTransferError('Falha ao transferir. Tente novamente.');
+        return;
+      }
+      setTransferDone(true);
+      setShowTransfer(false);
+      await fetchMessages(conversation.id);
+    } catch {
+      setTransferError('Erro de conexão.');
+    } finally {
+      setTransferring(false);
+    }
+  }
+
   async function handleResolve() {
     if (!conversation || resolving) return;
     if (!confirmResolve) {
@@ -321,6 +384,21 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
 
             <div className="flex items-center gap-2 shrink-0">
               <button
+                onClick={() => setShowTransfer((v) => !v)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  showTransfer
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                    : transferDone
+                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
+                    : 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700'
+                }`}
+                title="Transferir conversa"
+              >
+                <ArrowLeftRight size={12} />
+                {transferDone ? 'Transferido' : 'Transferir'}
+                <ChevronDown size={10} className={`transition-transform ${showTransfer ? 'rotate-180' : ''}`} />
+              </button>
+              <button
                 onClick={handleResolve}
                 disabled={resolving}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -355,6 +433,69 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
               </button>
             </div>
           </div>
+
+          {/* Transfer panel */}
+          {showTransfer && (
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-950/50 shrink-0">
+              <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                Transferir conversa
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-slate-500 mb-1">Agente</label>
+                  <select
+                    value={selectedAgentId}
+                    onChange={(e) => setSelectedAgentId(e.target.value)}
+                    className="w-full rounded-lg px-3 py-2 text-sm
+                      bg-white dark:bg-slate-800
+                      border border-gray-200 dark:border-slate-700
+                      text-gray-800 dark:text-slate-100
+                      focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">— manter atual —</option>
+                    {agents.map((a) => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-slate-500 mb-1">Departamento</label>
+                  <select
+                    value={selectedTeamId}
+                    onChange={(e) => setSelectedTeamId(e.target.value)}
+                    className="w-full rounded-lg px-3 py-2 text-sm
+                      bg-white dark:bg-slate-800
+                      border border-gray-200 dark:border-slate-700
+                      text-gray-800 dark:text-slate-100
+                      focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">— manter atual —</option>
+                    {teams.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {transferError && (
+                <p className="text-xs text-red-500 mt-2">{transferError}</p>
+              )}
+              <div className="flex justify-end mt-3">
+                <button
+                  onClick={handleTransfer}
+                  disabled={transferring || (!selectedAgentId && !selectedTeamId)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+                    bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 dark:disabled:bg-slate-700
+                    text-white disabled:text-gray-400 transition-colors"
+                >
+                  {transferring
+                    ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <ArrowLeftRight size={13} />
+                  }
+                  Aplicar transferência
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-5 py-4 min-h-0">

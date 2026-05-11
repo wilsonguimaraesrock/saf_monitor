@@ -105,3 +105,51 @@ export async function PATCH(
 
   return NextResponse.json(await res.json());
 }
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  if (!BASE_URL || !TOKEN) {
+    return NextResponse.json({ error: 'Configuração Chatwoot ausente' }, { status: 500 });
+  }
+
+  const { id } = await params;
+  const { agentId, teamId } = await req.json();
+
+  const results: Record<string, unknown> = {};
+
+  // Atribui agente via endpoint de assignments
+  if (agentId !== undefined) {
+    const res = await fetch(
+      `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}/assignments`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...chatwootHeaders() },
+        body: JSON.stringify({ assignee_id: agentId }),
+      }
+    );
+    if (!res.ok) {
+      return NextResponse.json({ error: `Erro ao atribuir agente: ${res.status}` }, { status: res.status });
+    }
+    results.agent = await res.json();
+  }
+
+  // Atribui equipe/departamento via PATCH na conversa
+  if (teamId !== undefined) {
+    const res = await fetch(
+      `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...chatwootHeaders() },
+        body: JSON.stringify({ team_id: teamId }),
+      }
+    );
+    if (!res.ok) {
+      return NextResponse.json({ error: `Erro ao atribuir equipe: ${res.status}` }, { status: res.status });
+    }
+    results.team = await res.json();
+  }
+
+  return NextResponse.json(results);
+}
