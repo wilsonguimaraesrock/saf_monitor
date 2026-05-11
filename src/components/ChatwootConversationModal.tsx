@@ -383,21 +383,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => setShowTransfer((v) => !v)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  showTransfer
-                    ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                    : transferDone
-                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
-                    : 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700'
-                }`}
-                title="Transferir conversa"
-              >
-                <ArrowLeftRight size={12} />
-                {transferDone ? 'Transferido' : 'Transferir'}
-                <ChevronDown size={10} className={`transition-transform ${showTransfer ? 'rotate-180' : ''}`} />
-              </button>
+              {/* Transferir — em standby */}
               <button
                 onClick={handleResolve}
                 disabled={resolving}
@@ -434,8 +420,8 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
             </div>
           </div>
 
-          {/* Transfer panel */}
-          {showTransfer && (
+          {/* Transfer panel — em standby (showTransfer sempre false enquanto não reativado) */}
+          {false && showTransfer && (
             <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-950/50 shrink-0">
               <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide mb-3">
                 Transferir conversa
