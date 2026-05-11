@@ -325,8 +325,8 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                 disabled={resolving}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   confirmResolve
-                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                    : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900/60'
+                    ? 'bg-green-700 text-white hover:bg-green-800'
+                    : 'bg-green-600 text-white hover:bg-green-700'
                 }`}
                 title="Resolver conversa"
               >
@@ -341,8 +341,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                  bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300
-                  hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors"
+                  bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                 title="Abrir no Chatwoot"
               >
                 <ExternalLink size={12} />Chatwoot
