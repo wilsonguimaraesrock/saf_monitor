@@ -153,7 +153,7 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 | `SectorChatwootLiveSection` | Container ao vivo com polling, status e botão "Backlog do mês" |
 | `ChatwootPanel` | Cards de métricas: abertos, pendentes, resolvidos, CSAT |
 | `ChatwootSlaPanel` | SLA: atribuição %, espera >1h, >24h, média |
-| `ChatwootConversationTable` | Tabela de conversas abertas, abre modal ao clicar |
+| `ChatwootConversationTable` | Tabela de conversas abertas, abre modal ao clicar; botão "Backlog do mês" no header |
 | `ChatwootConversationModal` | Chat nativo: histórico, texto, áudio, imagem, Resolver |
 | `ChatwootBacklogModal` | Backlog mensal: todas as conversas com status e CSAT; navegação prev/next mês |
 
@@ -167,11 +167,25 @@ Painel "SLA WhatsApp":
 Tabela de conversas abertas com etiquetas coloridas (hash determinístico → cor Tailwind); clique na linha abre o modal de chat nativo.
 
 **Backlog do mês:**
-- Botão "Backlog do mês" no canto superior da seção WhatsApp
+- Botão laranja "Backlog do mês" no header do card "CONVERSAS ABERTAS"
 - Busca conversas de todos os status (open/resolved/pending/snoozed) do mês selecionado
+- Pagina resolvidas (até 6 páginas × 25 = ~150 conversas), para quando encontra itens anteriores ao mês
 - Exibe nota CSAT por conversa (estrelas 1–5) e feedback textual quando disponível
 - Navegação entre meses (mês atual é o limite superior)
 - Clicar em uma conversa abre o modal de chat nativo para responder
+
+**Estrutura da resposta CSAT (`/csat_survey_responses`):**
+```json
+{
+  "id": 1,
+  "rating": 5,
+  "feedback_message": "",
+  "conversation_id": 53,
+  "contact": { "id": 62, "name": "...", "phone_number": "..." },
+  "created_at": 1777926417
+}
+```
+> `rating` é numérico (1–5). O join com conversas usa `conversation_id` (campo direto, não `conversation.id`).
 
 ### Telegram
 
