@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
-import { X, ExternalLink, Clock, Calendar, AlertTriangle, Tag, Building2, MessageSquare } from 'lucide-react';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { X, ExternalLink, Clock, Calendar, AlertTriangle, Tag, Building2, MessageSquare, Send } from 'lucide-react';
 import { clsx } from 'clsx';
 import { TicketRow } from './TicketTable';
 
@@ -51,7 +51,17 @@ function formatDate(raw: string | null | undefined): string {
 export function TicketModal({ ticket, onClose }: TicketModalProps) {
   const [updates, setUpdates] = useState<Update[]>([]);
   const [loading, setLoading] = useState(false);
+  const [reply, setReply] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
+  const [sendOk, setSendOk] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const fetchUpdates = useCallback(async (id: string) => {
+    const data = await fetch(`/api/tickets/${id}`).then((r) => r.json());
+    setUpdates(data.updates ?? []);
+  }, []);
 
   // Fecha com Escape
   useEffect(() => {
@@ -76,13 +86,12 @@ export function TicketModal({ ticket, onClose }: TicketModalProps) {
   useEffect(() => {
     if (!ticket) return;
     setUpdates([]);
+    setReply('');
+    setSendError('');
+    setSendOk(false);
     setLoading(true);
-    fetch(`/api/tickets/${ticket.id}`)
-      .then((r) => r.json())
-      .then((data) => setUpdates(data.updates ?? []))
-      .catch(() => setUpdates([]))
-      .finally(() => setLoading(false));
-  }, [ticket?.id]);
+    fetchUpdates(ticket.id).finally(() => setLoading(false));
+  }, [ticket?.id, fetchUpdates]);
 
   // Scroll automático para o fim do chat
   useEffect(() => {
@@ -90,6 +99,42 @@ export function TicketModal({ ticket, onClose }: TicketModalProps) {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [updates]);
+
+  async function handleSend() {
+    if (!ticket || !reply.trim() || sending) return;
+    setSending(true);
+    setSendError('');
+    setSendOk(false);
+    try {
+      const res = await fetch(`/api/tickets/${ticket.id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: reply.trim() }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setSendError(err.error ?? 'Falha ao enviar. Tente novamente.');
+        return;
+      }
+      setReply('');
+      setSendOk(true);
+      setTimeout(() => setSendOk(false), 3000);
+      // Recarrega histórico do banco (scraper ainda não capturou, mas mostra otimismo)
+      await fetchUpdates(ticket.id);
+    } catch {
+      setSendError('Erro de conexão.');
+    } finally {
+      setSending(false);
+      textareaRef.current?.focus();
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }
 
   if (!ticket) return null;
 
@@ -237,18 +282,57 @@ export function TicketModal({ ticket, onClose }: TicketModalProps) {
             )}
           </div>
 
-          {/* Footer */}
+          {/* Reply box */}
           <div className="px-6 py-4 border-t border-gray-100 dark:border-slate-800 shrink-0">
-            <a
-              href={dfranquiasUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl
-                bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
-            >
-              <ExternalLink size={15} />
-              Abrir no dfranquias
-            </a>
+            {sendError && (
+              <p className="text-xs text-red-500 mb-2">{sendError}</p>
+            )}
+            {sendOk && (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-2">
+                ✓ Mensagem enviada ao dfranquias. O histórico será atualizado na próxima coleta.
+              </p>
+            )}
+            <div className="flex items-end gap-2">
+              <textarea
+                ref={textareaRef}
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Digite sua resposta… (Enter para enviar, Shift+Enter para nova linha)"
+                rows={2}
+                className="flex-1 resize-none rounded-xl px-4 py-2.5 text-sm
+                  bg-gray-50 dark:bg-slate-800
+                  border border-gray-200 dark:border-slate-700
+                  text-gray-800 dark:text-slate-100
+                  placeholder-gray-400 dark:placeholder-slate-600
+                  focus:outline-none focus:ring-2 focus:ring-blue-500
+                  transition-colors"
+              />
+              <button
+                onClick={handleSend}
+                disabled={!reply.trim() || sending}
+                className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl
+                  bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 dark:disabled:bg-slate-700
+                  text-white disabled:text-gray-400 transition-colors"
+                title="Enviar (Enter)"
+              >
+                {sending
+                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <Send size={16} />
+                }
+              </button>
+              <a
+                href={dfranquiasUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl
+                  bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700
+                  text-gray-500 dark:text-slate-400 transition-colors"
+                title="Abrir no dfranquias"
+              >
+                <ExternalLink size={16} />
+              </a>
+            </div>
           </div>
         </div>
       </div>
