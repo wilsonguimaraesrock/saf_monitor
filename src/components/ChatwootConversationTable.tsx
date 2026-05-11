@@ -1,7 +1,9 @@
 'use client';
 
-import { ExternalLink, UserX } from 'lucide-react';
+import { useState } from 'react';
+import { MessageSquare, UserX } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
+import { ChatwootConversationModal } from './ChatwootConversationModal';
 
 const LABEL_COLORS = [
   'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300',
@@ -53,7 +55,11 @@ function cleanMessage(content: string): string {
 }
 
 export function ChatwootConversationTable({ conversations, title = 'Conversas Abertas' }: Props) {
+  const [selected, setSelected] = useState<ChatwootConversation | null>(null);
+
   return (
+    <>
+    <ChatwootConversationModal conversation={selected} onClose={() => setSelected(null)} />
     <div className="card overflow-hidden p-0">
       <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-800">
         <h2 className="text-base font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wide">
@@ -81,7 +87,11 @@ export function ChatwootConversationTable({ conversations, title = 'Conversas Ab
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-slate-800/60">
               {conversations.map((c, i) => (
-                <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
+                <tr
+                  key={c.id}
+                  onClick={() => setSelected(c)}
+                  className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+                >
                   <td className="px-4 py-3 text-gray-400 dark:text-slate-600 text-sm tabular-nums">{i + 1}</td>
 
                   <td className="px-4 py-3">
@@ -129,16 +139,14 @@ export function ChatwootConversationTable({ conversations, title = 'Conversas Ab
                   </td>
 
                   <td className="px-4 py-3">
-                    <a
-                      href={c.chatwootUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors"
-                      title="Abrir no Chatwoot"
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelected(c); }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors"
+                      title="Abrir conversa"
                     >
-                      <ExternalLink size={12} />
-                      Chatwoot
-                    </a>
+                      <MessageSquare size={12} />
+                      Abrir
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -147,5 +155,6 @@ export function ChatwootConversationTable({ conversations, title = 'Conversas Ab
         </div>
       )}
     </div>
+    </>
   );
 }
