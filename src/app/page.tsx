@@ -5,7 +5,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { AlertTriangle, Clock, LayoutGrid, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Clock, LayoutGrid, MessageSquare, ShieldCheck, Star } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { RefreshButton } from '@/components/RefreshButton';
 import { ScraperTriggerButton } from '@/components/ScraperTriggerButton';
@@ -14,6 +14,8 @@ import { SECTORS } from '@/lib/sectors';
 import { getSectorDisplayDepartments } from '@/lib/sectors';
 import type { SectorColor } from '@/lib/sectors';
 import { getLandingStats } from '@/repository/sectors';
+import { getChatwootLandingStats } from '@/integrations/chatwoot';
+import type { ChatwootLandingStats } from '@/integrations/chatwoot';
 import { queryOne } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -68,14 +70,23 @@ const LANDING_ACCENT_STYLES: Record<SectorColor, {
   },
 };
 
+function fmtWait(min: number): string {
+  if (min < 60) return `${min}min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.round(h / 24)}d`;
+}
+
 async function LandingContent() {
   // Monta mapa slug → departments para getLandingStats
   const sectorsMap = Object.fromEntries(
     SECTORS.map((s) => [s.slug, s.departments])
   );
 
-  // Stats globais e por setor em paralelo
-  const [globalRow, sectorStats] = await Promise.all([
+  const sectorsWithChatwoot = SECTORS.filter((s) => s.chatwoot);
+
+  // Stats globais, por setor e WhatsApp em paralelo
+  const [globalRow, sectorStats, chatwootResults] = await Promise.all([
     queryOne<{ total: string; overdue: string; awaiting: string }>(
       `SELECT
          COUNT(*) FILTER (WHERE status NOT IN ('resolvido','cancelado')
@@ -90,7 +101,12 @@ async function LandingContent() {
       []
     ),
     getLandingStats(sectorsMap),
+    Promise.all(sectorsWithChatwoot.map((s) => getChatwootLandingStats(s.chatwoot!.inboxId))),
   ]);
+
+  const chatwootStats: Record<string, ChatwootLandingStats> = Object.fromEntries(
+    sectorsWithChatwoot.map((s, i) => [s.slug, chatwootResults[i]])
+  );
 
   const global = {
     total:   Number(globalRow?.total   ?? 0),
@@ -188,6 +204,50 @@ async function LandingContent() {
                       </div>
                     )}
                   </div>
+
+                  {/* WhatsApp row */}
+                  {sector.chatwoot && (() => {
+                    const cw = chatwootStats[sector.slug];
+                    if (!cw) return null;
+                    return (
+                      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100 dark:border-slate-800">
+                        <div className="flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500 font-medium">
+                          <MessageSquare size={11} className="text-green-500 shrink-0" />
+                          <span className="text-gray-300 dark:text-slate-600 mr-0.5">WA</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <MessageSquare size={12} className={cw.open > 0 ? 'text-blue-500' : 'text-gray-300 dark:text-slate-600'} />
+                          <span className={`text-sm font-semibold tabular-nums ${cw.open > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500'}`}>
+                            {cw.open} abertas
+                          </span>
+                        </div>
+                        {cw.avgWaitMin !== null && (
+                          <div className="flex items-center gap-1.5">
+                            <Clock size={12} className={
+                              cw.avgWaitMin > 60 ? 'text-red-500' :
+                              cw.avgWaitMin > 30 ? 'text-amber-500' :
+                              'text-emerald-500'
+                            } />
+                            <span className={`text-sm font-semibold tabular-nums ${
+                              cw.avgWaitMin > 60 ? 'text-red-600 dark:text-red-400' :
+                              cw.avgWaitMin > 30 ? 'text-amber-600 dark:text-amber-400' :
+                              'text-emerald-600 dark:text-emerald-400'
+                            }`}>
+                              {fmtWait(cw.avgWaitMin)} espera
+                            </span>
+                          </div>
+                        )}
+                        {cw.csatAvg !== null && (
+                          <div className="flex items-center gap-1.5">
+                            <Star size={12} className="text-amber-400 fill-amber-400" />
+                            <span className="text-sm font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                              {cw.csatAvg}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </Link>
             );

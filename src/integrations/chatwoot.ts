@@ -183,6 +183,54 @@ export async function getOpenConversations(
   }
 }
 
+export interface ChatwootLandingStats {
+  open: number;
+  avgWaitMin: number | null;
+  csatAvg: number | null;
+}
+
+export async function getChatwootLandingStats(inboxId: number): Promise<ChatwootLandingStats> {
+  const empty: ChatwootLandingStats = { open: 0, avgWaitMin: null, csatAvg: null };
+  try {
+    const since30d = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
+    const now      = Math.floor(Date.now() / 1000);
+
+    const [convRes, csatRes] = await Promise.all([
+      chatwootFetch<{
+        data: {
+          meta: { all_count: number };
+          payload: Array<{ waiting_since: number | null }>;
+        };
+      }>(`/conversations?status=open&inbox_id=${inboxId}&page=1`, { cache: 'no-store' }),
+
+      chatwootFetch<Array<{ rating: number }>>(
+        `/csat_survey_responses?inbox_id=${inboxId}&since=${since30d}&page=1`,
+        { cache: 'no-store' }
+      ).catch(() => [] as Array<{ rating: number }>),
+    ]);
+
+    const open    = convRes?.data?.meta?.all_count ?? 0;
+    const payload = convRes?.data?.payload ?? [];
+
+    const waits = payload
+      .filter((c) => c.waiting_since && c.waiting_since > 0)
+      .map((c) => now - c.waiting_since!);
+
+    const avgWaitMin = waits.length > 0
+      ? Math.round(waits.reduce((a, b) => a + b, 0) / waits.length / 60)
+      : null;
+
+    const csatArr = Array.isArray(csatRes) ? csatRes : [];
+    const csatAvg = csatArr.length > 0
+      ? Math.round(csatArr.reduce((s, r) => s + Number(r.rating), 0) / csatArr.length * 10) / 10
+      : null;
+
+    return { open, avgWaitMin, csatAvg };
+  } catch {
+    return empty;
+  }
+}
+
 export async function getInboxes(): Promise<ChatwootInbox[]> {
   const data = await chatwootFetch<{ payload: ChatwootInbox[] }>('/inboxes');
   return data.payload ?? [];

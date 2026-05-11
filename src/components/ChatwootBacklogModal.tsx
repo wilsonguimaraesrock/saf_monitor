@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, MessageSquare, Star, UserX, CheckCircle2, Clock, Loader2 } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, MessageSquare, Star, UserX, CheckCircle2, Clock, Loader2, Search } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { BacklogConversation } from '@/app/api/chatwoot/backlog/route';
 import { ChatwootConversationModal } from './ChatwootConversationModal';
@@ -85,7 +85,7 @@ function toModalConversation(c: BacklogConversation): ChatwootConversation {
     id: c.id,
     contactName:    c.contactName,
     contactPhone:   c.contactPhone,
-    unitName:       '',
+    unitName:       c.unidade,
     labels:         c.labels,
     assigneeName:   c.assigneeName,
     lastMessage:    '',
@@ -103,6 +103,10 @@ export function ChatwootBacklogModal({ inboxId, inboxName, onClose }: Props) {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
   const [selected, setSelected] = useState<ChatwootConversation | null>(null);
+
+  const [filterEscola, setFilterEscola]   = useState('');
+  const [filterDepto, setFilterDepto]     = useState('');
+  const [filterAssunto, setFilterAssunto] = useState('');
 
   const fetchBacklog = useCallback(async () => {
     if (!inboxId) return;
@@ -155,10 +159,22 @@ export function ChatwootBacklogModal({ inboxId, inboxName, onClose }: Props) {
   }
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
 
+  // Client-side filtering
+  const filtered = conversations.filter((c) => {
+    const esc  = filterEscola.toLowerCase();
+    const dep  = filterDepto.toLowerCase();
+    const ass  = filterAssunto.toLowerCase();
+    if (esc && !c.unidade.toLowerCase().includes(esc)) return false;
+    if (dep && !c.departamento.toLowerCase().includes(dep) && !c.subdepartamento.toLowerCase().includes(dep)) return false;
+    if (ass && !c.assunto.toLowerCase().includes(ass)) return false;
+    return true;
+  });
+  const hasFilter = filterEscola || filterDepto || filterAssunto;
+
   // Stats
-  const total    = conversations.length;
-  const resolved = conversations.filter((c) => c.status === 'resolved').length;
-  const withCsat = conversations.filter((c) => c.csatRating !== null);
+  const total    = filtered.length;
+  const resolved = filtered.filter((c) => c.status === 'resolved').length;
+  const withCsat = filtered.filter((c) => c.csatRating !== null);
   const csatAvg  = withCsat.length
     ? Math.round((withCsat.reduce((s, c) => s + (c.csatRating ?? 0), 0) / withCsat.length) * 10) / 10
     : null;
@@ -171,7 +187,7 @@ export function ChatwootBacklogModal({ inboxId, inboxName, onClose }: Props) {
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div
-          className="pointer-events-auto w-full max-w-5xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl
+          className="pointer-events-auto w-full max-w-7xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl
             bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800"
           onClick={(e) => e.stopPropagation()}
         >
@@ -213,11 +229,13 @@ export function ChatwootBacklogModal({ inboxId, inboxName, onClose }: Props) {
           </div>
 
           {/* Stats bar */}
-          {!loading && !error && total > 0 && (
+          {!loading && !error && conversations.length > 0 && (
             <div className="flex items-center gap-6 px-6 py-3 border-b border-gray-100 dark:border-slate-800 shrink-0
               bg-gray-50 dark:bg-slate-950/40 text-sm">
               <span className="text-gray-500 dark:text-slate-400">
-                <span className="font-semibold text-gray-800 dark:text-slate-100">{total}</span> conversas
+                <span className="font-semibold text-gray-800 dark:text-slate-100">{total}</span>
+                {hasFilter && <span className="text-gray-400"> / {conversations.length}</span>}
+                {' '}conversas
               </span>
               <span className="text-gray-500 dark:text-slate-400">
                 <span className="font-semibold text-emerald-600 dark:text-emerald-400">{resolved}</span> resolvidas
@@ -231,6 +249,49 @@ export function ChatwootBacklogModal({ inboxId, inboxName, onClose }: Props) {
                   <StarRating rating={csatAvg} />
                   <span className="text-xs text-gray-400">({withCsat.length} avaliações)</span>
                 </span>
+              )}
+            </div>
+          )}
+
+          {/* Filters */}
+          {!loading && !error && conversations.length > 0 && (
+            <div className="flex items-center gap-2 px-6 py-3 border-b border-gray-100 dark:border-slate-800 shrink-0">
+              <Search size={13} className="text-gray-400 dark:text-slate-500 shrink-0" />
+              <input
+                type="text"
+                placeholder="Escola / Unidade"
+                value={filterEscola}
+                onChange={(e) => setFilterEscola(e.target.value)}
+                className="flex-1 text-sm px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
+                  bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-300
+                  placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+              <input
+                type="text"
+                placeholder="Departamento"
+                value={filterDepto}
+                onChange={(e) => setFilterDepto(e.target.value)}
+                className="flex-1 text-sm px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
+                  bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-300
+                  placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+              <input
+                type="text"
+                placeholder="Assunto"
+                value={filterAssunto}
+                onChange={(e) => setFilterAssunto(e.target.value)}
+                className="flex-1 text-sm px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
+                  bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-300
+                  placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+              {hasFilter && (
+                <button
+                  onClick={() => { setFilterEscola(''); setFilterDepto(''); setFilterAssunto(''); }}
+                  className="text-xs px-2 py-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-slate-300
+                    hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap"
+                >
+                  Limpar
+                </button>
               )}
             </div>
           )}
@@ -252,27 +313,40 @@ export function ChatwootBacklogModal({ inboxId, inboxName, onClose }: Props) {
                   Tentar novamente
                 </button>
               </div>
-            ) : total === 0 ? (
+            ) : conversations.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
                 <MessageSquare size={32} className="text-gray-200 dark:text-slate-700" />
                 <p className="text-sm text-gray-400 dark:text-slate-500">Nenhuma conversa encontrada neste período.</p>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
+                <Search size={32} className="text-gray-200 dark:text-slate-700" />
+                <p className="text-sm text-gray-400 dark:text-slate-500">Nenhuma conversa corresponde aos filtros.</p>
+                <button
+                  onClick={() => { setFilterEscola(''); setFilterDepto(''); setFilterAssunto(''); }}
+                  className="mt-1 text-xs px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  Limpar filtros
+                </button>
               </div>
             ) : (
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-950/80 backdrop-blur-sm">
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide w-8">#</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Contato</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Labels</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Agente</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Data</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">CSAT</th>
-                    <th className="px-4 py-3 w-12"></th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide w-8">#</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Contato</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Escola</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Departamento</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Assunto</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Agente</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Data</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">CSAT</th>
+                    <th className="px-3 py-3 w-12"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800/60">
-                  {conversations.map((c, i) => {
+                  {filtered.map((c, i) => {
                     const statusInfo = STATUS_MAP[c.status] ?? { label: c.status, cls: 'bg-gray-100 text-gray-500', icon: null };
                     return (
                       <tr
@@ -280,38 +354,52 @@ export function ChatwootBacklogModal({ inboxId, inboxName, onClose }: Props) {
                         onClick={() => setSelected(toModalConversation(c))}
                         className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
                       >
-                        <td className="px-4 py-3 text-gray-400 dark:text-slate-600 tabular-nums">{i + 1}</td>
+                        <td className="px-3 py-3 text-gray-400 dark:text-slate-600 tabular-nums">{i + 1}</td>
 
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-gray-800 dark:text-slate-100">{c.contactName}</p>
+                        <td className="px-3 py-3">
+                          <p className="font-medium text-gray-800 dark:text-slate-100 whitespace-nowrap">{c.contactName}</p>
                           {c.contactPhone && (
                             <p className="text-xs text-gray-400 dark:text-slate-500">{c.contactPhone}</p>
                           )}
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3">
+                          {c.unidade
+                            ? <span className="text-xs text-gray-600 dark:text-slate-300">{c.unidade}</span>
+                            : <span className="text-gray-300 dark:text-slate-700">—</span>
+                          }
+                        </td>
+
+                        <td className="px-3 py-3">
+                          {c.departamento ? (
+                            <div>
+                              <p className="text-xs text-gray-600 dark:text-slate-300">{c.departamento}</p>
+                              {c.subdepartamento && (
+                                <p className="text-xs text-gray-400 dark:text-slate-500">{c.subdepartamento}</p>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-300 dark:text-slate-700">—</span>
+                          )}
+                        </td>
+
+                        <td className="px-3 py-3 max-w-[180px]">
+                          {c.assunto
+                            ? <span className="text-xs text-gray-600 dark:text-slate-300 line-clamp-2">{c.assunto}</span>
+                            : <span className="text-gray-300 dark:text-slate-700">—</span>
+                          }
+                        </td>
+
+                        <td className="px-3 py-3">
                           <span className={clsx('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium', statusInfo.cls)}>
                             {statusInfo.icon}
                             {statusInfo.label}
                           </span>
                         </td>
 
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-1">
-                            {c.labels.length > 0
-                              ? c.labels.map((l) => (
-                                  <span key={l} className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${labelColor(l)}`}>
-                                    {l}
-                                  </span>
-                                ))
-                              : <span className="text-gray-300 dark:text-slate-700">—</span>
-                            }
-                          </div>
-                        </td>
-
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3">
                           {c.assigneeName
-                            ? <span className="text-gray-600 dark:text-slate-300">{c.assigneeName}</span>
+                            ? <span className="text-xs text-gray-600 dark:text-slate-300 whitespace-nowrap">{c.assigneeName}</span>
                             : (
                               <span className="inline-flex items-center gap-1 text-xs text-red-500 dark:text-red-400">
                                 <UserX size={12} /> Não atribuído
@@ -320,20 +408,20 @@ export function ChatwootBacklogModal({ inboxId, inboxName, onClose }: Props) {
                           }
                         </td>
 
-                        <td className="px-4 py-3 text-gray-500 dark:text-slate-400 tabular-nums whitespace-nowrap">
+                        <td className="px-3 py-3 text-gray-500 dark:text-slate-400 tabular-nums whitespace-nowrap text-xs">
                           {formatDate(c.createdAt)}
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3">
                           <StarRating rating={c.csatRating} />
                           {c.csatFeedback && (
-                            <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5 max-w-[160px] truncate" title={c.csatFeedback}>
+                            <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5 max-w-[120px] truncate" title={c.csatFeedback}>
                               {c.csatFeedback}
                             </p>
                           )}
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3">
                           <button
                             onClick={(e) => { e.stopPropagation(); setSelected(toModalConversation(c)); }}
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium
