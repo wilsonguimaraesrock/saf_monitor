@@ -1,8 +1,18 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { X, ExternalLink, Send, UserX, Phone, Building2, Tag, RefreshCw } from 'lucide-react';
+import {
+  X, ExternalLink, Send, UserX, Phone, Building2, Tag,
+  RefreshCw, CheckCircle, Image as ImageIcon, Mic, MicOff,
+} from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
+
+interface Attachment {
+  id: number;
+  file_type: 'image' | 'audio' | 'file' | 'video';
+  data_url: string;
+  thumb_url?: string;
+}
 
 interface Message {
   id: number;
@@ -11,6 +21,7 @@ interface Message {
   created_at: number;
   private: boolean;
   sender?: { name: string; type: string } | null;
+  attachments?: Attachment[];
 }
 
 interface Props {
@@ -22,7 +33,7 @@ const LABEL_COLORS = [
   'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300',
   'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
   'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
-  'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
+  'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400',
   'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300',
   'bg-cyan-100 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300',
   'bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300',
@@ -39,11 +50,12 @@ function labelColor(label: string): string {
 
 function formatTime(ts: number): string {
   return new Date(ts * 1000).toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
   });
+}
+
+function fmtSec(s: number): string {
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 export function ChatwootConversationModal({ conversation, onClose }: Props) {
@@ -52,6 +64,22 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
+  const [resolving, setResolving] = useState(false);
+  const [confirmResolve, setConfirmResolve] = useState(false);
+
+  // Image
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Audio
+  const [recording, setRecording] = useState(false);
+  const [recSec, setRecSec] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -60,7 +88,6 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     if (!res.ok) return;
     const data = await res.json();
     const payload: Message[] = data?.payload ?? [];
-    // Only show incoming (0) and outgoing (1), sorted by created_at
     const visible = payload
       .filter((m) => m.message_type === 0 || m.message_type === 1)
       .sort((a, b) => a.created_at - b.created_at);
@@ -69,9 +96,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
 
   // Fecha com Escape
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
@@ -88,6 +113,8 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     setMessages([]);
     setReply('');
     setSendError('');
+    setConfirmResolve(false);
+    clearImage();
     setLoading(true);
     fetchMessages(conversation.id).finally(() => setLoading(false));
   }, [conversation?.id, fetchMessages]);
@@ -101,13 +128,66 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
 
   // Scroll para o fim após carregar/atualizar
   useEffect(() => {
-    if (messages.length > 0) {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (messages.length > 0) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Cleanup stream ao desmontar
+  useEffect(() => {
+    return () => stopStream();
+  }, []);
+
+  function stopStream() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    if (recTimerRef.current) clearInterval(recTimerRef.current);
+  }
+
+  function clearImage() {
+    setImageFile(null);
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  }
+
+  async function sendAttachment(file: Blob, filename: string) {
+    if (!conversation) return;
+    setSending(true);
+    setSendError('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file, filename);
+      if (reply.trim()) fd.append('content', reply.trim());
+      const res = await fetch(`/api/chatwoot/conversation/${conversation.id}`, {
+        method: 'POST',
+        body: fd,
+      });
+      if (!res.ok) { setSendError('Falha ao enviar. Tente novamente.'); return; }
+      setReply('');
+      clearImage();
+      await fetchMessages(conversation.id);
+    } catch {
+      setSendError('Erro de conexão.');
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function handleSend() {
-    if (!conversation || !reply.trim() || sending) return;
+    if (!conversation || sending) return;
+
+    if (imageFile) {
+      await sendAttachment(imageFile, imageFile.name);
+      return;
+    }
+
+    if (!reply.trim()) return;
     setSending(true);
     setSendError('');
     try {
@@ -116,10 +196,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: reply.trim() }),
       });
-      if (!res.ok) {
-        setSendError('Falha ao enviar. Tente novamente.');
-        return;
-      }
+      if (!res.ok) { setSendError('Falha ao enviar. Tente novamente.'); return; }
       setReply('');
       await fetchMessages(conversation.id);
     } catch {
@@ -131,21 +208,71 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  }
+
+  async function handleRecordToggle() {
+    if (recording) {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        stopStream();
+        setRecording(false);
+        setRecSec(0);
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        await sendAttachment(blob, 'audio.webm');
+      };
+
+      recorder.start();
+      setRecording(true);
+      setRecSec(0);
+      recTimerRef.current = setInterval(() => setRecSec((s) => s + 1), 1000);
+    } catch {
+      setSendError('Permissão de microfone negada.');
     }
   }
+
+  async function handleResolve() {
+    if (!conversation || resolving) return;
+    if (!confirmResolve) {
+      setConfirmResolve(true);
+      setTimeout(() => setConfirmResolve(false), 4000);
+      return;
+    }
+    setResolving(true);
+    try {
+      const res = await fetch(`/api/chatwoot/conversation/${conversation.id}`, { method: 'PATCH' });
+      if (res.ok) onClose();
+    } finally {
+      setResolving(false);
+      setConfirmResolve(false);
+    }
+  }
+
+  const canSend = !sending && !recording && (!!reply.trim() || !!imageFile);
 
   if (!conversation) return null;
 
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
@@ -163,25 +290,21 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
               <div className="flex flex-wrap items-center gap-3 mt-1">
                 {conversation.contactPhone && (
                   <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500">
-                    <Phone size={11} />
-                    {conversation.contactPhone}
+                    <Phone size={11} />{conversation.contactPhone}
                   </span>
                 )}
                 {conversation.unitName && (
                   <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500">
-                    <Building2 size={11} />
-                    {conversation.unitName}
+                    <Building2 size={11} />{conversation.unitName}
                   </span>
                 )}
                 {conversation.assigneeName ? (
                   <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500">
-                    <Tag size={11} />
-                    {conversation.assigneeName}
+                    <Tag size={11} />{conversation.assigneeName}
                   </span>
                 ) : (
                   <span className="flex items-center gap-1 text-xs text-red-500 dark:text-red-400">
-                    <UserX size={11} />
-                    Não atribuído
+                    <UserX size={11} />Não atribuído
                   </span>
                 )}
               </div>
@@ -197,6 +320,22 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleResolve}
+                disabled={resolving}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  confirmResolve
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900/60'
+                }`}
+                title="Resolver conversa"
+              >
+                {resolving
+                  ? <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  : <CheckCircle size={12} />
+                }
+                {confirmResolve ? 'Confirmar?' : 'Resolver'}
+              </button>
               <a
                 href={conversation.chatwootUrl}
                 target="_blank"
@@ -206,8 +345,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                   hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors"
                 title="Abrir no Chatwoot"
               >
-                <ExternalLink size={12} />
-                Chatwoot
+                <ExternalLink size={12} />Chatwoot
               </a>
               <button
                 onClick={onClose}
@@ -239,25 +377,53 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                       key={m.id}
                       className={`flex flex-col max-w-[80%] gap-0.5 ${isOutgoing ? 'ml-auto items-end' : 'items-start'}`}
                     >
-                      {!isOutgoing && m.sender?.name && (
-                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 px-1">
-                          {m.sender.name}
-                        </span>
+                      <span className={`text-xs font-medium px-1 ${isOutgoing ? 'text-blue-500 dark:text-blue-400' : 'text-gray-500 dark:text-slate-500'}`}>
+                        {isOutgoing ? (m.sender?.name ?? 'Agente') : (m.sender?.name ?? '')}
+                      </span>
+
+                      {/* Attachments */}
+                      {m.attachments?.map((att) => (
+                        <div key={att.id} className={`rounded-2xl overflow-hidden ${isOutgoing ? 'rounded-br-sm' : 'rounded-bl-sm'}`}>
+                          {att.file_type === 'image' && (
+                            <a href={att.data_url} target="_blank" rel="noopener noreferrer">
+                              <img
+                                src={att.thumb_url ?? att.data_url}
+                                alt="imagem"
+                                className="max-w-[240px] max-h-[200px] object-cover"
+                              />
+                            </a>
+                          )}
+                          {att.file_type === 'audio' && (
+                            <audio controls src={att.data_url} className="max-w-[240px]" />
+                          )}
+                          {att.file_type === 'file' && (
+                            <a
+                              href={att.data_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`flex items-center gap-2 px-4 py-2.5 text-sm underline ${
+                                isOutgoing ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800 dark:bg-slate-800 dark:text-slate-200'
+                              }`}
+                            >
+                              📎 Arquivo
+                            </a>
+                          )}
+                        </div>
+                      ))}
+
+                      {/* Text content */}
+                      {m.content && (
+                        <div
+                          className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
+                            isOutgoing
+                              ? 'bg-blue-600 text-white rounded-br-sm'
+                              : 'bg-gray-100 text-gray-800 dark:bg-slate-800 dark:text-slate-200 rounded-bl-sm'
+                          }`}
+                        >
+                          {m.content}
+                        </div>
                       )}
-                      {isOutgoing && (
-                        <span className="text-xs font-medium text-blue-500 dark:text-blue-400 px-1">
-                          {m.sender?.name ?? 'Agente'}
-                        </span>
-                      )}
-                      <div
-                        className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
-                          isOutgoing
-                            ? 'bg-blue-600 text-white rounded-br-sm'
-                            : 'bg-gray-100 text-gray-800 dark:bg-slate-800 dark:text-slate-200 rounded-bl-sm'
-                        }`}
-                      >
-                        {m.content}
-                      </div>
+
                       <span className="text-xs text-gray-300 dark:text-slate-700 px-1">
                         {formatTime(m.created_at)}
                       </span>
@@ -271,16 +437,83 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
 
           {/* Reply box */}
           <div className="px-5 py-4 border-t border-gray-100 dark:border-slate-800 shrink-0">
-            {sendError && (
-              <p className="text-xs text-red-500 mb-2">{sendError}</p>
+
+            {/* Image preview */}
+            {imagePreview && (
+              <div className="relative inline-block mb-3">
+                <img src={imagePreview} alt="preview" className="h-20 rounded-xl object-cover border border-gray-200 dark:border-slate-700" />
+                <button
+                  onClick={clearImage}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-800 text-white flex items-center justify-center"
+                >
+                  <X size={10} />
+                </button>
+              </div>
             )}
+
+            {/* Recording indicator */}
+            {recording && (
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-xs font-medium text-red-500">Gravando {fmtSec(recSec)}</span>
+                <span className="text-xs text-gray-400 dark:text-slate-500">— clique no microfone para parar e enviar</span>
+              </div>
+            )}
+
+            {sendError && <p className="text-xs text-red-500 mb-2">{sendError}</p>}
+
             <div className="flex items-end gap-2">
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageSelect}
+              />
+
+              {/* Image button */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={recording || sending}
+                className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl
+                  bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400
+                  hover:bg-gray-200 dark:hover:bg-slate-700
+                  disabled:opacity-40 transition-colors"
+                title="Enviar imagem"
+              >
+                <ImageIcon size={17} />
+              </button>
+
+              {/* Mic button */}
+              <button
+                onClick={handleRecordToggle}
+                disabled={sending || !!imageFile}
+                className={`shrink-0 flex items-center justify-center w-10 h-10 rounded-xl transition-colors
+                  disabled:opacity-40 ${
+                    recording
+                      ? 'bg-red-500 hover:bg-red-600 text-white'
+                      : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700'
+                  }`}
+                title={recording ? 'Parar e enviar áudio' : 'Gravar áudio'}
+              >
+                {recording ? <MicOff size={17} /> : <Mic size={17} />}
+              </button>
+
+              {/* Textarea */}
               <textarea
                 ref={textareaRef}
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Digite sua resposta… (Enter para enviar, Shift+Enter para nova linha)"
+                disabled={recording}
+                placeholder={
+                  recording
+                    ? 'Gravando áudio…'
+                    : imageFile
+                    ? 'Legenda opcional… (Enter para enviar)'
+                    : 'Digite sua resposta… (Enter para enviar, Shift+Enter para nova linha)'
+                }
                 rows={2}
                 className="flex-1 resize-none rounded-xl px-4 py-2.5 text-sm
                   bg-gray-50 dark:bg-slate-800
@@ -288,11 +521,13 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                   text-gray-800 dark:text-slate-100
                   placeholder-gray-400 dark:placeholder-slate-600
                   focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600
-                  transition-colors"
+                  disabled:opacity-50 transition-colors"
               />
+
+              {/* Send button */}
               <button
                 onClick={handleSend}
-                disabled={!reply.trim() || sending}
+                disabled={!canSend}
                 className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl
                   bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 dark:disabled:bg-slate-700
                   text-white disabled:text-gray-400 dark:disabled:text-slate-500
