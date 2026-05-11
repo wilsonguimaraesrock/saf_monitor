@@ -41,9 +41,9 @@ type RawConv = {
 };
 
 type RawCsatResponse = {
-  rating: string | number;
+  rating: number;
   feedback_message: string | null;
-  conversation: { id: number } | null;
+  conversation_id: number;
 };
 
 async function fetchConversationsForStatus(
@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
       );
       if (Array.isArray(csatData)) {
         for (const r of csatData) {
-          const convId = r.conversation?.id;
+          const convId = r.conversation_id;
           if (convId) {
             csatMap.set(convId, {
               rating: Number(r.rating),
