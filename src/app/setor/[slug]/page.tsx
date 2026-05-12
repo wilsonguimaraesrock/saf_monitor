@@ -128,10 +128,10 @@ async function SectorContent({ params, searchParams }: PageProps) {
       getSectorTicketsFiltered(depts, filters),
       getSectorSlaStats(depts),
       chatwoot
-        ? getChatwootPanelData(chatwoot.inboxId, chatwoot.inboxName)
+        ? getChatwootPanelData(chatwoot.teamId, chatwoot.inboxId, chatwoot.inboxName)
         : Promise.resolve(null),
       chatwoot
-        ? getOpenConversations(chatwoot.inboxId)
+        ? getOpenConversations(chatwoot.teamId)
         : Promise.resolve([]),
       sector.subdepartments?.length
         ? Promise.all(

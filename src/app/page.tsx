@@ -101,7 +101,7 @@ async function LandingContent() {
       []
     ),
     getLandingStats(sectorsMap),
-    Promise.all(sectorsWithChatwoot.map((s) => getChatwootLandingStats(s.chatwoot!.inboxId))),
+    Promise.all(sectorsWithChatwoot.map((s) => getChatwootLandingStats(s.chatwoot!.inboxId, s.chatwoot!.teamId))),
   ]);
 
   const chatwootStats: Record<string, ChatwootLandingStats> = Object.fromEntries(

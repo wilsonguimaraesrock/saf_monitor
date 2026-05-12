@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const [panelData, openConversations] = await Promise.all([
-      getChatwootPanelData(sector.chatwoot.inboxId, sector.chatwoot.inboxName, { cache: 'no-store' }),
-      getOpenConversations(sector.chatwoot.inboxId, 50, { cache: 'no-store' }),
+      getChatwootPanelData(sector.chatwoot.teamId, sector.chatwoot.inboxId, sector.chatwoot.inboxName, { cache: 'no-store' }),
+      getOpenConversations(sector.chatwoot.teamId, 50, { cache: 'no-store' }),
     ]);
 
     return NextResponse.json(

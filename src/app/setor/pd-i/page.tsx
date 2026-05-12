@@ -112,8 +112,8 @@ async function PdiContent({ searchParams }: PageProps) {
       query('SELECT * FROM saf_clusters ORDER BY ticket_count DESC LIMIT 15'),
       getSectorTicketsFiltered(depts, filters),
       getSectorSlaStats(depts),
-      getChatwootPanelData(chatwoot.inboxId, chatwoot.inboxName),
-      getOpenConversations(chatwoot.inboxId),
+      getChatwootPanelData(chatwoot.teamId, chatwoot.inboxId, chatwoot.inboxName),
+      getOpenConversations(chatwoot.teamId),
     ]);
 
   const s = {

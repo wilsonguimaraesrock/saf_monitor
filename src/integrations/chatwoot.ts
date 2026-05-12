@@ -91,28 +91,29 @@ async function getCsatStats(
 }
 
 async function getConversationMeta(
-  inboxId: number,
+  teamId: number,
   status: string,
   options?: ChatwootRequestOptions
 ): Promise<ConversationMeta> {
   const data = await chatwootFetch<{ data: { meta: ConversationMeta } }>(
-    `/conversations?status=${status}&inbox_id=${inboxId}`,
+    `/conversations?status=${status}&team_id=${teamId}`,
     options
   );
   return data?.data?.meta ?? { all_count: 0, assigned_count: 0, unassigned_count: 0, mine_count: 0 };
 }
 
 export async function getChatwootPanelData(
+  teamId: number,
   inboxId: number,
   inboxName: string,
   options?: ChatwootRequestOptions
 ): Promise<ChatwootPanelData | null> {
   try {
     const [openMeta, pendingMeta, resolvedMeta, snoozedMeta, csat] = await Promise.all([
-      getConversationMeta(inboxId, 'open', options),
-      getConversationMeta(inboxId, 'pending', options),
-      getConversationMeta(inboxId, 'resolved', options),
-      getConversationMeta(inboxId, 'snoozed', options),
+      getConversationMeta(teamId, 'open', options),
+      getConversationMeta(teamId, 'pending', options),
+      getConversationMeta(teamId, 'resolved', options),
+      getConversationMeta(teamId, 'snoozed', options),
       getCsatStats(inboxId, options),
     ]);
     return {
@@ -144,7 +145,7 @@ export interface ChatwootConversation {
 }
 
 export async function getOpenConversations(
-  inboxId: number,
+  teamId: number,
   limit = 50,
   options?: ChatwootRequestOptions
 ): Promise<ChatwootConversation[]> {
@@ -164,7 +165,7 @@ export async function getOpenConversations(
           last_non_activity_message: { content: string } | null;
         }>;
       };
-    }>(`/conversations?status=open&inbox_id=${inboxId}&page=1`, options);
+    }>(`/conversations?status=open&team_id=${teamId}&page=1`, options);
 
     const payload = data?.data?.payload ?? [];
     return payload.slice(0, limit).map((c) => ({
@@ -189,7 +190,7 @@ export interface ChatwootLandingStats {
   csatAvg: number | null;
 }
 
-export async function getChatwootLandingStats(inboxId: number): Promise<ChatwootLandingStats> {
+export async function getChatwootLandingStats(inboxId: number, teamId: number): Promise<ChatwootLandingStats> {
   const empty: ChatwootLandingStats = { open: 0, avgWaitMin: null, csatAvg: null };
   try {
     const since30d = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
@@ -201,7 +202,7 @@ export async function getChatwootLandingStats(inboxId: number): Promise<Chatwoot
           meta: { all_count: number };
           payload: Array<{ waiting_since: number | null }>;
         };
-      }>(`/conversations?status=open&inbox_id=${inboxId}&page=1`, { cache: 'no-store' }),
+      }>(`/conversations?status=open&team_id=${teamId}&page=1`, { cache: 'no-store' }),
 
       chatwootFetch<Array<{ rating: number }>>(
         `/csat_survey_responses?inbox_id=${inboxId}&since=${since30d}&page=1`,

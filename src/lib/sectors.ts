@@ -28,6 +28,9 @@ export interface SectorSubdepartment {
 }
 
 export interface SectorChatwootConfig {
+  /** ID do team no Chatwoot (departamento) — usado para filtrar conversas */
+  teamId: number;
+  /** ID da inbox WhatsApp única — usada para CSAT */
   inboxId: number;
   inboxName: string;
 }
@@ -72,7 +75,7 @@ export const SECTORS: Sector[] = [
     displayDepartments: ['DSA JOY', 'MyRock', 'Plataformas de Aulas', 'Suporte E-mails'],
     icon:   FlaskConical,
     color:  'purple',
-    chatwoot: { inboxId: 9, inboxName: 'Tecnologia' },
+    chatwoot: { teamId: 3, inboxId: 11, inboxName: 'WhatsApp – Rockfeller' },
     showCategoryBreakdown: true,
   },
   {
@@ -98,7 +101,7 @@ export const SECTORS: Sector[] = [
         color: 'orange',
       },
     ],
-    chatwoot: { inboxId: 8, inboxName: 'Operações' },
+    chatwoot: { teamId: 2, inboxId: 11, inboxName: 'WhatsApp – Rockfeller' },
   },
   {
     slug:   'pedagogico',
@@ -106,7 +109,7 @@ export const SECTORS: Sector[] = [
     departments: ["Adults 60'", 'Pedagógico'],
     icon:   GraduationCap,
     color:  'emerald',
-    chatwoot: { inboxId: 5, inboxName: 'Pedagógico' },
+    chatwoot: { teamId: 7, inboxId: 11, inboxName: 'WhatsApp – Rockfeller' },
   },
   {
     slug:   'comercial',
@@ -114,7 +117,7 @@ export const SECTORS: Sector[] = [
     departments: ['Comercial'],
     icon:   TrendingUp,
     color:  'default',
-    chatwoot: { inboxId: 6, inboxName: 'Comercial' },
+    chatwoot: { teamId: 5, inboxId: 11, inboxName: 'WhatsApp – Rockfeller' },
   },
   {
     slug:   'mkt',
@@ -123,7 +126,7 @@ export const SECTORS: Sector[] = [
     displayDepartments: ['Marketing'],
     icon:   Megaphone,
     color:  'warning',
-    chatwoot: { inboxId: 7, inboxName: 'Marketing' },
+    chatwoot: { teamId: 4, inboxId: 11, inboxName: 'WhatsApp – Rockfeller' },
   },
   {
     slug:   'treinamentos',
@@ -132,7 +135,7 @@ export const SECTORS: Sector[] = [
     displayDepartments: ['Rock Academy'],
     icon:   Award,
     color:  'critical',
-    chatwoot: { inboxId: 10, inboxName: 'Rock Academy' },
+    chatwoot: { teamId: 8, inboxId: 11, inboxName: 'WhatsApp – Rockfeller' },
   },
   {
     slug:   'financeiro',
@@ -140,7 +143,7 @@ export const SECTORS: Sector[] = [
     departments: ['Financeiro'],
     icon:   Landmark,
     color:  'emerald',
-    chatwoot: { inboxId: 4, inboxName: 'Financeiro' },
+    chatwoot: { teamId: 6, inboxId: 11, inboxName: 'WhatsApp – Rockfeller' },
   },
 ];
 
