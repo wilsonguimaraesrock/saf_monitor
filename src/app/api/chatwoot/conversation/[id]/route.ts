@@ -115,41 +115,25 @@ export async function PUT(
   }
 
   const { id } = await params;
-  const { agentId, inboxId } = await req.json();
+  const { teamId } = await req.json();
 
-  const results: Record<string, unknown> = {};
-
-  // Atribui agente via endpoint de assignments
-  if (agentId !== undefined) {
-    const res = await fetch(
-      `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}/assignments`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...chatwootHeaders() },
-        body: JSON.stringify({ assignee_id: agentId }),
-      }
-    );
-    if (!res.ok) {
-      return NextResponse.json({ error: `Erro ao atribuir agente: ${res.status}` }, { status: res.status });
-    }
-    results.agent = await res.json();
+  if (teamId === undefined) {
+    return NextResponse.json({ error: 'teamId obrigatório' }, { status: 400 });
   }
 
-  // Transfere para outro canal (inbox) via PATCH na conversa
-  if (inboxId !== undefined) {
-    const res = await fetch(
-      `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}`,
-      {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...chatwootHeaders() },
-        body: JSON.stringify({ inbox_id: inboxId }),
-      }
-    );
-    if (!res.ok) {
-      return NextResponse.json({ error: `Erro ao transferir canal: ${res.status}` }, { status: res.status });
+  // Transfere para outro team (departamento) via endpoint de assignments
+  const res = await fetch(
+    `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}/assignments`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...chatwootHeaders() },
+      body: JSON.stringify({ team_id: teamId }),
     }
-    results.inbox = await res.json();
+  );
+
+  if (!res.ok) {
+    return NextResponse.json({ error: `Erro ao transferir team: ${res.status}` }, { status: res.status });
   }
 
-  return NextResponse.json(results);
+  return NextResponse.json(await res.json());
 }

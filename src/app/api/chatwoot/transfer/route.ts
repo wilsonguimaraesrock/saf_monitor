@@ -13,19 +13,14 @@ export async function GET() {
 
   const headers = { api_access_token: TOKEN };
 
-  const [agentsRes, inboxesRes] = await Promise.all([
-    fetch(`${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/agents`, { headers, cache: 'no-store' }),
-    fetch(`${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/inboxes`, { headers, cache: 'no-store' }),
-  ]);
-
-  const agents: Array<{ id: number; name: string }> = agentsRes.ok
-    ? (await agentsRes.json()).map((a: { id: number; name: string }) => ({ id: a.id, name: a.name }))
-    : [];
-
-  const inboxesData = inboxesRes.ok ? (await inboxesRes.json()).payload ?? [] : [];
-  const inboxes: Array<{ id: number; name: string }> = inboxesData.map(
-    (i: { id: number; name: string }) => ({ id: i.id, name: i.name })
+  const teamsRes = await fetch(
+    `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/teams`,
+    { headers, cache: 'no-store' }
   );
 
-  return NextResponse.json({ agents, inboxes });
+  const teams: Array<{ id: number; name: string }> = teamsRes.ok
+    ? (await teamsRes.json()).map((t: { id: number; name: string }) => ({ id: t.id, name: t.name }))
+    : [];
+
+  return NextResponse.json({ teams });
 }
