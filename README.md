@@ -26,7 +26,7 @@ Deployado em Vercel · banco PostgreSQL (Digital Ocean) · notificações via Te
 - **Landing page** — resumo de todos os setores: total de SAFs abertos, atrasados, aguardando resposta e SLA (%) por setor
 - **Dashboard por setor** — filtros, tabelas de tickets, SLA, breakdown por departamento e clusters de assunto
 - **Dashboard PD&I** — igual ao genérico + indicadores de atendimentos WhatsApp via Chatwoot (cards, SLA WhatsApp, tabela de conversas abertas, avaliação CSAT média)
-- **Chat nativo Chatwoot** — modal de conversa completo: histórico de mensagens, envio de texto/áudio/imagem, botão Resolver e link externo para o Chatwoot
+- **Chat nativo Chatwoot** — modal de conversa completo: histórico de mensagens, envio de texto/áudio/imagem, botão Resolver, botão **Transferir** (muda o team/departamento da conversa) e link externo para o Chatwoot
 - **Backlog mensal Chatwoot** — botão "Backlog do mês" na área WhatsApp exibe histórico de todas as conversas do mês com status, agente e nota CSAT; navegação por mês
 - **Resposta a SAFs pelo dashboard** — atendentes respondem tickets do dfranquias diretamente no modal de ticket, com autenticação individual (credenciais por atendente salvas em localStorage)
 - **Coleta de dados** — scraper Playwright roda via GitHub Actions a cada hora (seg–sex, 8h–20h BRT) e popula o banco
@@ -109,14 +109,21 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 
 ### Chatwoot (WhatsApp)
 
-- Usado nos setores mapeados em `src/lib/sectors.ts`:
-  - `pd-i` → inbox **Tecnologia** (ID 9)
-  - `operacoes` → inbox **Operações** (ID 8)
-  - `pedagogico` → inbox **Pedagógico** (ID 5)
-  - `comercial` → inbox **Comercial** (ID 6)
-  - `mkt` → inbox **Marketing** (ID 7)
-  - `treinamentos` → inbox **Rock Academy** (ID 10)
-  - `financeiro` → inbox **Financeiro** (ID 4)
+**Estrutura atual (mai/2026):** uma única inbox WhatsApp — **"WhatsApp – Rockfeller" (ID 11)** — e cada departamento é um **team** no Chatwoot. Conversas são roteadas entre departamentos por atribuição de team, não por inbox.
+
+- Usado nos setores mapeados em `src/lib/sectors.ts` via `SectorChatwootConfig { teamId, inboxId, inboxName }`:
+
+| Setor (slug) | Team no Chatwoot | Team ID | Inbox compartilhada |
+|---|---|---|---|
+| `pd-i` | tecnologia | 3 | WhatsApp – Rockfeller (11) |
+| `operacoes` | operações | 2 | WhatsApp – Rockfeller (11) |
+| `pedagogico` | pedagógico | 7 | WhatsApp – Rockfeller (11) |
+| `comercial` | comercial | 5 | WhatsApp – Rockfeller (11) |
+| `mkt` | marketing | 4 | WhatsApp – Rockfeller (11) |
+| `treinamentos` | rock academy | 8 | WhatsApp – Rockfeller (11) |
+| `financeiro` | financeiro | 6 | WhatsApp – Rockfeller (11) |
+
+- Conversas abertas e contagens filtradas por `team_id`; CSAT filtrado por `inbox_id` (a API Chatwoot não suporta CSAT por team)
 - O dashboard faz polling em `/api/chatwoot/live?sector={slug}` a cada 30s para atualizar cards e conversas abertas sem recarregar a página inteira
 - **Requer token com papel de Administrador** no Chatwoot (Settings → Agents → promover para Administrator)
 - Configuração: `src/integrations/chatwoot.ts`
@@ -125,14 +132,15 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 
 | Endpoint | Uso |
 |---|---|
-| `GET /conversations?status=open&inbox_id={id}` | Conversas abertas ao vivo |
-| `GET /conversations?status={status}&inbox_id={id}` | Contagens por status |
-| `GET /conversations?status={status}&inbox_id={id}&page={n}` | Paginação para backlog |
-| `GET /csat_survey_responses?inbox_id={id}&since={unix}` | CSAT 30 dias / mês |
+| `GET /conversations?status=open&team_id={id}` | Conversas abertas ao vivo por departamento |
+| `GET /conversations?status={status}&team_id={id}` | Contagens por status por departamento |
+| `GET /conversations?status={status}&inbox_id={id}&page={n}` | Paginação para backlog (usa inbox) |
+| `GET /csat_survey_responses?inbox_id={id}&since={unix}` | CSAT 30 dias / mês (usa inbox) |
 | `GET /messages` via `/api/chatwoot/conversation/[id]` | Histórico da conversa |
 | `POST /messages` via `/api/chatwoot/conversation/[id]` | Envio de mensagem/áudio/imagem |
 | `POST /toggle_status` via `PATCH /api/chatwoot/conversation/[id]` | Resolver conversa |
-| `GET /agents` + `GET /inboxes` via `/api/chatwoot/transfer` | Agentes e caixas de entrada |
+| `POST /assignments` via `PUT /api/chatwoot/conversation/[id]` | Transferir conversa para outro team |
+| `GET /teams` via `/api/chatwoot/transfer` | Listar teams disponíveis para transferência |
 
 **Rotas internas da API Next.js (Chatwoot):**
 
@@ -142,8 +150,8 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 | `/api/chatwoot/conversation/[id]` | GET | Histórico de mensagens |
 | `/api/chatwoot/conversation/[id]` | POST | Enviar mensagem (texto ou multipart) |
 | `/api/chatwoot/conversation/[id]` | PATCH | Resolver conversa |
-| `/api/chatwoot/conversation/[id]` | PUT | Transferir agente |
-| `/api/chatwoot/transfer` | GET | Listar agentes e inboxes |
+| `/api/chatwoot/conversation/[id]` | PUT | Transferir para outro team `{ teamId }` |
+| `/api/chatwoot/transfer` | GET | Listar teams `{ teams: [{id, name}] }` |
 | `/api/chatwoot/backlog` | GET | Conversas do mês com CSAT (`?inboxId=X&month=YYYY-MM`) |
 
 **Componentes Chatwoot:**
@@ -154,7 +162,7 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 | `ChatwootPanel` | Cards de métricas: abertos, pendentes, resolvidos, CSAT |
 | `ChatwootSlaPanel` | SLA: atribuição %, espera >1h, >24h, média |
 | `ChatwootConversationTable` | Tabela de conversas abertas, abre modal ao clicar; botão "Backlog do mês" no header |
-| `ChatwootConversationModal` | Chat nativo: histórico, texto, áudio, imagem, Resolver |
+| `ChatwootConversationModal` | Chat nativo: histórico, texto, áudio, imagem, Resolver, **Transferir** (select de team) |
 | `ChatwootBacklogModal` | Backlog mensal: todas as conversas com status e CSAT; navegação prev/next mês |
 
 Indicadores exibidos no painel "Atendimentos WhatsApp":
@@ -356,6 +364,12 @@ Variáveis de ambiente devem ser configuradas no painel da Vercel em **Settings 
   departments: ['Departamento Exato no dfranquias'],
   icon:        IconComponent,  // lucide-react
   color:       'cyan',
+  // Opcional — para exibir conversas WhatsApp:
+  chatwoot: {
+    teamId:    X,    // ID do team no Chatwoot (GET /teams para listar)
+    inboxId:   11,   // sempre 11 (inbox única WhatsApp – Rockfeller)
+    inboxName: 'WhatsApp – Rockfeller',
+  },
 }
 ```
 
@@ -363,4 +377,6 @@ Variáveis de ambiente devem ser configuradas no painel da Vercel em **Settings 
 
 3. Faça deploy — o dashboard genérico (`src/app/setor/[slug]/page.tsx`) é criado automaticamente.
 
-> Para um setor com indicadores especiais (como Chatwoot no PD&I), crie uma página dedicada em `src/app/setor/<slug>/page.tsx`.
+> Para um setor com indicadores especiais (como PD&I), crie uma página dedicada em `src/app/setor/<slug>/page.tsx`.
+>
+> Para descobrir o `teamId` de um novo departamento: `GET /api/v1/accounts/{id}/teams` no Chatwoot ou use o endpoint `/api/chatwoot/discover` da aplicação.
