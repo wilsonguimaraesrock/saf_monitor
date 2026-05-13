@@ -1,10 +1,9 @@
 'use client';
 
-import { startTransition, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { History } from 'lucide-react';
 import type { ChatwootConversation, ChatwootPanelData } from '@/integrations/chatwoot';
 import { ChatwootPanel } from '@/components/ChatwootPanel';
-import { ChatwootSlaPanel } from '@/components/ChatwootSlaPanel';
 import { ChatwootConversationTable } from '@/components/ChatwootConversationTable';
 import { ChatwootBacklogModal } from '@/components/ChatwootBacklogModal';
 import { ChatwootBreakdownCard } from '@/components/ChatwootBreakdownCard';
@@ -25,7 +24,6 @@ interface Props {
   initialPanelData: ChatwootPanelData | null;
   initialOpenConversations: ChatwootConversation[];
   initialRefreshedAt: string;
-  children?: ReactNode;
 }
 
 export function SectorChatwootLiveSection({
@@ -36,7 +34,6 @@ export function SectorChatwootLiveSection({
   initialPanelData,
   initialOpenConversations,
   initialRefreshedAt,
-  children,
 }: Props) {
   const [panelData, setPanelData] = useState(initialPanelData);
   const [openConversations, setOpenConversations] = useState(initialOpenConversations);
@@ -201,14 +198,6 @@ export function SectorChatwootLiveSection({
       />
 
       <ChatwootBreakdownCard teamId={teamId} inboxId={inboxId} />
-
-      {children}
-
-      <ChatwootSlaPanel
-        conversations={openConversations}
-        panelData={panelData}
-        title={`SLA WhatsApp — ${inboxName}`}
-      />
     </div>
   );
 }

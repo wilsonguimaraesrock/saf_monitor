@@ -18,6 +18,7 @@ import { ClusterList } from '@/components/ClusterList';
 import { Filters } from '@/components/Filters';
 import { SlaPanel } from '@/components/SlaPanel';
 import { SectorChatwootLiveSection } from '@/components/SectorChatwootLiveSection';
+import { ChatwootSlaPanelLive } from '@/components/ChatwootSlaPanelLive';
 import {
   getLegacySectorRedirect,
   getSectorBySlug,
@@ -237,7 +238,7 @@ async function SectorContent({ params, searchParams }: PageProps) {
         </div>
       )}
 
-      {chatwoot ? (
+      {chatwoot && (
         <SectorChatwootLiveSection
           key={sector.slug}
           sectorSlug={sector.slug}
@@ -247,11 +248,7 @@ async function SectorContent({ params, searchParams }: PageProps) {
           initialPanelData={chatwootData}
           initialOpenConversations={openConversations}
           initialRefreshedAt={new Date().toISOString()}
-      >
-          <SlaPanel sla={slaStats} />
-        </SectorChatwootLiveSection>
-      ) : (
-        <SlaPanel sla={slaStats} />
+        />
       )}
 
       {/* ── Filtros ────────────────────────────────────────── */}
@@ -261,6 +258,17 @@ async function SectorContent({ params, searchParams }: PageProps) {
 
       {/* ── Tabela principal ───────────────────────────────── */}
       <TicketTable tickets={allTickets as never} title={mainTableTitle} highlightOverdue />
+
+      {/* ── SLA — SAF e WhatsApp ───────────────────────────── */}
+      <SlaPanel sla={slaStats} />
+      {chatwoot && (
+        <ChatwootSlaPanelLive
+          sectorSlug={sector.slug}
+          inboxName={chatwoot.inboxName}
+          initialConversations={openConversations}
+          initialPanelData={chatwootData}
+        />
+      )}
 
       {/* ── Tabelas fixas ──────────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

@@ -26,6 +26,7 @@ import { ClusterList } from '@/components/ClusterList';
 import { Filters } from '@/components/Filters';
 import { SlaPanel } from '@/components/SlaPanel';
 import { SectorChatwootLiveSection } from '@/components/SectorChatwootLiveSection';
+import { ChatwootSlaPanelLive } from '@/components/ChatwootSlaPanelLive';
 import { getSectorBySlug } from '@/lib/sectors';
 import {
   getSectorStats,
@@ -202,15 +203,22 @@ async function PdiContent({ searchParams }: PageProps) {
         initialPanelData={chatwootData}
         initialOpenConversations={openConversations}
         initialRefreshedAt={new Date().toISOString()}
-      >
-        <SlaPanel sla={slaStats} />
-      </SectorChatwootLiveSection>
+      />
 
       <div className="card">
         <Filters />
       </div>
 
       <TicketTable tickets={allTickets as never} title={mainTableTitle} highlightOverdue />
+
+      {/* ── SLA — SAF e WhatsApp ───────────────────────────── */}
+      <SlaPanel sla={slaStats} />
+      <ChatwootSlaPanelLive
+        sectorSlug={sector.slug}
+        inboxName={chatwoot.inboxName}
+        initialConversations={openConversations}
+        initialPanelData={chatwootData}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <TrendChart data={trend as never} />
