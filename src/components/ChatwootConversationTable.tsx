@@ -95,6 +95,13 @@ export function ChatwootConversationTable({ conversations, title = 'Conversas Ab
           ...prev,
           [convId]: agent ? { id: agent.id, name: agent.name } : null,
         }));
+        if (agent) {
+          fetch(`/api/chatwoot/conversation/${convId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: `Seu atendimento está com *${agent.name}*.` }),
+          }).catch(() => {});
+        }
       }
     } finally {
       setAssigningId(null);
