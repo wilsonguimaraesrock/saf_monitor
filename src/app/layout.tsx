@@ -5,7 +5,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'Monitoramento de SAFs',
+  title: 'Atendimento aos Franqueados',
   description: 'Dashboard de acompanhamento e priorização de tickets SAF',
 };
 

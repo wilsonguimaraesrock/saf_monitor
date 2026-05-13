@@ -277,7 +277,7 @@ export default function LandingPage() {
               <span className="live-dot" />
               <div>
                 <h1 className="text-base font-bold text-white dark:text-slate-100 leading-tight">
-                  Monitoramento de SAFs
+                  Atendimento aos Franqueados
                 </h1>
                 <p className="text-xs text-orange-100 dark:text-slate-600">Visão geral por setor</p>
               </div>

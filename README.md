@@ -1,4 +1,4 @@
-# Monitoramento de SAFs — Rockfeller
+# Atendimento aos Franqueados — Rockfeller
 
 Dashboard em tempo real para acompanhamento de SAFs (Solicitações de Apoio Franqueado) do sistema **dfranquias.com.br**, com integração Chatwoot para monitoramento de atendimentos via WhatsApp.
 
@@ -123,7 +123,7 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 | `treinamentos` | rock academy | 8 | WhatsApp – Rockfeller (11) |
 | `financeiro` | financeiro | 6 | WhatsApp – Rockfeller (11) |
 
-- Conversas abertas e contagens filtradas por `team_id`; CSAT filtrado por `inbox_id` (a API Chatwoot não suporta CSAT por team)
+- Conversas abertas, contagens e **CSAT** filtrados por `team_id` — cada departamento exibe sua própria nota de satisfação
 - O dashboard faz polling em `/api/chatwoot/live?sector={slug}` a cada 30s para atualizar cards e conversas abertas sem recarregar a página inteira
 - **Requer token com papel de Administrador** no Chatwoot (Settings → Agents → promover para Administrator)
 - Configuração: `src/integrations/chatwoot.ts`
@@ -135,7 +135,7 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 | `GET /conversations?status=open&team_id={id}` | Conversas abertas ao vivo por departamento |
 | `GET /conversations?status={status}&team_id={id}` | Contagens por status por departamento |
 | `GET /conversations?status={status}&inbox_id={id}&page={n}` | Paginação para backlog (usa inbox) |
-| `GET /csat_survey_responses?inbox_id={id}&since={unix}` | CSAT 30 dias / mês (usa inbox) |
+| `GET /csat_survey_responses?inbox_id={id}&team_id={id}&since={unix}` | CSAT do mês corrente por departamento |
 | `GET /messages` via `/api/chatwoot/conversation/[id]` | Histórico da conversa |
 | `POST /messages` via `/api/chatwoot/conversation/[id]` | Envio de mensagem/áudio/imagem |
 | `POST /toggle_status` via `PATCH /api/chatwoot/conversation/[id]` | Resolver conversa |
@@ -167,7 +167,7 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 
 Indicadores exibidos no painel "Atendimentos WhatsApp":
 - Conversas abertas, não atribuídas, pendentes, resolvidas, adiadas
-- **Avaliação média CSAT** (escala 1–5, colorida: ≥4.0 verde / ≥3.0 amarelo / <3.0 vermelho)
+- **Avaliação média CSAT do mês** por departamento (escala 1–5, colorida: ≥4.0 verde / ≥3.0 amarelo / <3.0 vermelho); vazio quando não há avaliações no mês corrente
 
 Painel "SLA WhatsApp":
 - Taxa de atribuição (%), aguardando >1h, aguardando >24h, espera média

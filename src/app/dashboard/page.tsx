@@ -74,7 +74,7 @@ async function DashboardContent({ month }: { month: string }) {
       SECTORS
         .filter((s) => s.chatwoot)
         .map(async (s) => {
-          const csat = await getCsatForPeriod(s.chatwoot!.inboxId, since, until);
+          const csat = await getCsatForPeriod(s.chatwoot!.inboxId, since, until, s.chatwoot!.teamId);
           return { slug: s.slug, ...csat };
         })
     ),

@@ -71,12 +71,14 @@ export interface ChatwootPanelData {
 
 async function getCsatStats(
   inboxId: number,
+  teamId: number,
   options?: ChatwootRequestOptions
 ): Promise<{ avg: number | null; total: number }> {
   try {
-    const since = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
+    const now = new Date();
+    const since = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) / 1000);
     const data = await chatwootFetch<Array<{ rating: number }>>(
-      `/csat_survey_responses?inbox_id=${inboxId}&since=${since}&page=1`,
+      `/csat_survey_responses?inbox_id=${inboxId}&team_id=${teamId}&since=${since}&page=1`,
       options
     );
     if (!Array.isArray(data) || data.length === 0) return { avg: null, total: 0 };
@@ -114,7 +116,7 @@ export async function getChatwootPanelData(
       getConversationMeta(teamId, 'pending', options),
       getConversationMeta(teamId, 'resolved', options),
       getConversationMeta(teamId, 'snoozed', options),
-      getCsatStats(inboxId, options),
+      getCsatStats(inboxId, teamId, options),
     ]);
     return {
       inboxId,
@@ -193,8 +195,9 @@ export interface ChatwootLandingStats {
 export async function getChatwootLandingStats(inboxId: number, teamId: number): Promise<ChatwootLandingStats> {
   const empty: ChatwootLandingStats = { open: 0, avgWaitMin: null, csatAvg: null };
   try {
-    const since30d = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
-    const now      = Math.floor(Date.now() / 1000);
+    const now        = Math.floor(Date.now() / 1000);
+    const monthStart = new Date();
+    const sinceMonth = Math.floor(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth(), 1) / 1000);
 
     const [convRes, csatRes] = await Promise.all([
       chatwootFetch<{
@@ -205,7 +208,7 @@ export async function getChatwootLandingStats(inboxId: number, teamId: number): 
       }>(`/conversations?status=open&team_id=${teamId}&page=1`, { cache: 'no-store' }),
 
       chatwootFetch<Array<{ rating: number }>>(
-        `/csat_survey_responses?inbox_id=${inboxId}&since=${since30d}&page=1`,
+        `/csat_survey_responses?inbox_id=${inboxId}&team_id=${teamId}&since=${sinceMonth}&page=1`,
         { cache: 'no-store' }
       ).catch(() => [] as Array<{ rating: number }>),
     ]);
@@ -235,11 +238,13 @@ export async function getChatwootLandingStats(inboxId: number, teamId: number): 
 export async function getCsatForPeriod(
   inboxId: number,
   since: number,
-  until: number
+  until: number,
+  teamId?: number
 ): Promise<{ avg: number | null; total: number }> {
   try {
+    const teamParam = teamId != null ? `&team_id=${teamId}` : '';
     const data = await chatwootFetch<Array<{ rating: number }>>(
-      `/csat_survey_responses?inbox_id=${inboxId}&since=${since}&until=${until}&page=1`,
+      `/csat_survey_responses?inbox_id=${inboxId}${teamParam}&since=${since}&until=${until}&page=1`,
       { cache: 'no-store' }
     );
     if (!Array.isArray(data) || data.length === 0) return { avg: null, total: 0 };
