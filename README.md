@@ -23,9 +23,11 @@ Deployado em Vercel · banco PostgreSQL (Digital Ocean) · notificações via Te
 
 ## Visão geral
 
-- **Landing page** — resumo de todos os setores: total de SAFs abertos, atrasados, aguardando resposta e SLA (%) por setor
-- **Dashboard por setor** — filtros, tabelas de tickets, SLA, breakdown por departamento e clusters de assunto
-- **Dashboard PD&I** — igual ao genérico + indicadores de atendimentos WhatsApp via Chatwoot (cards, SLA WhatsApp, tabela de conversas abertas, avaliação CSAT média)
+- **Landing page** — resumo de todos os setores: total de SAFs abertos, atrasados, aguardando resposta, SLA (%) e indicadores WhatsApp por setor (total do mês, conversas abertas, CSAT do mês corrente por departamento)
+- **Dashboard por setor** — filtros, tabelas de tickets, SLA SAF e SLA WhatsApp (após a tabela principal), breakdown por departamento e clusters de assunto
+- **Dashboard PD&I** — igual ao genérico + indicadores de atendimentos WhatsApp via Chatwoot (cards, conversas abertas, breakdown, SLA WhatsApp, avaliação CSAT por departamento)
+- **Breakdown WhatsApp** — card com 3 abas por setor: **subdepartamento** (contagem + resolvidas), **assunto** (ranking de frequência) e **atendentes** (contagem + CSAT médio)
+- **Atribuição de agente inline** — dropdown diretamente na tabela de conversas abertas; ao atribuir, envia mensagem automática no WhatsApp informando o responsável ("Seu atendimento está com *[Nome]*.")
 - **Chat nativo Chatwoot** — modal de conversa completo: histórico de mensagens, envio de texto/áudio/imagem, botão Resolver, botão **Transferir** (muda o team/departamento da conversa) e link externo para o Chatwoot
 - **Backlog mensal Chatwoot** — botão "Backlog do mês" na área WhatsApp exibe histórico de todas as conversas do mês com status, agente e nota CSAT; navegação por mês
 - **Resposta a SAFs pelo dashboard** — atendentes respondem tickets do dfranquias diretamente no modal de ticket, com autenticação individual (credenciais por atendente salvas em localStorage)
@@ -136,10 +138,12 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 | `GET /conversations?status={status}&team_id={id}` | Contagens por status por departamento |
 | `GET /conversations?status={status}&inbox_id={id}&page={n}` | Paginação para backlog (usa inbox) |
 | `GET /csat_survey_responses?inbox_id={id}&team_id={id}&since={unix}` | CSAT do mês corrente por departamento |
+| `GET /reports/summary?since={unix}&until={unix}&id={teamId}&type=team` | Total de conversas abertas no mês por team |
+| `GET /agents` | Lista todos os agentes da conta |
 | `GET /messages` via `/api/chatwoot/conversation/[id]` | Histórico da conversa |
 | `POST /messages` via `/api/chatwoot/conversation/[id]` | Envio de mensagem/áudio/imagem |
 | `POST /toggle_status` via `PATCH /api/chatwoot/conversation/[id]` | Resolver conversa |
-| `POST /assignments` via `PUT /api/chatwoot/conversation/[id]` | Transferir conversa para outro team |
+| `POST /assignments` via `PUT /api/chatwoot/conversation/[id]` | Atribuir agente `{ assignee_id }` ou transferir team `{ team_id }` |
 | `GET /teams` via `/api/chatwoot/transfer` | Listar teams disponíveis para transferência |
 
 **Rotas internas da API Next.js (Chatwoot):**
@@ -147,30 +151,53 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 | Rota | Método | Função |
 |---|---|---|
 | `/api/chatwoot/live` | GET | Polling 30s — dados ao vivo por setor |
+| `/api/chatwoot/agents` | GET | Lista agentes da conta `{ agents: [{id, name, available}] }` |
+| `/api/chatwoot/breakdown` | GET | Breakdown do mês por team (`?teamId=X&inboxId=Y`) — agrega por subdep, assunto e atendente+CSAT |
 | `/api/chatwoot/conversation/[id]` | GET | Histórico de mensagens |
 | `/api/chatwoot/conversation/[id]` | POST | Enviar mensagem (texto ou multipart) |
 | `/api/chatwoot/conversation/[id]` | PATCH | Resolver conversa |
-| `/api/chatwoot/conversation/[id]` | PUT | Transferir para outro team `{ teamId }` |
+| `/api/chatwoot/conversation/[id]` | PUT | Atribuir agente `{ agentId }` ou transferir team `{ teamId }` |
 | `/api/chatwoot/transfer` | GET | Listar teams `{ teams: [{id, name}] }` |
 | `/api/chatwoot/backlog` | GET | Conversas do mês com CSAT (`?inboxId=X&month=YYYY-MM`) |
+
+**Layout dos cards por setor (ordem):**
+
+1. Indicadores ao vivo (ChatwootPanel)
+2. Conversas abertas agora (ChatwootConversationTable) — com dropdown de atribuição de agente
+3. Breakdown do mês (ChatwootBreakdownCard)
+4. Filtros + Tabela principal de SAFs
+5. SLA dos SAFs (SlaPanel)
+6. SLA WhatsApp (ChatwootSlaPanelLive — polling independente de 30s)
+7. Tabelas secundárias (atrasados, aguardando, mais antigos…)
 
 **Componentes Chatwoot:**
 
 | Componente | Função |
 |---|---|
-| `SectorChatwootLiveSection` | Container ao vivo com polling, status e botão "Backlog do mês" |
+| `SectorChatwootLiveSection` | Container ao vivo com polling 30s, status, botão "Backlog do mês", Panel e ConversationTable |
 | `ChatwootPanel` | Cards de métricas: abertos, pendentes, resolvidos, CSAT |
-| `ChatwootSlaPanel` | SLA: atribuição %, espera >1h, >24h, média |
-| `ChatwootConversationTable` | Tabela de conversas abertas, abre modal ao clicar; botão "Backlog do mês" no header |
+| `ChatwootBreakdownCard` | 3 abas: por subdepartamento (+ resolvidas), por assunto, por atendente (+ CSAT) |
+| `ChatwootSlaPanel` | SLA: atribuição %, espera >1h, >24h, média (componente presentacional) |
+| `ChatwootSlaPanelLive` | Wrapper autônomo com polling 30s — renderiza ChatwootSlaPanel com dados vivos |
+| `ChatwootConversationTable` | Tabela de conversas abertas com **dropdown inline de atribuição de agente**; botão "Backlog do mês" |
 | `ChatwootConversationModal` | Chat nativo: histórico, texto, áudio, imagem, Resolver, **Transferir** (select de team) |
 | `ChatwootBacklogModal` | Backlog mensal: todas as conversas com status e CSAT; navegação prev/next mês |
+
+**Atribuição de agente inline:**
+- Coluna "Agente" na tabela de conversas abertas é clicável
+- Clique carrega a lista de agentes (`GET /api/chatwoot/agents`) e exibe um `<select>` in-place
+- Ao selecionar: `PUT /api/chatwoot/conversation/{id}` com `{ agentId }` → Chatwoot `POST /assignments` com `{ assignee_id }`
+- Após atribuição bem-sucedida: envia automaticamente no WhatsApp **"Seu atendimento está com *[Nome do Agente]*."**
+- Atualização otimista da linha — sem reload de página
 
 Indicadores exibidos no painel "Atendimentos WhatsApp":
 - Conversas abertas, não atribuídas, pendentes, resolvidas, adiadas
 - **Avaliação média CSAT do mês** por departamento (escala 1–5, colorida: ≥4.0 verde / ≥3.0 amarelo / <3.0 vermelho); vazio quando não há avaliações no mês corrente
 
-Painel "SLA WhatsApp":
-- Taxa de atribuição (%), aguardando >1h, aguardando >24h, espera média
+**Cards da landing page (por setor com WhatsApp):**
+- `X no mês` — total de conversas abertas no mês corrente via `/reports/summary?type=team` (inclui todos os status)
+- `X abertas` — conversas em aberto no momento
+- Tempo médio de espera + CSAT do mês por setor
 
 Tabela de conversas abertas com etiquetas coloridas (hash determinístico → cor Tailwind); clique na linha abre o modal de chat nativo.
 
