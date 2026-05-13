@@ -194,6 +194,12 @@ export function SectorChatwootLiveSection({
 
       {panelData && <ChatwootPanel data={panelData} />}
 
+      <ChatwootConversationTable
+        conversations={openConversations}
+        title={`Conversas Abertas — WhatsApp ${inboxName}`}
+        onBacklog={() => setBacklogOpen(true)}
+      />
+
       <ChatwootBreakdownCard teamId={teamId} inboxId={inboxId} />
 
       {children}
@@ -202,12 +208,6 @@ export function SectorChatwootLiveSection({
         conversations={openConversations}
         panelData={panelData}
         title={`SLA WhatsApp — ${inboxName}`}
-      />
-
-      <ChatwootConversationTable
-        conversations={openConversations}
-        title={`Conversas Abertas — WhatsApp ${inboxName}`}
-        onBacklog={() => setBacklogOpen(true)}
       />
     </div>
   );
