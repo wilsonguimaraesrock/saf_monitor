@@ -7,6 +7,7 @@ import { ChatwootPanel } from '@/components/ChatwootPanel';
 import { ChatwootSlaPanel } from '@/components/ChatwootSlaPanel';
 import { ChatwootConversationTable } from '@/components/ChatwootConversationTable';
 import { ChatwootBacklogModal } from '@/components/ChatwootBacklogModal';
+import { ChatwootBreakdownCard } from '@/components/ChatwootBreakdownCard';
 
 const LIVE_REFRESH_MS = 30 * 1000;
 
@@ -19,6 +20,8 @@ interface LiveChatwootResponse {
 interface Props {
   sectorSlug: string;
   inboxName: string;
+  teamId: number;
+  inboxId: number;
   initialPanelData: ChatwootPanelData | null;
   initialOpenConversations: ChatwootConversation[];
   initialRefreshedAt: string;
@@ -28,6 +31,8 @@ interface Props {
 export function SectorChatwootLiveSection({
   sectorSlug,
   inboxName,
+  teamId,
+  inboxId,
   initialPanelData,
   initialOpenConversations,
   initialRefreshedAt,
@@ -188,6 +193,8 @@ export function SectorChatwootLiveSection({
       </div>
 
       {panelData && <ChatwootPanel data={panelData} />}
+
+      <ChatwootBreakdownCard teamId={teamId} inboxId={inboxId} />
 
       {children}
 

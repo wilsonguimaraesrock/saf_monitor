@@ -197,6 +197,8 @@ async function PdiContent({ searchParams }: PageProps) {
         key={sector.slug}
         sectorSlug={sector.slug}
         inboxName={chatwoot.inboxName}
+        teamId={chatwoot.teamId}
+        inboxId={chatwoot.inboxId}
         initialPanelData={chatwootData}
         initialOpenConversations={openConversations}
         initialRefreshedAt={new Date().toISOString()}
