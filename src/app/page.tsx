@@ -210,42 +210,56 @@ async function LandingContent() {
                     const cw = chatwootStats[sector.slug];
                     if (!cw) return null;
                     return (
-                      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100 dark:border-slate-800">
-                        <div className="flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500 font-medium">
-                          <MessageSquare size={11} className="text-green-500 shrink-0" />
-                          <span className="text-gray-300 dark:text-slate-600 mr-0.5">WA</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <MessageSquare size={12} className={cw.open > 0 ? 'text-blue-500' : 'text-gray-300 dark:text-slate-600'} />
-                          <span className={`text-base font-semibold tabular-nums ${cw.open > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500'}`}>
-                            {cw.open} abertas
-                          </span>
-                        </div>
-                        {cw.avgWaitMin !== null && (
+                      <>
+                        {/* linha 1: total do mês + abertas agora */}
+                        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100 dark:border-slate-800">
+                          <div className="flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500 font-medium">
+                            <MessageSquare size={11} className="text-green-500 shrink-0" />
+                            <span className="text-gray-300 dark:text-slate-600 mr-0.5">WA</span>
+                          </div>
                           <div className="flex items-center gap-1.5">
-                            <Clock size={12} className={
-                              cw.avgWaitMin > 60 ? 'text-red-500' :
-                              cw.avgWaitMin > 30 ? 'text-amber-500' :
-                              'text-emerald-500'
-                            } />
-                            <span className={`text-base font-semibold tabular-nums ${
-                              cw.avgWaitMin > 60 ? 'text-red-600 dark:text-red-400' :
-                              cw.avgWaitMin > 30 ? 'text-amber-600 dark:text-amber-400' :
-                              'text-emerald-600 dark:text-emerald-400'
-                            }`}>
-                              {fmtWait(cw.avgWaitMin)} espera
+                            <MessageSquare size={12} className={cw.monthlyTotal > 0 ? 'text-green-500' : 'text-gray-300 dark:text-slate-600'} />
+                            <span className={`text-base font-semibold tabular-nums ${cw.monthlyTotal > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-slate-500'}`}>
+                              {cw.monthlyTotal} no mês
                             </span>
                           </div>
-                        )}
-                        {cw.csatAvg !== null && (
                           <div className="flex items-center gap-1.5">
-                            <Star size={12} className="text-amber-400 fill-amber-400" />
-                            <span className="text-base font-semibold tabular-nums text-amber-600 dark:text-amber-400">
-                              {cw.csatAvg}
+                            <MessageSquare size={12} className={cw.open > 0 ? 'text-blue-500' : 'text-gray-300 dark:text-slate-600'} />
+                            <span className={`text-base font-semibold tabular-nums ${cw.open > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500'}`}>
+                              {cw.open} abertas
                             </span>
                           </div>
+                        </div>
+                        {/* linha 2: espera + CSAT */}
+                        {(cw.avgWaitMin !== null || cw.csatAvg !== null) && (
+                          <div className="flex items-center gap-4 mt-2">
+                            {cw.avgWaitMin !== null && (
+                              <div className="flex items-center gap-1.5">
+                                <Clock size={12} className={
+                                  cw.avgWaitMin > 60 ? 'text-red-500' :
+                                  cw.avgWaitMin > 30 ? 'text-amber-500' :
+                                  'text-emerald-500'
+                                } />
+                                <span className={`text-base font-semibold tabular-nums ${
+                                  cw.avgWaitMin > 60 ? 'text-red-600 dark:text-red-400' :
+                                  cw.avgWaitMin > 30 ? 'text-amber-600 dark:text-amber-400' :
+                                  'text-emerald-600 dark:text-emerald-400'
+                                }`}>
+                                  {fmtWait(cw.avgWaitMin)} espera
+                                </span>
+                              </div>
+                            )}
+                            {cw.csatAvg !== null && (
+                              <div className="flex items-center gap-1.5">
+                                <Star size={12} className="text-amber-400 fill-amber-400" />
+                                <span className="text-base font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                                  {cw.csatAvg}
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         )}
-                      </div>
+                      </>
                     );
                   })()}
                 </div>
