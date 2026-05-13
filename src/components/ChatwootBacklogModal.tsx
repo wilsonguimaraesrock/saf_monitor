@@ -87,6 +87,7 @@ function toModalConversation(c: BacklogConversation): ChatwootConversation {
     contactPhone:   c.contactPhone,
     unitName:       c.unidade,
     labels:         c.labels,
+    assigneeId:     null,
     assigneeName:   c.assigneeName,
     lastMessage:    '',
     waitingSinceSec: 0,

@@ -115,24 +115,28 @@ export async function PUT(
   }
 
   const { id } = await params;
-  const { teamId } = await req.json();
+  const body = await req.json();
+  const { teamId, agentId } = body;
 
-  if (teamId === undefined) {
-    return NextResponse.json({ error: 'teamId obrigatório' }, { status: 400 });
+  if (teamId === undefined && agentId === undefined) {
+    return NextResponse.json({ error: 'teamId ou agentId obrigatório' }, { status: 400 });
   }
 
-  // Transfere para outro team (departamento) via endpoint de assignments
+  const payload = teamId !== undefined
+    ? { team_id: teamId }
+    : { assignee_id: agentId ?? null };
+
   const res = await fetch(
     `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}/assignments`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...chatwootHeaders() },
-      body: JSON.stringify({ team_id: teamId }),
+      body: JSON.stringify(payload),
     }
   );
 
   if (!res.ok) {
-    return NextResponse.json({ error: `Erro ao transferir team: ${res.status}` }, { status: res.status });
+    return NextResponse.json({ error: `Erro na atribuição: ${res.status}` }, { status: res.status });
   }
 
   return NextResponse.json(await res.json());

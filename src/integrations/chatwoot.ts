@@ -140,6 +140,7 @@ export interface ChatwootConversation {
   contactPhone: string;
   unitName: string;
   labels: string[];
+  assigneeId: number | null;
   assigneeName: string | null;
   lastMessage: string;
   waitingSinceSec: number;
@@ -161,7 +162,7 @@ export async function getOpenConversations(
           labels: string[];
           meta: {
             sender: { name: string; phone_number: string };
-            assignee: { name: string } | null;
+            assignee: { id: number; name: string } | null;
           };
           custom_attributes: Record<string, string>;
           last_non_activity_message: { content: string } | null;
@@ -176,6 +177,7 @@ export async function getOpenConversations(
       contactPhone:   c.meta?.sender?.phone_number ?? '',
       unitName:       c.custom_attributes?.unitName ?? '',
       labels:         c.labels ?? [],
+      assigneeId:     c.meta?.assignee?.id ?? null,
       assigneeName:   c.meta?.assignee?.name ?? null,
       lastMessage:    c.last_non_activity_message?.content ?? '',
       waitingSinceSec: c.waiting_since ?? 0,
