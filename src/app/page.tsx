@@ -235,7 +235,7 @@ async function LandingContent() {
                           <div className="flex items-center gap-1.5">
                             <MessageSquare size={12} className={cw.monthlyTotal > 0 ? 'text-green-500' : 'text-gray-300 dark:text-slate-600'} />
                             <span className={`text-base font-semibold tabular-nums ${cw.monthlyTotal > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-slate-500'}`}>
-                              {cw.monthlyTotal} no mês
+                              {cw.monthlyTotal} total
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5">

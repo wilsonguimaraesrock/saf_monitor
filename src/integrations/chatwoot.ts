@@ -203,7 +203,7 @@ export async function getChatwootLandingStats(inboxId: number, teamId: number): 
     const monthStart = new Date();
     const sinceMonth = Math.floor(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth(), 1) / 1000);
 
-    const [convRes, pendingMeta, csatRes, summaryRes] = await Promise.all([
+    const [convRes, pendingMeta, resolvedMeta, snoozedMeta, csatRes] = await Promise.all([
       chatwootFetch<{
         data: {
           meta: { all_count: number };
@@ -211,17 +211,14 @@ export async function getChatwootLandingStats(inboxId: number, teamId: number): 
         };
       }>(`/conversations?status=open&team_id=${teamId}&page=1`, { cache: 'no-store' }),
 
-      getConversationMeta(teamId, 'pending', { cache: 'no-store' }),
+      getConversationMeta(teamId, 'pending',  { cache: 'no-store' }),
+      getConversationMeta(teamId, 'resolved', { cache: 'no-store' }),
+      getConversationMeta(teamId, 'snoozed',  { cache: 'no-store' }),
 
       chatwootFetch<Array<{ rating: number }>>(
         `/csat_survey_responses?inbox_id=${inboxId}&team_id=${teamId}&since=${sinceMonth}&page=1`,
         { cache: 'no-store' }
       ).catch(() => [] as Array<{ rating: number }>),
-
-      chatwootFetch<{ conversations_count?: number }>(
-        `/reports/summary?since=${sinceMonth}&until=${now}&id=${teamId}&type=team`,
-        { cache: 'no-store' }
-      ).catch(() => ({} as { conversations_count?: number })),
     ]);
 
     const open    = convRes?.data?.meta?.all_count ?? 0;
@@ -241,7 +238,8 @@ export async function getChatwootLandingStats(inboxId: number, teamId: number): 
       ? Math.round(csatArr.reduce((s, r) => s + Number(r.rating), 0) / csatArr.length * 10) / 10
       : null;
 
-    const monthlyTotal = summaryRes?.conversations_count ?? 0;
+    // total = open + pending + resolved + snoozed (mesmos dados do painel do setor)
+    const monthlyTotal = open + pending + resolvedMeta.all_count + snoozedMeta.all_count;
 
     return { open, pending, monthlyTotal, avgWaitMin, csatAvg };
   } catch {
