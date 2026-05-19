@@ -151,16 +151,16 @@ async function LandingContent() {
               >
                 <div className={`h-0.5 ${accent.bar}`} />
 
-                <div className="p-3.5">
+                <div className="p-4">
                   {/* ── Linha 1: ícone + nome + número ── */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className={`p-1.5 rounded-lg shrink-0 transition-colors ${accent.iconWrap} ${accent.iconWrapHover}`}>
-                        <Icon size={15} className={accent.icon} />
+                      <div className={`p-2 rounded-lg shrink-0 transition-colors ${accent.iconWrap} ${accent.iconWrapHover}`}>
+                        <Icon size={16} className={accent.icon} />
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="font-bold text-gray-900 dark:text-slate-100 text-sm leading-tight">{sector.name}</p>
+                          <p className="font-bold text-gray-900 dark:text-slate-100 text-base leading-tight">{sector.name}</p>
                           {sector.chatwoot && (() => {
                             const cw = chatwootStats[sector.slug];
                             const alertCount = (cw?.open ?? 0) + (cw?.pending ?? 0);
@@ -173,7 +173,7 @@ async function LandingContent() {
                             );
                           })()}
                         </div>
-                        <p className="text-xs text-gray-400 dark:text-slate-500 truncate max-w-[160px] leading-tight">
+                        <p className="text-xs text-gray-400 dark:text-slate-500 truncate max-w-[180px] leading-tight mt-0.5">
                           {getSectorDisplayDepartments(sector).join(', ')}
                         </p>
                       </div>
@@ -183,7 +183,7 @@ async function LandingContent() {
                         {stats.total}
                       </span>
                       {stats.monthlyTotal > 0 && (
-                        <p className="text-xs text-gray-400 dark:text-slate-500 tabular-nums leading-tight">
+                        <p className="text-xs text-gray-400 dark:text-slate-500 tabular-nums leading-tight mt-0.5">
                           {stats.monthlyTotal} no mês
                         </p>
                       )}
@@ -191,27 +191,27 @@ async function LandingContent() {
                   </div>
 
                   {/* ── Linha 2: atrasados + aguardando + SLA + em risco ── */}
-                  <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100 dark:border-slate-800 flex-wrap">
-                    <div className="flex items-center gap-1">
-                      <AlertTriangle size={11} className={stats.overdue > 0 ? 'text-red-500' : 'text-gray-300 dark:text-slate-700'} />
-                      <span className={`text-xs font-semibold tabular-nums ${stats.overdue > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-slate-600'}`}>
+                  <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-gray-100 dark:border-slate-800 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      <AlertTriangle size={13} className={stats.overdue > 0 ? 'text-red-500' : 'text-gray-300 dark:text-slate-700'} />
+                      <span className={`text-sm font-semibold tabular-nums ${stats.overdue > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-slate-600'}`}>
                         {stats.overdue} atrasados
                       </span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Clock size={11} className={stats.awaiting > 0 ? 'text-amber-500' : 'text-gray-300 dark:text-slate-700'} />
-                      <span className={`text-xs font-semibold tabular-nums ${stats.awaiting > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-slate-600'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <Clock size={13} className={stats.awaiting > 0 ? 'text-amber-500' : 'text-gray-300 dark:text-slate-700'} />
+                      <span className={`text-sm font-semibold tabular-nums ${stats.awaiting > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-slate-600'}`}>
                         {stats.awaiting} aguardando
                       </span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <ShieldCheck size={11} className={
+                    <div className="flex items-center gap-1.5">
+                      <ShieldCheck size={13} className={
                         stats.slaRate >= 80 ? 'text-emerald-500' :
                         stats.slaRate >= 60 ? 'text-amber-500' :
                         stats.slaRate > 0   ? 'text-red-500' :
                         'text-gray-300 dark:text-slate-700'
                       } />
-                      <span className={`text-xs font-semibold tabular-nums ${
+                      <span className={`text-sm font-semibold tabular-nums ${
                         stats.slaRate >= 80 ? 'text-emerald-600 dark:text-emerald-400' :
                         stats.slaRate >= 60 ? 'text-amber-600 dark:text-amber-400' :
                         stats.slaRate > 0   ? 'text-red-600 dark:text-red-400' :
@@ -221,9 +221,9 @@ async function LandingContent() {
                       </span>
                     </div>
                     {stats.atRisk > 0 && (
-                      <div className="flex items-center gap-1">
-                        <Clock size={11} className="text-orange-500" />
-                        <span className="text-xs font-semibold tabular-nums text-orange-600 dark:text-orange-400">
+                      <div className="flex items-center gap-1.5">
+                        <Clock size={13} className="text-orange-500" />
+                        <span className="text-sm font-semibold tabular-nums text-orange-600 dark:text-orange-400">
                           {stats.atRisk} em risco
                         </span>
                       </div>
@@ -235,29 +235,29 @@ async function LandingContent() {
                     const cw = chatwootStats[sector.slug];
                     if (!cw) return null;
                     return (
-                      <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100 dark:border-slate-800 flex-wrap">
-                        <div className="flex items-center gap-1">
-                          <MessageSquare size={11} className="text-green-500 shrink-0" />
+                      <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-gray-100 dark:border-slate-800 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          <MessageSquare size={13} className="text-green-500 shrink-0" />
                           <span className="text-xs font-medium text-gray-400 dark:text-slate-500">WA</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <span className={`text-xs font-semibold tabular-nums ${cw.monthlyTotal > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-slate-600'}`}>
+                          <span className={`text-sm font-semibold tabular-nums ${cw.monthlyTotal > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-slate-600'}`}>
                             {cw.monthlyTotal} total
                           </span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <span className={`text-xs font-semibold tabular-nums ${cw.open > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-600'}`}>
+                          <span className={`text-sm font-semibold tabular-nums ${cw.open > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-600'}`}>
                             {cw.open} abertas
                           </span>
                         </div>
                         {cw.avgWaitMin !== null && (
-                          <div className="flex items-center gap-1">
-                            <Clock size={11} className={
+                          <div className="flex items-center gap-1.5">
+                            <Clock size={13} className={
                               cw.avgWaitMin > 60 ? 'text-red-500' :
                               cw.avgWaitMin > 30 ? 'text-amber-500' :
                               'text-emerald-500'
                             } />
-                            <span className={`text-xs font-semibold tabular-nums ${
+                            <span className={`text-sm font-semibold tabular-nums ${
                               cw.avgWaitMin > 60 ? 'text-red-600 dark:text-red-400' :
                               cw.avgWaitMin > 30 ? 'text-amber-600 dark:text-amber-400' :
                               'text-emerald-600 dark:text-emerald-400'
@@ -267,9 +267,9 @@ async function LandingContent() {
                           </div>
                         )}
                         {cw.csatAvg !== null && (
-                          <div className="flex items-center gap-1">
-                            <Star size={11} className="text-amber-400 fill-amber-400" />
-                            <span className="text-xs font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                          <div className="flex items-center gap-1.5">
+                            <Star size={13} className="text-amber-400 fill-amber-400" />
+                            <span className="text-sm font-semibold tabular-nums text-amber-600 dark:text-amber-400">
                               {cw.csatAvg}
                             </span>
                           </div>
