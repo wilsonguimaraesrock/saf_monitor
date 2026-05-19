@@ -95,10 +95,12 @@ async function getCsatStats(
 async function getConversationMeta(
   teamId: number,
   status: string,
-  options?: ChatwootRequestOptions
+  options?: ChatwootRequestOptions,
+  since?: number
 ): Promise<ConversationMeta> {
+  const sinceParam = since ? `&since=${since}` : '';
   const data = await chatwootFetch<{ data: { meta: ConversationMeta } }>(
-    `/conversations?status=${status}&team_id=${teamId}`,
+    `/conversations?status=${status}&team_id=${teamId}${sinceParam}`,
     options
   );
   return data?.data?.meta ?? { all_count: 0, assigned_count: 0, unassigned_count: 0, mine_count: 0 };
@@ -203,7 +205,7 @@ export async function getChatwootLandingStats(inboxId: number, teamId: number): 
     const monthStart = new Date();
     const sinceMonth = Math.floor(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth(), 1) / 1000);
 
-    const [convRes, pendingMeta, csatRes, summaryRes] = await Promise.all([
+    const [convRes, pendingMeta, resolvedMeta, snoozedMeta, csatRes] = await Promise.all([
       chatwootFetch<{
         data: {
           meta: { all_count: number };
@@ -211,19 +213,15 @@ export async function getChatwootLandingStats(inboxId: number, teamId: number): 
         };
       }>(`/conversations?status=open&team_id=${teamId}&page=1`, { cache: 'no-store' }),
 
-      getConversationMeta(teamId, 'pending', { cache: 'no-store' }),
+      getConversationMeta(teamId, 'pending',  { cache: 'no-store' }),
+      // since=sinceMonth filtra apenas resolvidas criadas neste mês (evita histórico all-time)
+      getConversationMeta(teamId, 'resolved', { cache: 'no-store' }, sinceMonth),
+      getConversationMeta(teamId, 'snoozed',  { cache: 'no-store' }),
 
       chatwootFetch<Array<{ rating: number }>>(
         `/csat_survey_responses?inbox_id=${inboxId}&team_id=${teamId}&since=${sinceMonth}&page=1`,
         { cache: 'no-store' }
       ).catch(() => [] as Array<{ rating: number }>),
-
-      // /reports/summary devolve conversas ativas no período (criadas OU com atividade)
-      // Tentamos flat { conversations_count } e nested { data: { conversations_count } }
-      chatwootFetch<Record<string, unknown>>(
-        `/reports/summary?since=${sinceMonth}&until=${now}&id=${teamId}&type=team`,
-        { cache: 'no-store' }
-      ).catch(() => null as null),
     ]);
 
     const open    = convRes?.data?.meta?.all_count ?? 0;
@@ -243,16 +241,8 @@ export async function getChatwootLandingStats(inboxId: number, teamId: number): 
       ? Math.round(csatArr.reduce((s, r) => s + Number(r.rating), 0) / csatArr.length * 10) / 10
       : null;
 
-    // Tenta extrair conversations_count do summary (resposta flat ou nested em data{})
-    const summaryCount = summaryRes
-      ? Number(
-          summaryRes['conversations_count'] ??
-          (summaryRes['data'] as Record<string, unknown> | undefined)?.['conversations_count'] ??
-          0
-        )
-      : 0;
-    // Se o summary devolver valor válido usa ele; senão cai para open+pending (ativas agora)
-    const monthlyTotal = summaryCount > 0 ? summaryCount : open + pending;
+    // open+pending+snoozed = ativas agora; resolved com since = criadas e resolvidas este mês
+    const monthlyTotal = open + pending + resolvedMeta.all_count + snoozedMeta.all_count;
 
     return { open, pending, monthlyTotal, avgWaitMin, csatAvg };
   } catch {
