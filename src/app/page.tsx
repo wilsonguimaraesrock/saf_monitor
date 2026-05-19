@@ -153,12 +153,17 @@ async function LandingContent() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-bold text-gray-900 dark:text-slate-100 text-sm">{sector.name}</p>
-                          {sector.chatwoot && (chatwootStats[sector.slug]?.pending ?? 0) > 0 && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700 px-1.5 py-0.5 rounded-full animate-pulse leading-none">
-                              <MessageSquare size={9} className="shrink-0" />
-                              {chatwootStats[sector.slug]!.pending}
-                            </span>
-                          )}
+                          {sector.chatwoot && (() => {
+                            const cw = chatwootStats[sector.slug];
+                            const alertCount = (cw?.open ?? 0) + (cw?.pending ?? 0);
+                            if (alertCount === 0) return null;
+                            return (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700 px-1.5 py-0.5 rounded-full animate-pulse leading-none">
+                                <MessageSquare size={9} className="shrink-0" />
+                                {alertCount}
+                              </span>
+                            );
+                          })()}
                         </div>
                         <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5 truncate max-w-[180px]">
                           {getSectorDisplayDepartments(sector).join(', ')}
