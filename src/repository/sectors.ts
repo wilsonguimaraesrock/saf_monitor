@@ -22,20 +22,24 @@ export async function getSectorStats(
   const params: unknown[] = [depts];
   let p = 2;
 
+  const isHistorical = !!(opts?.dateFrom && opts?.dateTo);
   let dateFilter: string;
-  if (opts?.dateFrom && opts?.dateTo) {
+  if (isHistorical) {
     dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
-    params.push(opts.dateFrom, opts.dateTo);
+    params.push(opts!.dateFrom, opts!.dateTo);
   } else {
     dateFilter = `AND opened_at >= NOW() - INTERVAL '3 months'`;
   }
 
   const deptFilter = `AND department = ANY($1::text[])`;
+  // For historical periods, total counts all tickets opened then (including resolved),
+  // matching the landing page getLandingStats behaviour.
+  const totalStatusFilter = isHistorical ? '' : `status NOT IN ('resolvido','cancelado') AND`;
 
   return queryOne(
     `SELECT
        (SELECT COUNT(*) FROM saf_tickets
-        WHERE status NOT IN ('resolvido','cancelado') ${dateFilter} ${deptFilter})               AS total_open,
+        WHERE ${totalStatusFilter} TRUE ${dateFilter} ${deptFilter})                             AS total_open,
        (SELECT COUNT(*) FROM saf_tickets
         WHERE is_overdue AND status NOT IN ('resolvido','cancelado') ${dateFilter} ${deptFilter}) AS total_overdue,
        (SELECT COUNT(*) FROM saf_tickets
@@ -53,7 +57,7 @@ export async function getSectorStats(
   );
 }
 
-/** Contagem de tickets abertos por priority_category, filtrado por department */
+/** Contagem de tickets por priority_category, filtrado por department */
 export async function getSectorCategoryStats(
   departments: string[],
   opts?: { dateFrom?: string; dateTo?: string }
@@ -61,22 +65,24 @@ export async function getSectorCategoryStats(
   const params: unknown[] = [departments];
   let p = 2;
 
+  const isHistorical = !!(opts?.dateFrom && opts?.dateTo);
   let dateFilter: string;
-  if (opts?.dateFrom && opts?.dateTo) {
+  if (isHistorical) {
     dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
-    params.push(opts.dateFrom, opts.dateTo);
+    params.push(opts!.dateFrom, opts!.dateTo);
   } else {
     dateFilter = `AND opened_at >= NOW() - INTERVAL '3 months'`;
   }
 
   const deptFilter = `AND department = ANY($1::text[])`;
+  const statusFilter = isHistorical ? '' : `AND status NOT IN ('resolvido','cancelado')`;
 
   return queryOne(
     `SELECT
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'dsa_joy'           AND status NOT IN ('resolvido','cancelado') ${dateFilter} ${deptFilter}) AS count_dsa_joy,
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'myrock'            AND status NOT IN ('resolvido','cancelado') ${dateFilter} ${deptFilter}) AS count_myrock,
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'plataformas_aulas' AND status NOT IN ('resolvido','cancelado') ${dateFilter} ${deptFilter}) AS count_plataformas_aulas,
-       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'suporte_emails'    AND status NOT IN ('resolvido','cancelado') ${dateFilter} ${deptFilter}) AS count_suporte_emails`,
+       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'dsa_joy'           ${statusFilter} ${dateFilter} ${deptFilter}) AS count_dsa_joy,
+       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'myrock'            ${statusFilter} ${dateFilter} ${deptFilter}) AS count_myrock,
+       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'plataformas_aulas' ${statusFilter} ${dateFilter} ${deptFilter}) AS count_plataformas_aulas,
+       (SELECT COUNT(*) FROM saf_tickets WHERE priority_category = 'suporte_emails'    ${statusFilter} ${dateFilter} ${deptFilter}) AS count_suporte_emails`,
     params
   );
 }
@@ -89,19 +95,22 @@ export async function getSectorDeptBreakdown(
   const params: unknown[] = [departments];
   let p = 2;
 
+  const isHistorical = !!(opts?.dateFrom && opts?.dateTo);
   let dateFilter: string;
-  if (opts?.dateFrom && opts?.dateTo) {
+  if (isHistorical) {
     dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
-    params.push(opts.dateFrom, opts.dateTo);
+    params.push(opts!.dateFrom, opts!.dateTo);
   } else {
     dateFilter = `AND opened_at >= NOW() - INTERVAL '3 months'`;
   }
+
+  const statusFilter = isHistorical ? '' : `AND status NOT IN ('resolvido','cancelado')`;
 
   return query(
     `SELECT department, COUNT(*) AS total
      FROM saf_tickets
      WHERE department = ANY($1::text[])
-       AND status NOT IN ('resolvido','cancelado')
+       ${statusFilter}
        ${dateFilter}
      GROUP BY department
      ORDER BY total DESC`,
