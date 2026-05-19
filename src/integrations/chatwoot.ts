@@ -214,8 +214,7 @@ export async function getChatwootLandingStats(inboxId: number, teamId: number): 
       }>(`/conversations?status=open&team_id=${teamId}&page=1`, { cache: 'no-store' }),
 
       getConversationMeta(teamId, 'pending',  { cache: 'no-store' }),
-      // since=sinceMonth filtra apenas resolvidas criadas neste mês (evita histórico all-time)
-      getConversationMeta(teamId, 'resolved', { cache: 'no-store' }, sinceMonth),
+      getConversationMeta(teamId, 'resolved', { cache: 'no-store' }),
       getConversationMeta(teamId, 'snoozed',  { cache: 'no-store' }),
 
       chatwootFetch<Array<{ rating: number }>>(
