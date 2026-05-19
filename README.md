@@ -196,13 +196,16 @@ Indicadores exibidos no painel "Atendimentos WhatsApp":
 
 **Cards da landing page (por setor com WhatsApp):**
 - Badge verde pulsante (`animate-pulse`) com ícone WhatsApp + contagem aparece ao lado do nome do setor quando há conversas **pendentes** (`status=pending`)
-- `X no mês` — total de conversas abertas no mês corrente via `/reports/summary?type=team` (inclui todos os status)
+- `X total` — soma de open + pending + resolved + snoozed via `getConversationMeta` por status (mesma fonte do painel interno do setor)
 - `X abertas` — conversas em aberto no momento
 - Tempo médio de espera + CSAT do mês por setor
 
 **Cards da landing page (SAFs por setor):**
 - Número grande = SAFs **em aberto** (últimos 3 meses)
 - `X no mês` abaixo do número grande = total de SAFs abertos no mês corrente (todos os status, via `DATE_TRUNC('month', NOW())`)
+
+**ChatwootPanel (painel de atendimentos):**
+- Fontes aumentadas: label `text-sm`, número `text-4xl`, subtítulo `text-sm`; ícones 15px
 
 Tabela de conversas abertas com etiquetas coloridas (hash determinístico → cor Tailwind); clique na linha abre o modal de chat nativo.
 

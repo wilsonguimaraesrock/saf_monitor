@@ -11,8 +11,8 @@ export function ChatwootPanel({ data }: Props) {
   return (
     <div className="card">
       <div className="flex items-center gap-2 mb-3">
-        <MessageCircle size={14} className="text-green-500" />
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+        <MessageCircle size={16} className="text-green-500" />
+        <p className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
           Atendimentos WhatsApp — {data.inboxName}
         </p>
       </div>
@@ -26,15 +26,15 @@ export function ChatwootPanel({ data }: Props) {
             : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'
         }`}>
           <div className="flex items-center gap-1.5">
-            <MessageCircle size={13} className={data.open > 0 ? 'text-blue-500' : 'text-gray-400 dark:text-slate-500'} />
-            <span className="text-xs text-gray-500 dark:text-slate-400">Abertas</span>
+            <MessageCircle size={15} className={data.open > 0 ? 'text-blue-500' : 'text-gray-400 dark:text-slate-500'} />
+            <span className="text-sm text-gray-500 dark:text-slate-400">Abertas</span>
           </div>
-          <span className={`text-2xl font-bold tabular-nums ${
+          <span className={`text-4xl font-bold tabular-nums ${
             data.open > 0 ? 'text-blue-700 dark:text-blue-300' : 'text-gray-400 dark:text-slate-500'
           }`}>
             {data.open}
           </span>
-          <span className="text-xs text-gray-400 dark:text-slate-500">em atendimento</span>
+          <span className="text-sm text-gray-400 dark:text-slate-500">em atendimento</span>
         </div>
 
         {/* Não atribuídas */}
@@ -44,15 +44,15 @@ export function ChatwootPanel({ data }: Props) {
             : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'
         }`}>
           <div className="flex items-center gap-1.5">
-            <UserX size={13} className={data.unassigned > 0 ? 'text-red-500' : 'text-gray-400 dark:text-slate-500'} />
-            <span className="text-xs text-gray-500 dark:text-slate-400">Não atribuídas</span>
+            <UserX size={15} className={data.unassigned > 0 ? 'text-red-500' : 'text-gray-400 dark:text-slate-500'} />
+            <span className="text-sm text-gray-500 dark:text-slate-400">Não atribuídas</span>
           </div>
-          <span className={`text-2xl font-bold tabular-nums ${
+          <span className={`text-4xl font-bold tabular-nums ${
             data.unassigned > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'
           }`}>
             {data.unassigned}
           </span>
-          <span className="text-xs text-gray-400 dark:text-slate-500">sem agente</span>
+          <span className="text-sm text-gray-400 dark:text-slate-500">sem agente</span>
         </div>
 
         {/* Pendentes */}
@@ -62,27 +62,27 @@ export function ChatwootPanel({ data }: Props) {
             : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'
         }`}>
           <div className="flex items-center gap-1.5">
-            <Clock size={13} className={data.pending > 0 ? 'text-amber-500' : 'text-gray-400 dark:text-slate-500'} />
-            <span className="text-xs text-gray-500 dark:text-slate-400">Pendentes</span>
+            <Clock size={15} className={data.pending > 0 ? 'text-amber-500' : 'text-gray-400 dark:text-slate-500'} />
+            <span className="text-sm text-gray-500 dark:text-slate-400">Pendentes</span>
           </div>
-          <span className={`text-2xl font-bold tabular-nums ${
+          <span className={`text-4xl font-bold tabular-nums ${
             data.pending > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-slate-500'
           }`}>
             {data.pending}
           </span>
-          <span className="text-xs text-gray-400 dark:text-slate-500">aguardando ação</span>
+          <span className="text-sm text-gray-400 dark:text-slate-500">aguardando ação</span>
         </div>
 
         {/* Resolvidas */}
         <div className="rounded-xl border p-4 flex flex-col gap-1 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800">
           <div className="flex items-center gap-1.5">
-            <CheckCircle2 size={13} className="text-emerald-500" />
-            <span className="text-xs text-gray-500 dark:text-slate-400">Resolvidas</span>
+            <CheckCircle2 size={15} className="text-emerald-500" />
+            <span className="text-sm text-gray-500 dark:text-slate-400">Resolvidas</span>
           </div>
-          <span className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+          <span className="text-4xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
             {data.resolved}
           </span>
-          <span className="text-xs text-gray-400 dark:text-slate-500">total no canal</span>
+          <span className="text-sm text-gray-400 dark:text-slate-500">total no canal</span>
         </div>
 
         {/* Adiadas */}
@@ -92,15 +92,15 @@ export function ChatwootPanel({ data }: Props) {
             : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'
         }`}>
           <div className="flex items-center gap-1.5">
-            <BellOff size={13} className={data.snoozed > 0 ? 'text-slate-500' : 'text-gray-400 dark:text-slate-500'} />
-            <span className="text-xs text-gray-500 dark:text-slate-400">Adiadas</span>
+            <BellOff size={15} className={data.snoozed > 0 ? 'text-slate-500' : 'text-gray-400 dark:text-slate-500'} />
+            <span className="text-sm text-gray-500 dark:text-slate-400">Adiadas</span>
           </div>
-          <span className={`text-2xl font-bold tabular-nums ${
+          <span className={`text-4xl font-bold tabular-nums ${
             data.snoozed > 0 ? 'text-slate-600 dark:text-slate-300' : 'text-gray-400 dark:text-slate-500'
           }`}>
             {data.snoozed}
           </span>
-          <span className="text-xs text-gray-400 dark:text-slate-500">snoozed</span>
+          <span className="text-sm text-gray-400 dark:text-slate-500">snoozed</span>
         </div>
 
         {/* Avaliação média CSAT */}
@@ -124,13 +124,13 @@ export function ChatwootPanel({ data }: Props) {
           return (
             <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${bgClass}`}>
               <div className="flex items-center gap-1.5">
-                <Star size={13} className={iconClass} />
-                <span className="text-xs text-gray-500 dark:text-slate-400">Avaliação média</span>
+                <Star size={15} className={iconClass} />
+                <span className="text-sm text-gray-500 dark:text-slate-400">Avaliação média</span>
               </div>
-              <span className={`text-2xl font-bold tabular-nums ${colorClass}`}>
+              <span className={`text-4xl font-bold tabular-nums ${colorClass}`}>
                 {avg !== null ? avg.toFixed(1) : '—'}
               </span>
-              <span className="text-xs text-gray-400 dark:text-slate-500">
+              <span className="text-sm text-gray-400 dark:text-slate-500">
                 {data.csatTotal > 0 ? `${data.csatTotal} avaliação${data.csatTotal > 1 ? 'ões' : ''}` : 'sem dados'}
               </span>
             </div>
