@@ -1,70 +1,39 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, MessageSquare, Star, UserX, CheckCircle2, Clock, Loader2, Search } from 'lucide-react';
-import { clsx } from 'clsx';
-import type { BacklogConversation } from '@/app/api/chatwoot/backlog/route';
-import { ChatwootConversationModal } from './ChatwootConversationModal';
-import type { ChatwootConversation } from '@/integrations/chatwoot';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  X, ChevronLeft, ChevronRight, Search, Loader2, MessageSquare, Star, ExternalLink,
+} from 'lucide-react';
+import type { GlobalBacklogConversation } from '@/app/api/chatwoot/global-backlog/route';
 
-interface Props {
-  inboxId: number | null;
-  teamId: number;
-  inboxName?: string;
-  onClose: () => void;
-}
-
-const LABEL_COLORS = [
-  'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300',
-  'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
-  'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
-  'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400',
-  'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300',
-  'bg-cyan-100 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300',
-  'bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300',
+const CW_SECTOR_NAMES = [
+  { slug: 'pd-i',         name: 'PD&I' },
+  { slug: 'operacoes',    name: 'Operações' },
+  { slug: 'pedagogico',   name: 'Pedagógico' },
+  { slug: 'comercial',    name: 'Comercial' },
+  { slug: 'mkt',          name: 'MKT' },
+  { slug: 'treinamentos', name: 'Treinamentos' },
+  { slug: 'financeiro',   name: 'Financeiro' },
 ];
-function labelColor(label: string) {
-  let h = 0;
-  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) >>> 0;
-  return LABEL_COLORS[h % LABEL_COLORS.length];
-}
 
-const STATUS_MAP: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
-  resolved: {
-    label: 'Resolvido',
-    cls:   'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400',
-    icon:  <CheckCircle2 size={11} />,
-  },
-  open: {
-    label: 'Aberto',
-    cls:   'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400',
-    icon:  <MessageSquare size={11} />,
-  },
-  pending: {
-    label: 'Pendente',
-    cls:   'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400',
-    icon:  <Clock size={11} />,
-  },
-  snoozed: {
-    label: 'Pausado',
-    cls:   'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400',
-    icon:  <Clock size={11} />,
-  },
+const STATUS_MAP: Record<string, { label: string; cls: string }> = {
+  resolved: { label: 'Resolvido', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' },
+  open:     { label: 'Aberta',    cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300' },
+  pending:  { label: 'Pendente',  cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300' },
+  snoozed:  { label: 'Adiada',    cls: 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400' },
 };
 
-function StarRating({ rating }: { rating: number | null }) {
-  if (rating === null) return <span className="text-gray-300 dark:text-slate-700">—</span>;
-  const stars = Math.round(rating);
+function StarRating({ rating }: { rating: number }) {
   return (
-    <span className="inline-flex items-center gap-0.5" title={`Nota ${rating}`}>
+    <span className="inline-flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map((s) => (
         <Star
           key={s}
-          size={12}
-          className={s <= stars ? 'text-amber-400 fill-amber-400' : 'text-gray-200 dark:text-slate-700'}
+          size={11}
+          className={s <= Math.round(rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-300 dark:text-slate-600'}
         />
       ))}
-      <span className="ml-1 text-xs text-gray-500 dark:text-slate-400">{rating}</span>
+      <span className="ml-1 text-xs font-semibold text-gray-700 dark:text-slate-300">{rating}</span>
     </span>
   );
 }
@@ -80,45 +49,30 @@ function monthLabel(year: number, month: number) {
   return new Date(year, month, 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 }
 
-// Minimal ChatwootConversation for the modal
-function toModalConversation(c: BacklogConversation): ChatwootConversation {
-  return {
-    id: c.id,
-    contactName:    c.contactName,
-    contactPhone:   c.contactPhone,
-    unitName:       c.unidade,
-    labels:         c.labels,
-    assigneeId:     null,
-    assigneeName:   c.assigneeName,
-    lastMessage:    '',
-    waitingSinceSec: 0,
-    chatwootUrl:    c.chatwootUrl,
-  };
+interface Props {
+  onClose: () => void;
 }
 
-export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Props) {
+export function GlobalChatwootBacklogModal({ onClose }: Props) {
   const now = new Date();
   const [year, setYear]   = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth()); // 0-indexed
+  const [month, setMonth] = useState(now.getMonth());
 
-  const [conversations, setConversations] = useState<BacklogConversation[]>([]);
+  const [conversations, setConversations] = useState<GlobalBacklogConversation[]>([]);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
-  const [selected, setSelected] = useState<ChatwootConversation | null>(null);
 
-  const [filterEscola, setFilterEscola]   = useState('');
-  const [filterDepto, setFilterDepto]     = useState('');
+  const [filterSetor,   setFilterSetor]   = useState('');
+  const [filterEscola,  setFilterEscola]  = useState('');
+  const [filterDepto,   setFilterDepto]   = useState('');
   const [filterAssunto, setFilterAssunto] = useState('');
 
-  const fetchBacklog = useCallback(async () => {
-    if (!inboxId) return;
+  const fetch_ = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
-      const res = await fetch(`/api/chatwoot/backlog?inboxId=${inboxId}&teamId=${teamId}&month=${monthStr}`, {
-        cache: 'no-store',
-      });
+      const res = await fetch(`/api/chatwoot/global-backlog?month=${monthStr}`, { cache: 'no-store' });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? `Erro ${res.status}`);
@@ -130,20 +84,16 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
     } finally {
       setLoading(false);
     }
-  }, [inboxId, year, month]);
+  }, [year, month]);
 
-  useEffect(() => { void fetchBacklog(); }, [fetchBacklog]);
+  useEffect(() => { void fetch_(); }, [fetch_]);
 
-  // Escape closes
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !selected) onClose();
-    }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose, selected]);
+  }, [onClose]);
 
-  // Body scroll lock
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
@@ -154,39 +104,36 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
     else setMonth((m) => m - 1);
   }
   function nextMonth() {
-    const n = new Date();
-    if (year > n.getFullYear() || (year === n.getFullYear() && month >= n.getMonth())) return;
+    if (year > now.getFullYear() || (year === now.getFullYear() && month >= now.getMonth())) return;
     if (month === 11) { setYear((y) => y + 1); setMonth(0); }
     else setMonth((m) => m + 1);
   }
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
 
-  // Client-side filtering
   const filtered = conversations.filter((c) => {
-    const esc  = filterEscola.toLowerCase();
-    const dep  = filterDepto.toLowerCase();
-    const ass  = filterAssunto.toLowerCase();
-    if (esc && !c.unidade.toLowerCase().includes(esc)) return false;
-    if (dep && !c.departamento.toLowerCase().includes(dep) && !c.subdepartamento.toLowerCase().includes(dep)) return false;
-    if (ass && !c.assunto.toLowerCase().includes(ass)) return false;
+    if (filterSetor   && c.sectorSlug !== filterSetor) return false;
+    if (filterEscola  && !c.unidade.toLowerCase().includes(filterEscola.toLowerCase())) return false;
+    if (filterDepto   && !c.departamento.toLowerCase().includes(filterDepto.toLowerCase())
+                      && !c.subdepartamento.toLowerCase().includes(filterDepto.toLowerCase())) return false;
+    if (filterAssunto && !c.assunto.toLowerCase().includes(filterAssunto.toLowerCase())) return false;
     return true;
   });
-  const hasFilter = filterEscola || filterDepto || filterAssunto;
 
-  // Stats
-  const total    = filtered.length;
-  const resolved = filtered.filter((c) => c.status === 'resolved').length;
-  const withCsat = filtered.filter((c) => c.csatRating !== null);
-  const csatAvg  = withCsat.length
-    ? Math.round((withCsat.reduce((s, c) => s + (c.csatRating ?? 0), 0) / withCsat.length) * 10) / 10
+  const hasFilter = filterSetor || filterEscola || filterDepto || filterAssunto;
+  const resolved  = filtered.filter((c) => c.status === 'resolved').length;
+  const withCsat  = filtered.filter((c) => c.csatRating !== null);
+  const csatAvg   = withCsat.length
+    ? Math.round(withCsat.reduce((s, c) => s + (c.csatRating ?? 0), 0) / withCsat.length * 10) / 10
     : null;
+
+  function clearFilters() {
+    setFilterSetor(''); setFilterEscola(''); setFilterDepto(''); setFilterAssunto('');
+  }
 
   return (
     <>
-      {/* Backdrop */}
       <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div
           className="pointer-events-auto w-full max-w-7xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl
@@ -196,11 +143,11 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
           {/* Header */}
           <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-gray-100 dark:border-slate-800 shrink-0">
             <div className="flex items-center gap-3">
+              <MessageSquare size={18} className="text-green-500 shrink-0" />
               <h2 className="text-base font-semibold text-gray-800 dark:text-slate-100">
-                Backlog — {inboxName ?? 'WhatsApp'}
+                Conversas WhatsApp — Todos os Setores
               </h2>
 
-              {/* Month navigation */}
               <div className="flex items-center gap-1 ml-2">
                 <button
                   onClick={prevMonth}
@@ -233,9 +180,9 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
           {/* Stats bar */}
           {!loading && !error && conversations.length > 0 && (
             <div className="flex items-center gap-6 px-6 py-3 border-b border-gray-100 dark:border-slate-800 shrink-0
-              bg-gray-50 dark:bg-slate-950/40 text-sm">
+              bg-gray-50 dark:bg-slate-950/40 text-sm flex-wrap">
               <span className="text-gray-500 dark:text-slate-400">
-                <span className="font-semibold text-gray-800 dark:text-slate-100">{total}</span>
+                <span className="font-semibold text-gray-800 dark:text-slate-100">{filtered.length}</span>
                 {hasFilter && <span className="text-gray-400"> / {conversations.length}</span>}
                 {' '}conversas
               </span>
@@ -243,13 +190,12 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
                 <span className="font-semibold text-emerald-600 dark:text-emerald-400">{resolved}</span> resolvidas
               </span>
               <span className="text-gray-500 dark:text-slate-400">
-                <span className="font-semibold text-blue-600 dark:text-blue-400">{total - resolved}</span> em aberto
+                <span className="font-semibold text-blue-600 dark:text-blue-400">{filtered.length - resolved}</span> em aberto
               </span>
               {csatAvg !== null && (
                 <span className="flex items-center gap-1.5 text-gray-500 dark:text-slate-400">
-                  CSAT médio:
-                  <StarRating rating={csatAvg} />
-                  <span className="text-xs text-gray-400">({withCsat.length} avaliações)</span>
+                  CSAT médio: <StarRating rating={csatAvg} />
+                  <span className="text-xs text-gray-400">({withCsat.length})</span>
                 </span>
               )}
             </div>
@@ -257,14 +203,29 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
 
           {/* Filters */}
           {!loading && !error && conversations.length > 0 && (
-            <div className="flex items-center gap-2 px-6 py-3 border-b border-gray-100 dark:border-slate-800 shrink-0">
+            <div className="flex items-center gap-2 px-6 py-3 border-b border-gray-100 dark:border-slate-800 shrink-0 flex-wrap">
               <Search size={13} className="text-gray-400 dark:text-slate-500 shrink-0" />
+
+              {/* Setor select */}
+              <select
+                value={filterSetor}
+                onChange={(e) => setFilterSetor(e.target.value)}
+                className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
+                  bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-300
+                  focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              >
+                <option value="">Todos os setores</option>
+                {CW_SECTOR_NAMES.map((s) => (
+                  <option key={s.slug} value={s.slug}>{s.name}</option>
+                ))}
+              </select>
+
               <input
                 type="text"
                 placeholder="Escola / Unidade"
                 value={filterEscola}
                 onChange={(e) => setFilterEscola(e.target.value)}
-                className="flex-1 text-sm px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
+                className="flex-1 min-w-[120px] text-sm px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
                   bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-300
                   placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
               />
@@ -273,7 +234,7 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
                 placeholder="Departamento"
                 value={filterDepto}
                 onChange={(e) => setFilterDepto(e.target.value)}
-                className="flex-1 text-sm px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
+                className="flex-1 min-w-[120px] text-sm px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
                   bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-300
                   placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
               />
@@ -282,13 +243,13 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
                 placeholder="Assunto"
                 value={filterAssunto}
                 onChange={(e) => setFilterAssunto(e.target.value)}
-                className="flex-1 text-sm px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
+                className="flex-1 min-w-[100px] text-sm px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
                   bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-300
                   placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
               />
               {hasFilter && (
                 <button
-                  onClick={() => { setFilterEscola(''); setFilterDepto(''); setFilterAssunto(''); }}
+                  onClick={clearFilters}
                   className="text-xs px-2 py-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-slate-300
                     hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap"
                 >
@@ -301,15 +262,15 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
           {/* Content */}
           <div className="flex-1 overflow-y-auto min-h-0">
             {loading ? (
-              <div className="flex items-center justify-center gap-2 py-16 text-gray-400 dark:text-slate-500">
-                <Loader2 size={18} className="animate-spin" />
-                <span className="text-sm">Carregando conversas…</span>
+              <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400 dark:text-slate-500">
+                <Loader2 size={24} className="animate-spin" />
+                <span className="text-sm">Carregando conversas de todos os setores…</span>
               </div>
             ) : error ? (
               <div className="flex flex-col items-center justify-center py-16 gap-2 text-center px-6">
                 <p className="text-sm text-red-500">{error}</p>
                 <button
-                  onClick={fetchBacklog}
+                  onClick={fetch_}
                   className="mt-2 px-4 py-2 rounded-lg text-sm bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors text-gray-600 dark:text-slate-300"
                 >
                   Tentar novamente
@@ -324,10 +285,7 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
               <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
                 <Search size={32} className="text-gray-200 dark:text-slate-700" />
                 <p className="text-sm text-gray-400 dark:text-slate-500">Nenhuma conversa corresponde aos filtros.</p>
-                <button
-                  onClick={() => { setFilterEscola(''); setFilterDepto(''); setFilterAssunto(''); }}
-                  className="mt-1 text-xs px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
-                >
+                <button onClick={clearFilters} className="mt-1 text-xs px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors">
                   Limpar filtros
                 </button>
               </div>
@@ -338,24 +296,21 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide w-8">#</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Contato</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Escola</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Setor</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Departamento</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Assunto</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Agente</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Data</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">CSAT</th>
-                    <th className="px-3 py-3 w-12"></th>
+                    <th className="px-3 py-3 w-12" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800/60">
                   {filtered.map((c, i) => {
-                    const statusInfo = STATUS_MAP[c.status] ?? { label: c.status, cls: 'bg-gray-100 text-gray-500', icon: null };
+                    const statusInfo = STATUS_MAP[c.status] ?? { label: c.status, cls: 'bg-gray-100 text-gray-500' };
                     return (
-                      <tr
-                        key={c.id}
-                        onClick={() => setSelected(toModalConversation(c))}
-                        className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
-                      >
+                      <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
                         <td className="px-3 py-3 text-gray-400 dark:text-slate-600 tabular-nums">{i + 1}</td>
 
                         <td className="px-3 py-3">
@@ -373,66 +328,67 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
                         </td>
 
                         <td className="px-3 py-3">
-                          {c.departamento ? (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300 whitespace-nowrap">
+                            {c.sectorName}
+                          </span>
+                        </td>
+
+                        <td className="px-3 py-3">
+                          {c.subdepartamento ? (
                             <div>
-                              <p className="text-xs text-gray-600 dark:text-slate-300">{c.departamento}</p>
-                              {c.subdepartamento && (
-                                <p className="text-xs text-gray-400 dark:text-slate-500">{c.subdepartamento}</p>
+                              <p className="text-xs text-gray-700 dark:text-slate-300">{c.subdepartamento}</p>
+                              {c.departamento && c.departamento !== c.subdepartamento && (
+                                <p className="text-xs text-gray-400 dark:text-slate-500">{c.departamento}</p>
                               )}
                             </div>
+                          ) : c.departamento ? (
+                            <span className="text-xs text-gray-700 dark:text-slate-300">{c.departamento}</span>
                           ) : (
                             <span className="text-gray-300 dark:text-slate-700">—</span>
                           )}
                         </td>
 
-                        <td className="px-3 py-3 max-w-[180px]">
+                        <td className="px-3 py-3">
                           {c.assunto
-                            ? <span className="text-xs text-gray-600 dark:text-slate-300 line-clamp-2">{c.assunto}</span>
+                            ? <span className="text-xs text-gray-600 dark:text-slate-300">{c.assunto}</span>
                             : <span className="text-gray-300 dark:text-slate-700">—</span>
                           }
                         </td>
 
                         <td className="px-3 py-3">
-                          <span className={clsx('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium', statusInfo.cls)}>
-                            {statusInfo.icon}
+                          <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ${statusInfo.cls}`}>
                             {statusInfo.label}
                           </span>
                         </td>
 
-                        <td className="px-3 py-3">
-                          {c.assigneeName
-                            ? <span className="text-xs text-gray-600 dark:text-slate-300 whitespace-nowrap">{c.assigneeName}</span>
-                            : (
-                              <span className="inline-flex items-center gap-1 text-xs text-red-500 dark:text-red-400">
-                                <UserX size={12} /> Não atribuído
-                              </span>
-                            )
-                          }
+                        <td className="px-3 py-3 text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                          {c.assigneeName ?? <span className="text-gray-300 dark:text-slate-700">—</span>}
                         </td>
 
-                        <td className="px-3 py-3 text-gray-500 dark:text-slate-400 tabular-nums whitespace-nowrap text-xs">
+                        <td className="px-3 py-3 text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap tabular-nums">
                           {formatDate(c.createdAt)}
                         </td>
 
                         <td className="px-3 py-3">
-                          <StarRating rating={c.csatRating} />
-                          {c.csatFeedback && (
-                            <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5 max-w-[120px] truncate" title={c.csatFeedback}>
-                              {c.csatFeedback}
-                            </p>
-                          )}
+                          {c.csatRating !== null
+                            ? <StarRating rating={c.csatRating} />
+                            : <span className="text-gray-300 dark:text-slate-700 text-xs">—</span>
+                          }
                         </td>
 
                         <td className="px-3 py-3">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setSelected(toModalConversation(c)); }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium
-                              bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300
-                              hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors"
+                          <a
+                            href={c.chatwootUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg
+                              bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400
+                              hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
                           >
-                            <MessageSquare size={12} />
+                            <ExternalLink size={11} />
                             Abrir
-                          </button>
+                          </a>
                         </td>
                       </tr>
                     );
@@ -443,12 +399,6 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
           </div>
         </div>
       </div>
-
-      {/* Conversation modal on top */}
-      <ChatwootConversationModal
-        conversation={selected}
-        onClose={() => setSelected(null)}
-      />
     </>
   );
 }

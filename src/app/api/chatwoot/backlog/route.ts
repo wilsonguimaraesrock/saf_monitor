@@ -100,6 +100,7 @@ type RawCsatResponse = {
 
 async function fetchConversationsForStatus(
   inboxId: number,
+  teamId: number,
   status: string,
   since: number,
   maxPages = 6
@@ -108,7 +109,7 @@ async function fetchConversationsForStatus(
 
   for (let page = 1; page <= maxPages; page++) {
     const data = await cwFetch<{ data: { payload: RawConv[] } }>(
-      `/conversations?status=${status}&inbox_id=${inboxId}&page=${page}`
+      `/conversations?status=${status}&inbox_id=${inboxId}&team_id=${teamId}&page=${page}`
     );
     const payload = data?.data?.payload ?? [];
     if (payload.length === 0) break;
@@ -127,11 +128,12 @@ async function fetchConversationsForStatus(
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const inboxId = Number(searchParams.get('inboxId'));
+  const inboxId  = Number(searchParams.get('inboxId'));
+  const teamId   = Number(searchParams.get('teamId')) || 0;
   const monthParam = searchParams.get('month'); // "YYYY-MM"
 
-  if (!inboxId) {
-    return NextResponse.json({ error: 'inboxId obrigatório' }, { status: 400 });
+  if (!inboxId || !teamId) {
+    return NextResponse.json({ error: 'inboxId e teamId obrigatórios' }, { status: 400 });
   }
 
   // Compute month boundaries
@@ -150,10 +152,10 @@ export async function GET(req: NextRequest) {
   try {
     // Fetch conversations for all relevant statuses in parallel
     const [resolved, open, pending, snoozed] = await Promise.all([
-      fetchConversationsForStatus(inboxId, 'resolved', since),
-      fetchConversationsForStatus(inboxId, 'open', since, 3),
-      fetchConversationsForStatus(inboxId, 'pending', since, 2),
-      fetchConversationsForStatus(inboxId, 'snoozed', since, 2),
+      fetchConversationsForStatus(inboxId, teamId, 'resolved', since),
+      fetchConversationsForStatus(inboxId, teamId, 'open', since, 3),
+      fetchConversationsForStatus(inboxId, teamId, 'pending', since, 2),
+      fetchConversationsForStatus(inboxId, teamId, 'snoozed', since, 2),
     ]);
 
     const allConversations = [...resolved, ...open, ...pending, ...snoozed];

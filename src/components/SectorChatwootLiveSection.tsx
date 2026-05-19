@@ -157,6 +157,7 @@ export function SectorChatwootLiveSection({
       {backlogOpen && (
         <ChatwootBacklogModal
           inboxId={panelData?.inboxId ?? null}
+          teamId={teamId}
           inboxName={inboxName}
           onClose={() => setBacklogOpen(false)}
         />

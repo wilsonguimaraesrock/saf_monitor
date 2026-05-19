@@ -17,6 +17,7 @@ import { getLandingStats } from '@/repository/sectors';
 import { getChatwootLandingStats } from '@/integrations/chatwoot';
 import type { ChatwootLandingStats } from '@/integrations/chatwoot';
 import { queryOne } from '@/lib/db';
+import { GlobalChatwootButton } from '@/components/GlobalChatwootButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,11 +125,18 @@ async function LandingContent() {
         <StatCard label="Aguard. nossa resp." value={global.awaiting}icon={Clock}         variant={global.awaiting > 0 ? 'warning' : 'success'} subtitle="ação pendente" />
       </div>
 
-      {/* ── Cards de setor ─────────────────────────────────── */}
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-4">
+      {/* ── WhatsApp global ────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
           Setores
         </h2>
+        <GlobalChatwootButton
+          totalWA={Object.values(chatwootStats).reduce((s, cw) => s + (cw?.monthlyTotal ?? 0), 0)}
+        />
+      </div>
+
+      {/* ── Cards de setor ─────────────────────────────────── */}
+      <div>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {SECTORS.map((sector) => {
             const stats  = sectorStats[sector.slug] ?? { total: 0, overdue: 0, awaiting: 0 };

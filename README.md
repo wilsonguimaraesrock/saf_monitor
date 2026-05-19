@@ -23,7 +23,7 @@ Deployado em Vercel · banco PostgreSQL (Digital Ocean) · notificações via Te
 
 ## Visão geral
 
-- **Landing page** — resumo de todos os setores: total de SAFs abertos + total do mês corrente (abertos e resolvidos), atrasados, aguardando resposta, SLA (%) e indicadores WhatsApp por setor (total do mês, conversas abertas, CSAT); badge verde pulsante no card do setor quando há conversas WhatsApp pendentes
+- **Landing page** — resumo de todos os setores: total de SAFs abertos + total do mês corrente, atrasados, aguardando resposta, SLA (%) e indicadores WhatsApp por setor (total do mês, conversas abertas, CSAT); badge verde pulsante no card do setor quando há conversas WhatsApp pendentes; botão **"Conversas WhatsApp"** consolida o backlog de todos os setores com filtros
 - **Dashboard por setor** — filtros, tabelas de tickets, SLA SAF e SLA WhatsApp (após a tabela principal), breakdown por departamento e clusters de assunto
 - **Dashboard PD&I** — igual ao genérico + indicadores de atendimentos WhatsApp via Chatwoot (cards, conversas abertas, breakdown, SLA WhatsApp, avaliação CSAT por departamento)
 - **Breakdown WhatsApp** — card com 3 abas por setor: **subdepartamento** (contagem + resolvidas), **assunto** (ranking de frequência) e **atendentes** (contagem + CSAT médio)
@@ -136,7 +136,7 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 |---|---|
 | `GET /conversations?status=open&team_id={id}` | Conversas abertas ao vivo por departamento |
 | `GET /conversations?status={status}&team_id={id}` | Contagens por status por departamento |
-| `GET /conversations?status={status}&inbox_id={id}&page={n}` | Paginação para backlog (usa inbox) |
+| `GET /conversations?status={status}&inbox_id={id}&team_id={id}&page={n}` | Paginação para backlog (filtra por inbox **e** team — consistente com os totais por setor) |
 | `GET /csat_survey_responses?inbox_id={id}&team_id={id}&since={unix}` | CSAT do mês corrente por departamento |
 | `GET /reports/summary?since={unix}&until={unix}&id={teamId}&type=team` | Total de conversas abertas no mês por team |
 | `GET /agents` | Lista todos os agentes da conta |
@@ -158,7 +158,8 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 | `/api/chatwoot/conversation/[id]` | PATCH | Resolver conversa |
 | `/api/chatwoot/conversation/[id]` | PUT | Atribuir agente `{ agentId }` ou transferir team `{ teamId }` |
 | `/api/chatwoot/transfer` | GET | Listar teams `{ teams: [{id, name}] }` |
-| `/api/chatwoot/backlog` | GET | Conversas do mês com CSAT (`?inboxId=X&month=YYYY-MM`) |
+| `/api/chatwoot/backlog` | GET | Conversas do mês com CSAT (`?inboxId=X&teamId=Y&month=YYYY-MM`) — filtra por inbox **e** team |
+| `/api/chatwoot/global-backlog` | GET | Conversas do mês de **todos os setores** (`?month=YYYY-MM`) — agrega os 7 times em paralelo |
 
 **Layout dos cards por setor (ordem):**
 
@@ -181,7 +182,9 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 | `ChatwootSlaPanelLive` | Wrapper autônomo com polling 30s — renderiza ChatwootSlaPanel com dados vivos |
 | `ChatwootConversationTable` | Tabela de conversas abertas com **dropdown inline de atribuição de agente**; botão "Backlog do mês" |
 | `ChatwootConversationModal` | Chat nativo: histórico, texto, áudio, imagem, Resolver, **Transferir** (select de team) |
-| `ChatwootBacklogModal` | Backlog mensal: todas as conversas com status e CSAT; navegação prev/next mês |
+| `ChatwootBacklogModal` | Backlog mensal por setor: todas as conversas com status e CSAT; navegação prev/next mês |
+| `GlobalChatwootBacklogModal` | Backlog global: consolida conversas de **todos os setores** com filtro de Setor, Escola, Departamento e Assunto |
+| `GlobalChatwootButton` | Botão na landing page que abre o `GlobalChatwootBacklogModal`; exibe total consolidado do mês |
 
 **Atribuição de agente inline:**
 - Coluna "Agente" na tabela de conversas abertas é clicável
@@ -209,13 +212,21 @@ Indicadores exibidos no painel "Atendimentos WhatsApp":
 
 Tabela de conversas abertas com etiquetas coloridas (hash determinístico → cor Tailwind); clique na linha abre o modal de chat nativo.
 
-**Backlog do mês:**
+**Backlog do mês (por setor):**
 - Botão laranja "Backlog do mês" no header do card "CONVERSAS ABERTAS"
-- Busca conversas de todos os status (open/resolved/pending/snoozed) do mês selecionado
-- Pagina resolvidas (até 6 páginas × 25 = ~150 conversas), para quando encontra itens anteriores ao mês
+- Busca conversas de todos os status (open/resolved/pending/snoozed) do mês selecionado filtrando por `inbox_id` **e** `team_id` — garantindo contagem consistente com o card "X total" da landing
+- Pagina até 6 páginas × 25 por status, para quando encontra itens anteriores ao mês
 - Exibe nota CSAT por conversa (estrelas 1–5) e feedback textual quando disponível
 - Navegação entre meses (mês atual é o limite superior)
 - Clicar em uma conversa abre o modal de chat nativo para responder
+
+**Backlog global (landing page):**
+- Botão "Conversas WhatsApp" ao lado do título "Setores" na landing page — badge com total consolidado do mês
+- Abre `GlobalChatwootBacklogModal`: agrega conversas de todos os 7 setores em paralelo (até 8 chamadas concorrentes)
+- CSAT buscado em uma única chamada para a inbox compartilhada
+- Filtros: **Setor** (select), Escola/Unidade, Departamento, Assunto
+- Coluna extra "Setor" (badge laranja) na tabela; demais colunas idênticas ao backlog por setor
+- Limite de 200 conversas por requisição para manter performance
 
 **Estrutura da resposta CSAT (`/csat_survey_responses`):**
 ```json
