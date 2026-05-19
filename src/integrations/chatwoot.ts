@@ -198,6 +198,26 @@ export interface ChatwootLandingStats {
   csatAvg: number | null;
 }
 
+async function getMonthlyResolvedCount(teamId: number, sinceMonth: number): Promise<number> {
+  let count = 0;
+  for (let page = 1; page <= 10; page++) {
+    let data: { data: { payload: Array<{ created_at: number }> } } | null = null;
+    try {
+      data = await chatwootFetch<{ data: { payload: Array<{ created_at: number }> } }>(
+        `/conversations?status=resolved&team_id=${teamId}&page=${page}`,
+        { cache: 'no-store' }
+      );
+    } catch { break; }
+    const payload = data?.data?.payload ?? [];
+    if (payload.length === 0) break;
+    const inMonth = payload.filter((c) => c.created_at >= sinceMonth);
+    count += inMonth.length;
+    const oldest = payload[payload.length - 1]?.created_at ?? 0;
+    if (oldest < sinceMonth) break;
+  }
+  return count;
+}
+
 export async function getChatwootLandingStats(inboxId: number, teamId: number): Promise<ChatwootLandingStats> {
   const empty: ChatwootLandingStats = { open: 0, pending: 0, monthlyTotal: 0, avgWaitMin: null, csatAvg: null };
   try {
@@ -205,7 +225,7 @@ export async function getChatwootLandingStats(inboxId: number, teamId: number): 
     const monthStart = new Date();
     const sinceMonth = Math.floor(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth(), 1) / 1000);
 
-    const [convRes, pendingMeta, resolvedMeta, snoozedMeta, csatRes] = await Promise.all([
+    const [convRes, pendingMeta, snoozedMeta, csatRes, monthlyResolved] = await Promise.all([
       chatwootFetch<{
         data: {
           meta: { all_count: number };
@@ -213,14 +233,15 @@ export async function getChatwootLandingStats(inboxId: number, teamId: number): 
         };
       }>(`/conversations?status=open&team_id=${teamId}&page=1`, { cache: 'no-store' }),
 
-      getConversationMeta(teamId, 'pending',  { cache: 'no-store' }),
-      getConversationMeta(teamId, 'resolved', { cache: 'no-store' }),
-      getConversationMeta(teamId, 'snoozed',  { cache: 'no-store' }),
+      getConversationMeta(teamId, 'pending', { cache: 'no-store' }),
+      getConversationMeta(teamId, 'snoozed', { cache: 'no-store' }),
 
       chatwootFetch<Array<{ rating: number }>>(
         `/csat_survey_responses?inbox_id=${inboxId}&team_id=${teamId}&since=${sinceMonth}&page=1`,
         { cache: 'no-store' }
       ).catch(() => [] as Array<{ rating: number }>),
+
+      getMonthlyResolvedCount(teamId, sinceMonth),
     ]);
 
     const open    = convRes?.data?.meta?.all_count ?? 0;
@@ -240,8 +261,7 @@ export async function getChatwootLandingStats(inboxId: number, teamId: number): 
       ? Math.round(csatArr.reduce((s, r) => s + Number(r.rating), 0) / csatArr.length * 10) / 10
       : null;
 
-    // open+pending+snoozed = ativas agora; resolved com since = criadas e resolvidas este mês
-    const monthlyTotal = open + pending + resolvedMeta.all_count + snoozedMeta.all_count;
+    const monthlyTotal = open + pending + monthlyResolved + snoozedMeta.all_count;
 
     return { open, pending, monthlyTotal, avgWaitMin, csatAvg };
   } catch {
