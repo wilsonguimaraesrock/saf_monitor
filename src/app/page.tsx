@@ -116,10 +116,10 @@ async function LandingContent() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
 
       {/* ── Totalizadores globais ───────────────────────────── */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-3">
         <StatCard label="Total SAFs abertos" value={global.total}   icon={LayoutGrid}    variant="default" subtitle="todos os setores" />
         <StatCard label="Atrasados"           value={global.overdue} icon={AlertTriangle} variant={global.overdue > 0 ? 'critical' : 'success'} subtitle="prazo vencido" />
         <StatCard label="Aguard. nossa resp." value={global.awaiting}icon={Clock}         variant={global.awaiting > 0 ? 'warning' : 'success'} subtitle="ação pendente" />
@@ -137,7 +137,7 @@ async function LandingContent() {
 
       {/* ── Cards de setor ─────────────────────────────────── */}
       <div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {SECTORS.map((sector) => {
             const stats  = sectorStats[sector.slug] ?? { total: 0, overdue: 0, awaiting: 0 };
             const Icon   = sector.icon;
@@ -147,147 +147,134 @@ async function LandingContent() {
               <Link
                 key={sector.slug}
                 href={`/setor/${sector.slug}`}
-                className="group block rounded-2xl border bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 shadow-sm hover:shadow-md hover:scale-[1.01] transition-all duration-150 overflow-hidden"
+                className="group block rounded-xl border bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 shadow-sm hover:shadow-md hover:scale-[1.01] transition-all duration-150 overflow-hidden"
               >
-                {/* Barra de acento */}
-                <div className={`h-1 ${accent.bar}`} />
+                <div className={`h-0.5 ${accent.bar}`} />
 
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <div className={`p-2 rounded-xl transition-colors ${accent.iconWrap} ${accent.iconWrapHover}`}>
-                        <Icon size={18} className={accent.icon} />
+                <div className="p-3.5">
+                  {/* ── Linha 1: ícone + nome + número ── */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`p-1.5 rounded-lg shrink-0 transition-colors ${accent.iconWrap} ${accent.iconWrapHover}`}>
+                        <Icon size={15} className={accent.icon} />
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-bold text-gray-900 dark:text-slate-100 text-sm">{sector.name}</p>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-bold text-gray-900 dark:text-slate-100 text-sm leading-tight">{sector.name}</p>
                           {sector.chatwoot && (() => {
                             const cw = chatwootStats[sector.slug];
                             const alertCount = (cw?.open ?? 0) + (cw?.pending ?? 0);
                             if (alertCount === 0) return null;
                             return (
-                              <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-green-500 dark:bg-green-500 text-white px-2 py-1 rounded-full animate-pulse shadow-md shadow-green-400/50 dark:shadow-green-600/40 leading-none" style={{ animationDuration: '0.7s' }}>
-                                <MessageSquare size={12} className="shrink-0 fill-white/30" />
-                                {alertCount} WA
+                              <span className="inline-flex items-center gap-1 text-xs font-bold bg-green-500 text-white px-1.5 py-0.5 rounded-full animate-pulse shadow-sm shadow-green-400/50 leading-none" style={{ animationDuration: '0.7s' }}>
+                                <MessageSquare size={10} className="shrink-0 fill-white/30" />
+                                {alertCount}
                               </span>
                             );
                           })()}
                         </div>
-                        <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5 truncate max-w-[180px]">
+                        <p className="text-xs text-gray-400 dark:text-slate-500 truncate max-w-[160px] leading-tight">
                           {getSectorDisplayDepartments(sector).join(', ')}
                         </p>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <span className="text-4xl font-bold tabular-nums text-gray-900 dark:text-slate-100">
+                      <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-100 leading-none">
                         {stats.total}
                       </span>
                       {stats.monthlyTotal > 0 && (
-                        <p className="text-xs text-gray-400 dark:text-slate-500 tabular-nums mt-0.5">
+                        <p className="text-xs text-gray-400 dark:text-slate-500 tabular-nums leading-tight">
                           {stats.monthlyTotal} no mês
                         </p>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-slate-800">
-                    <div className="flex items-center gap-1.5">
-                      <AlertTriangle size={13} className={stats.overdue > 0 ? 'text-red-500' : 'text-gray-300 dark:text-slate-600'} />
-                      <span className={`text-base font-semibold tabular-nums ${stats.overdue > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'}`}>
+                  {/* ── Linha 2: atrasados + aguardando + SLA + em risco ── */}
+                  <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100 dark:border-slate-800 flex-wrap">
+                    <div className="flex items-center gap-1">
+                      <AlertTriangle size={11} className={stats.overdue > 0 ? 'text-red-500' : 'text-gray-300 dark:text-slate-700'} />
+                      <span className={`text-xs font-semibold tabular-nums ${stats.overdue > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-slate-600'}`}>
                         {stats.overdue} atrasados
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <Clock size={13} className={stats.awaiting > 0 ? 'text-amber-500' : 'text-gray-300 dark:text-slate-600'} />
-                      <span className={`text-base font-semibold tabular-nums ${stats.awaiting > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-slate-500'}`}>
+                    <div className="flex items-center gap-1">
+                      <Clock size={11} className={stats.awaiting > 0 ? 'text-amber-500' : 'text-gray-300 dark:text-slate-700'} />
+                      <span className={`text-xs font-semibold tabular-nums ${stats.awaiting > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-slate-600'}`}>
                         {stats.awaiting} aguardando
                       </span>
                     </div>
-                  </div>
-
-                  {/* SLA row */}
-                  <div className="flex gap-4 mt-3 pt-3 border-t border-gray-100 dark:border-slate-800">
-                    <div className="flex items-center gap-1.5">
-                      <ShieldCheck size={13} className={
+                    <div className="flex items-center gap-1">
+                      <ShieldCheck size={11} className={
                         stats.slaRate >= 80 ? 'text-emerald-500' :
                         stats.slaRate >= 60 ? 'text-amber-500' :
                         stats.slaRate > 0   ? 'text-red-500' :
-                        'text-gray-300 dark:text-slate-600'
+                        'text-gray-300 dark:text-slate-700'
                       } />
-                      <span className={`text-base font-semibold tabular-nums ${
+                      <span className={`text-xs font-semibold tabular-nums ${
                         stats.slaRate >= 80 ? 'text-emerald-600 dark:text-emerald-400' :
                         stats.slaRate >= 60 ? 'text-amber-600 dark:text-amber-400' :
                         stats.slaRate > 0   ? 'text-red-600 dark:text-red-400' :
-                        'text-gray-400 dark:text-slate-500'
+                        'text-gray-400 dark:text-slate-600'
                       }`}>
                         {stats.slaRate > 0 ? `${stats.slaRate}% SLA` : '— SLA'}
                       </span>
                     </div>
                     {stats.atRisk > 0 && (
-                      <div className="flex items-center gap-1.5">
-                        <Clock size={13} className="text-orange-500" />
-                        <span className="text-base font-semibold tabular-nums text-orange-600 dark:text-orange-400">
+                      <div className="flex items-center gap-1">
+                        <Clock size={11} className="text-orange-500" />
+                        <span className="text-xs font-semibold tabular-nums text-orange-600 dark:text-orange-400">
                           {stats.atRisk} em risco
                         </span>
                       </div>
                     )}
                   </div>
 
-                  {/* WhatsApp row */}
+                  {/* ── Linha 3: WhatsApp (tudo em uma linha) ── */}
                   {sector.chatwoot && (() => {
                     const cw = chatwootStats[sector.slug];
                     if (!cw) return null;
                     return (
-                      <>
-                        {/* linha 1: total do mês + abertas agora */}
-                        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100 dark:border-slate-800">
-                          <div className="flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500 font-medium">
-                            <MessageSquare size={11} className="text-green-500 shrink-0" />
-                            <span className="text-gray-300 dark:text-slate-600 mr-0.5">WA</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <MessageSquare size={12} className={cw.monthlyTotal > 0 ? 'text-green-500' : 'text-gray-300 dark:text-slate-600'} />
-                            <span className={`text-base font-semibold tabular-nums ${cw.monthlyTotal > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-slate-500'}`}>
-                              {cw.monthlyTotal} total
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <MessageSquare size={12} className={cw.open > 0 ? 'text-blue-500' : 'text-gray-300 dark:text-slate-600'} />
-                            <span className={`text-base font-semibold tabular-nums ${cw.open > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500'}`}>
-                              {cw.open} abertas
-                            </span>
-                          </div>
+                      <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100 dark:border-slate-800 flex-wrap">
+                        <div className="flex items-center gap-1">
+                          <MessageSquare size={11} className="text-green-500 shrink-0" />
+                          <span className="text-xs font-medium text-gray-400 dark:text-slate-500">WA</span>
                         </div>
-                        {/* linha 2: espera + CSAT */}
-                        {(cw.avgWaitMin !== null || cw.csatAvg !== null) && (
-                          <div className="flex items-center gap-4 mt-2">
-                            {cw.avgWaitMin !== null && (
-                              <div className="flex items-center gap-1.5">
-                                <Clock size={12} className={
-                                  cw.avgWaitMin > 60 ? 'text-red-500' :
-                                  cw.avgWaitMin > 30 ? 'text-amber-500' :
-                                  'text-emerald-500'
-                                } />
-                                <span className={`text-base font-semibold tabular-nums ${
-                                  cw.avgWaitMin > 60 ? 'text-red-600 dark:text-red-400' :
-                                  cw.avgWaitMin > 30 ? 'text-amber-600 dark:text-amber-400' :
-                                  'text-emerald-600 dark:text-emerald-400'
-                                }`}>
-                                  {fmtWait(cw.avgWaitMin)} espera
-                                </span>
-                              </div>
-                            )}
-                            {cw.csatAvg !== null && (
-                              <div className="flex items-center gap-1.5">
-                                <Star size={12} className="text-amber-400 fill-amber-400" />
-                                <span className="text-base font-semibold tabular-nums text-amber-600 dark:text-amber-400">
-                                  {cw.csatAvg}
-                                </span>
-                              </div>
-                            )}
+                        <div className="flex items-center gap-1">
+                          <span className={`text-xs font-semibold tabular-nums ${cw.monthlyTotal > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-slate-600'}`}>
+                            {cw.monthlyTotal} total
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className={`text-xs font-semibold tabular-nums ${cw.open > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-600'}`}>
+                            {cw.open} abertas
+                          </span>
+                        </div>
+                        {cw.avgWaitMin !== null && (
+                          <div className="flex items-center gap-1">
+                            <Clock size={11} className={
+                              cw.avgWaitMin > 60 ? 'text-red-500' :
+                              cw.avgWaitMin > 30 ? 'text-amber-500' :
+                              'text-emerald-500'
+                            } />
+                            <span className={`text-xs font-semibold tabular-nums ${
+                              cw.avgWaitMin > 60 ? 'text-red-600 dark:text-red-400' :
+                              cw.avgWaitMin > 30 ? 'text-amber-600 dark:text-amber-400' :
+                              'text-emerald-600 dark:text-emerald-400'
+                            }`}>
+                              {fmtWait(cw.avgWaitMin)}
+                            </span>
                           </div>
                         )}
-                      </>
+                        {cw.csatAvg !== null && (
+                          <div className="flex items-center gap-1">
+                            <Star size={11} className="text-amber-400 fill-amber-400" />
+                            <span className="text-xs font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                              {cw.csatAvg}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     );
                   })()}
                 </div>
