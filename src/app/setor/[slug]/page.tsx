@@ -25,6 +25,8 @@ import {
   getSectorDisplayDepartments,
   getSectorSubdepartment,
 } from '@/lib/sectors';
+import { MonthPickerNav } from '@/components/MonthPickerNav';
+import { parseMonthParam } from '@/lib/month';
 import {
   getSectorStats,
   getSectorOverdueTickets,
@@ -306,6 +308,7 @@ export default async function SectorPage(props: PageProps) {
   if (!sector) notFound();
 
   const SectorIcon = sector.icon;
+  const { ym, isCurrentMonth } = parseMonthParam(sp.month);
 
   return (
     <main className="min-h-screen">
@@ -340,6 +343,7 @@ export default async function SectorPage(props: PageProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <MonthPickerNav currentMonth={ym} isCurrentMonth={isCurrentMonth} />
             <DarkModeToggle />
             <ScraperTriggerButton />
             <RefreshButton />

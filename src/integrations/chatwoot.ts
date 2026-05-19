@@ -198,7 +198,11 @@ export interface ChatwootLandingStats {
   csatAvg: number | null;
 }
 
-async function getMonthlyResolvedCount(teamId: number, sinceMonth: number): Promise<number> {
+async function getMonthlyResolvedCount(
+  teamId: number,
+  sinceMonth: number,
+  untilMonth?: number
+): Promise<number> {
   let count = 0;
   for (let page = 1; page <= 10; page++) {
     let data: { data: { payload: Array<{ created_at: number }> } } | null = null;
@@ -210,7 +214,9 @@ async function getMonthlyResolvedCount(teamId: number, sinceMonth: number): Prom
     } catch { break; }
     const payload = data?.data?.payload ?? [];
     if (payload.length === 0) break;
-    const inMonth = payload.filter((c) => c.created_at >= sinceMonth);
+    const inMonth = payload.filter(
+      (c) => c.created_at >= sinceMonth && (untilMonth === undefined || c.created_at < untilMonth)
+    );
     count += inMonth.length;
     const oldest = payload[payload.length - 1]?.created_at ?? 0;
     if (oldest < sinceMonth) break;
@@ -218,12 +224,54 @@ async function getMonthlyResolvedCount(teamId: number, sinceMonth: number): Prom
   return count;
 }
 
-export async function getChatwootLandingStats(inboxId: number, teamId: number): Promise<ChatwootLandingStats> {
+async function getHistoricalMonthlyCount(
+  teamId: number,
+  sinceMonth: number,
+  untilMonth: number
+): Promise<number> {
+  let total = 0;
+  for (const status of ['open', 'pending', 'resolved', 'snoozed'] as const) {
+    for (let page = 1; page <= 10; page++) {
+      let data: { data: { payload: Array<{ created_at: number }> } } | null = null;
+      try {
+        data = await chatwootFetch<{ data: { payload: Array<{ created_at: number }> } }>(
+          `/conversations?status=${status}&team_id=${teamId}&page=${page}`,
+          { cache: 'no-store' }
+        );
+      } catch { break; }
+      const payload = data?.data?.payload ?? [];
+      if (payload.length === 0) break;
+      const inRange = payload.filter(
+        (c) => c.created_at >= sinceMonth && c.created_at < untilMonth
+      );
+      total += inRange.length;
+      const oldest = payload[payload.length - 1]?.created_at ?? 0;
+      if (oldest < sinceMonth) break;
+    }
+  }
+  return total;
+}
+
+export async function getChatwootLandingStats(
+  inboxId: number,
+  teamId: number,
+  monthStart?: Date,
+  monthEnd?: Date,
+): Promise<ChatwootLandingStats> {
   const empty: ChatwootLandingStats = { open: 0, pending: 0, monthlyTotal: 0, avgWaitMin: null, csatAvg: null };
   try {
-    const now        = Math.floor(Date.now() / 1000);
-    const monthStart = new Date();
-    const sinceMonth = Math.floor(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth(), 1) / 1000);
+    const now = Math.floor(Date.now() / 1000);
+
+    // Past month — return only historical count, no live metrics
+    if (monthStart && monthEnd && monthEnd.getTime() <= Date.now()) {
+      const sinceMonth = Math.floor(monthStart.getTime() / 1000);
+      const untilMonth = Math.floor(monthEnd.getTime() / 1000);
+      const monthlyTotal = await getHistoricalMonthlyCount(teamId, sinceMonth, untilMonth);
+      return { open: 0, pending: 0, monthlyTotal, avgWaitMin: null, csatAvg: null };
+    }
+
+    const curMonthStart = monthStart ?? new Date();
+    const sinceMonth = Math.floor(Date.UTC(curMonthStart.getUTCFullYear(), curMonthStart.getUTCMonth(), 1) / 1000);
 
     const [convRes, pendingMeta, snoozedMeta, csatRes, monthlyResolved] = await Promise.all([
       chatwootFetch<{
