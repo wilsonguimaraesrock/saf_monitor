@@ -28,6 +28,8 @@ import { SlaPanel } from '@/components/SlaPanel';
 import { SectorChatwootLiveSection } from '@/components/SectorChatwootLiveSection';
 import { ChatwootSlaPanelLive } from '@/components/ChatwootSlaPanelLive';
 import { getSectorBySlug } from '@/lib/sectors';
+import { MonthPickerNav } from '@/components/MonthPickerNav';
+import { parseMonthParam } from '@/lib/month';
 import {
   getSectorStats,
   getSectorCategoryStats,
@@ -249,7 +251,10 @@ async function PdiContent({ searchParams }: PageProps) {
   );
 }
 
-export default function PdiPage(props: PageProps) {
+export default async function PdiPage(props: PageProps) {
+  const sp = await props.searchParams;
+  const { ym, isCurrentMonth } = parseMonthParam(sp.month);
+
   return (
     <main className="min-h-screen">
       <header className="sticky top-0 z-20 bg-gradient-to-r from-orange-600 to-amber-600 border-b border-orange-700 dark:from-slate-900 dark:to-slate-900 dark:border-slate-800">
@@ -281,6 +286,7 @@ export default function PdiPage(props: PageProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <MonthPickerNav currentMonth={ym} isCurrentMonth={isCurrentMonth} />
             <DarkModeToggle />
             <ScraperTriggerButton />
             <RefreshButton />
