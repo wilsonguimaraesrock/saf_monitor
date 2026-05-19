@@ -166,9 +166,9 @@ async function LandingContent() {
                             const alertCount = (cw?.open ?? 0) + (cw?.pending ?? 0);
                             if (alertCount === 0) return null;
                             return (
-                              <span className="inline-flex items-center gap-1 text-xs font-bold bg-green-500 text-white px-1.5 py-0.5 rounded-full animate-pulse shadow-sm shadow-green-400/50 leading-none" style={{ animationDuration: '0.7s' }}>
-                                <MessageSquare size={10} className="shrink-0 fill-white/30" />
-                                {alertCount}
+                              <span className="inline-flex items-center gap-1.5 text-sm font-bold bg-green-500 text-white px-2.5 py-1 rounded-full animate-pulse shadow-md shadow-green-400/50 leading-none" style={{ animationDuration: '0.7s' }}>
+                                <MessageSquare size={13} className="shrink-0 fill-white/30" />
+                                {alertCount} WA
                               </span>
                             );
                           })()}
