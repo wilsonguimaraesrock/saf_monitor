@@ -58,6 +58,31 @@ function fmtSec(s: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+// Renderiza markdown estilo WhatsApp: *bold* _italic_ ~strike~ `code`
+function renderWhatsApp(text: string): React.ReactNode {
+  const regex = /(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|`[^`\n]+`)/g;
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let key = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    const raw = match[0];
+    const inner = raw.slice(1, -1);
+    if      (raw[0] === '*') parts.push(<strong key={key++}>{inner}</strong>);
+    else if (raw[0] === '_') parts.push(<em key={key++}>{inner}</em>);
+    else if (raw[0] === '~') parts.push(<s key={key++}>{inner}</s>);
+    else parts.push(
+      <code key={key++} className="font-mono text-[0.85em] bg-black/10 dark:bg-white/10 px-1 rounded">
+        {inner}
+      </code>
+    );
+    last = regex.lastIndex;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return <>{parts}</>;
+}
+
 export function ChatwootConversationModal({ conversation, onClose }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -528,7 +553,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                               : 'bg-gray-100 text-gray-800 dark:bg-slate-800 dark:text-slate-200 rounded-bl-sm'
                           }`}
                         >
-                          {m.content}
+                          {renderWhatsApp(m.content)}
                         </div>
                       )}
 
