@@ -23,7 +23,7 @@ Deployado em Vercel · banco PostgreSQL (Digital Ocean) · notificações via Te
 
 ## Visão geral
 
-- **Landing page** — resumo de todos os setores: total de SAFs abertos, atrasados, aguardando resposta, SLA (%) e indicadores WhatsApp por setor (total do mês, conversas abertas, CSAT do mês corrente por departamento)
+- **Landing page** — resumo de todos os setores: total de SAFs abertos + total do mês corrente (abertos e resolvidos), atrasados, aguardando resposta, SLA (%) e indicadores WhatsApp por setor (total do mês, conversas abertas, CSAT); badge verde pulsante no card do setor quando há conversas WhatsApp pendentes
 - **Dashboard por setor** — filtros, tabelas de tickets, SLA SAF e SLA WhatsApp (após a tabela principal), breakdown por departamento e clusters de assunto
 - **Dashboard PD&I** — igual ao genérico + indicadores de atendimentos WhatsApp via Chatwoot (cards, conversas abertas, breakdown, SLA WhatsApp, avaliação CSAT por departamento)
 - **Breakdown WhatsApp** — card com 3 abas por setor: **subdepartamento** (contagem + resolvidas), **assunto** (ranking de frequência) e **atendentes** (contagem + CSAT médio)
@@ -195,9 +195,14 @@ Indicadores exibidos no painel "Atendimentos WhatsApp":
 - **Avaliação média CSAT do mês** por departamento (escala 1–5, colorida: ≥4.0 verde / ≥3.0 amarelo / <3.0 vermelho); vazio quando não há avaliações no mês corrente
 
 **Cards da landing page (por setor com WhatsApp):**
+- Badge verde pulsante (`animate-pulse`) com ícone WhatsApp + contagem aparece ao lado do nome do setor quando há conversas **pendentes** (`status=pending`)
 - `X no mês` — total de conversas abertas no mês corrente via `/reports/summary?type=team` (inclui todos os status)
 - `X abertas` — conversas em aberto no momento
 - Tempo médio de espera + CSAT do mês por setor
+
+**Cards da landing page (SAFs por setor):**
+- Número grande = SAFs **em aberto** (últimos 3 meses)
+- `X no mês` abaixo do número grande = total de SAFs abertos no mês corrente (todos os status, via `DATE_TRUNC('month', NOW())`)
 
 Tabela de conversas abertas com etiquetas coloridas (hash determinístico → cor Tailwind); clique na linha abre o modal de chat nativo.
 

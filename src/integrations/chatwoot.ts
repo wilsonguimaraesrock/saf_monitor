@@ -190,25 +190,28 @@ export async function getOpenConversations(
 
 export interface ChatwootLandingStats {
   open: number;
+  pending: number;
   monthlyTotal: number;
   avgWaitMin: number | null;
   csatAvg: number | null;
 }
 
 export async function getChatwootLandingStats(inboxId: number, teamId: number): Promise<ChatwootLandingStats> {
-  const empty: ChatwootLandingStats = { open: 0, monthlyTotal: 0, avgWaitMin: null, csatAvg: null };
+  const empty: ChatwootLandingStats = { open: 0, pending: 0, monthlyTotal: 0, avgWaitMin: null, csatAvg: null };
   try {
     const now        = Math.floor(Date.now() / 1000);
     const monthStart = new Date();
     const sinceMonth = Math.floor(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth(), 1) / 1000);
 
-    const [convRes, csatRes, summaryRes] = await Promise.all([
+    const [convRes, pendingMeta, csatRes, summaryRes] = await Promise.all([
       chatwootFetch<{
         data: {
           meta: { all_count: number };
           payload: Array<{ waiting_since: number | null }>;
         };
       }>(`/conversations?status=open&team_id=${teamId}&page=1`, { cache: 'no-store' }),
+
+      getConversationMeta(teamId, 'pending', { cache: 'no-store' }),
 
       chatwootFetch<Array<{ rating: number }>>(
         `/csat_survey_responses?inbox_id=${inboxId}&team_id=${teamId}&since=${sinceMonth}&page=1`,
@@ -222,6 +225,7 @@ export async function getChatwootLandingStats(inboxId: number, teamId: number): 
     ]);
 
     const open    = convRes?.data?.meta?.all_count ?? 0;
+    const pending = pendingMeta.all_count;
     const payload = convRes?.data?.payload ?? [];
 
     const waits = payload
@@ -239,7 +243,7 @@ export async function getChatwootLandingStats(inboxId: number, teamId: number): 
 
     const monthlyTotal = summaryRes?.conversations_count ?? 0;
 
-    return { open, monthlyTotal, avgWaitMin, csatAvg };
+    return { open, pending, monthlyTotal, avgWaitMin, csatAvg };
   } catch {
     return empty;
   }

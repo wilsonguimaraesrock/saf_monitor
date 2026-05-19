@@ -151,15 +151,30 @@ async function LandingContent() {
                         <Icon size={18} className={accent.icon} />
                       </div>
                       <div>
-                        <p className="font-bold text-gray-900 dark:text-slate-100 text-sm">{sector.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-gray-900 dark:text-slate-100 text-sm">{sector.name}</p>
+                          {sector.chatwoot && (chatwootStats[sector.slug]?.pending ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700 px-1.5 py-0.5 rounded-full animate-pulse leading-none">
+                              <MessageSquare size={9} className="shrink-0" />
+                              {chatwootStats[sector.slug]!.pending}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5 truncate max-w-[180px]">
                           {getSectorDisplayDepartments(sector).join(', ')}
                         </p>
                       </div>
                     </div>
-                    <span className="text-4xl font-bold tabular-nums text-gray-900 dark:text-slate-100 shrink-0">
-                      {stats.total}
-                    </span>
+                    <div className="text-right shrink-0">
+                      <span className="text-4xl font-bold tabular-nums text-gray-900 dark:text-slate-100">
+                        {stats.total}
+                      </span>
+                      {stats.monthlyTotal > 0 && (
+                        <p className="text-xs text-gray-400 dark:text-slate-500 tabular-nums mt-0.5">
+                          {stats.monthlyTotal} no mês
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex gap-4 mt-4 pt-4 border-t border-gray-100 dark:border-slate-800">

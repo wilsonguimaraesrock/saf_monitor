@@ -352,13 +352,13 @@ export async function getSectorClusters(departments: string[], limit = 15) {
 export async function getLandingStats(sectorsMap: Record<string, string[]>) {
   const SLA_START = `'2026-05-01'`;
 
-  const results: Record<string, { total: number; overdue: number; awaiting: number; slaRate: number; atRisk: number }> = {};
+  const results: Record<string, { total: number; overdue: number; awaiting: number; slaRate: number; atRisk: number; monthlyTotal: number }> = {};
 
   await Promise.all(
     Object.entries(sectorsMap).map(async ([slug, departments]) => {
       const row = await queryOne<{
         total: string; overdue: string; awaiting: string;
-        sla_rate: string; at_risk: string;
+        sla_rate: string; at_risk: string; monthly_total: string;
       }>(
         `SELECT
            COUNT(*) FILTER (WHERE status NOT IN ('resolvido','cancelado')
@@ -369,6 +369,9 @@ export async function getLandingStats(sectorsMap: Record<string, string[]>) {
            COUNT(*) FILTER (WHERE awaiting_our_response
              AND status NOT IN ('resolvido','cancelado')
              AND opened_at >= NOW() - INTERVAL '3 months') AS awaiting,
+           COUNT(*) FILTER (
+             WHERE opened_at >= DATE_TRUNC('month', NOW())
+           ) AS monthly_total,
 
            ROUND(
              100.0 * COUNT(*) FILTER (
@@ -396,11 +399,12 @@ export async function getLandingStats(sectorsMap: Record<string, string[]>) {
         [departments]
       );
       results[slug] = {
-        total:    Number(row?.total    ?? 0),
-        overdue:  Number(row?.overdue  ?? 0),
-        awaiting: Number(row?.awaiting ?? 0),
-        slaRate:  Number(row?.sla_rate ?? 0),
-        atRisk:   Number(row?.at_risk  ?? 0),
+        total:        Number(row?.total         ?? 0),
+        overdue:      Number(row?.overdue       ?? 0),
+        awaiting:     Number(row?.awaiting      ?? 0),
+        slaRate:      Number(row?.sla_rate      ?? 0),
+        atRisk:       Number(row?.at_risk       ?? 0),
+        monthlyTotal: Number(row?.monthly_total ?? 0),
       };
     })
   );
