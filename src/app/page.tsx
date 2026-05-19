@@ -18,6 +18,25 @@ import { getChatwootLandingStats } from '@/integrations/chatwoot';
 import type { ChatwootLandingStats } from '@/integrations/chatwoot';
 import { queryOne } from '@/lib/db';
 import { GlobalChatwootButton } from '@/components/GlobalChatwootButton';
+import { MonthPickerNav } from '@/components/MonthPickerNav';
+
+function parseMonthParam(param?: string): { start: Date; end: Date; ym: string; isCurrentMonth: boolean } {
+  const now = new Date();
+  let year  = now.getFullYear();
+  let month = now.getMonth(); // 0-indexed
+
+  if (param && /^\d{4}-\d{2}$/.test(param)) {
+    const [y, m] = param.split('-').map(Number);
+    year = y; month = m - 1;
+  }
+
+  const start = new Date(year, month, 1);
+  const end   = new Date(year, month + 1, 1);
+  const ym    = `${year}-${String(month + 1).padStart(2, '0')}`;
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+
+  return { start, end, ym, isCurrentMonth };
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -78,7 +97,9 @@ function fmtWait(min: number): string {
   return `${Math.round(h / 24)}d`;
 }
 
-async function LandingContent() {
+async function LandingContent({ month }: { month: string }) {
+  const { start, end } = parseMonthParam(month);
+
   // Monta mapa slug → departments para getLandingStats
   const sectorsMap = Object.fromEntries(
     SECTORS.map((s) => [s.slug, s.departments])
@@ -90,18 +111,17 @@ async function LandingContent() {
   const [globalRow, sectorStats, chatwootResults] = await Promise.all([
     queryOne<{ total: string; overdue: string; awaiting: string }>(
       `SELECT
-         COUNT(*) FILTER (WHERE status NOT IN ('resolvido','cancelado')
-           AND opened_at >= NOW() - INTERVAL '3 months') AS total,
+         COUNT(*) FILTER (WHERE opened_at >= $1 AND opened_at < $2) AS total,
          COUNT(*) FILTER (WHERE is_overdue
            AND status NOT IN ('resolvido','cancelado')
-           AND opened_at >= NOW() - INTERVAL '3 months') AS overdue,
+           AND opened_at >= $1 AND opened_at < $2) AS overdue,
          COUNT(*) FILTER (WHERE awaiting_our_response
            AND status NOT IN ('resolvido','cancelado')
-           AND opened_at >= NOW() - INTERVAL '3 months') AS awaiting
+           AND opened_at >= $1 AND opened_at < $2) AS awaiting
        FROM saf_tickets`,
-      []
+      [start.toISOString(), end.toISOString()]
     ),
-    getLandingStats(sectorsMap),
+    getLandingStats(sectorsMap, start, end),
     Promise.all(sectorsWithChatwoot.map((s) => getChatwootLandingStats(s.chatwoot!.inboxId, s.chatwoot!.teamId))),
   ]);
 
@@ -182,11 +202,6 @@ async function LandingContent() {
                       <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-100 leading-none">
                         {stats.total}
                       </span>
-                      {stats.monthlyTotal > 0 && (
-                        <p className="text-xs text-gray-400 dark:text-slate-500 tabular-nums leading-tight mt-0.5">
-                          {stats.monthlyTotal} no mês
-                        </p>
-                      )}
                     </div>
                   </div>
 
@@ -287,7 +302,14 @@ async function LandingContent() {
   );
 }
 
-export default function LandingPage() {
+export default async function LandingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
+  const { month: monthParam } = await searchParams;
+  const { ym, isCurrentMonth } = parseMonthParam(monthParam);
+
   return (
     <main className="min-h-screen">
       <header className="sticky top-0 z-20 bg-gradient-to-r from-orange-600 to-amber-600 border-b border-orange-700 dark:from-slate-900 dark:to-slate-900 dark:border-slate-800">
@@ -313,6 +335,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <MonthPickerNav currentMonth={ym} isCurrentMonth={isCurrentMonth} />
             <DarkModeToggle />
             <ScraperTriggerButton />
             <RefreshButton />
@@ -322,7 +345,7 @@ export default function LandingPage() {
 
       <div className="max-w-screen-2xl mx-auto px-6 py-6">
         <Suspense fallback={<div className="flex items-center justify-center h-64 text-gray-400 text-sm">Carregando dados...</div>}>
-          <LandingContent />
+          <LandingContent month={ym} />
         </Suspense>
       </div>
     </main>

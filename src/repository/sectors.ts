@@ -349,62 +349,63 @@ export async function getSectorClusters(departments: string[], limit = 15) {
 // -------------------------------------------------------
 
 /** Contagem por setor para a landing page — um SELECT por setor */
-export async function getLandingStats(sectorsMap: Record<string, string[]>) {
-  const SLA_START = `'2026-05-01'`;
-
-  const results: Record<string, { total: number; overdue: number; awaiting: number; slaRate: number; atRisk: number; monthlyTotal: number }> = {};
+export async function getLandingStats(
+  sectorsMap: Record<string, string[]>,
+  monthStart: Date,
+  monthEnd: Date,
+) {
+  const results: Record<string, { total: number; overdue: number; awaiting: number; slaRate: number; atRisk: number }> = {};
 
   await Promise.all(
     Object.entries(sectorsMap).map(async ([slug, departments]) => {
       const row = await queryOne<{
         total: string; overdue: string; awaiting: string;
-        sla_rate: string; at_risk: string; monthly_total: string;
+        sla_rate: string; at_risk: string;
       }>(
         `SELECT
-           COUNT(*) FILTER (WHERE status NOT IN ('resolvido','cancelado')
-             AND opened_at >= NOW() - INTERVAL '3 months') AS total,
-           COUNT(*) FILTER (WHERE is_overdue
-             AND status NOT IN ('resolvido','cancelado')
-             AND opened_at >= NOW() - INTERVAL '3 months') AS overdue,
-           COUNT(*) FILTER (WHERE awaiting_our_response
-             AND status NOT IN ('resolvido','cancelado')
-             AND opened_at >= NOW() - INTERVAL '3 months') AS awaiting,
            COUNT(*) FILTER (
-             WHERE opened_at >= DATE_TRUNC('month', NOW())
-           ) AS monthly_total,
-
+             WHERE opened_at >= $2 AND opened_at < $3
+           ) AS total,
+           COUNT(*) FILTER (
+             WHERE is_overdue
+               AND status NOT IN ('resolvido','cancelado')
+               AND opened_at >= $2 AND opened_at < $3
+           ) AS overdue,
+           COUNT(*) FILTER (
+             WHERE awaiting_our_response
+               AND status NOT IN ('resolvido','cancelado')
+               AND opened_at >= $2 AND opened_at < $3
+           ) AS awaiting,
            ROUND(
              100.0 * COUNT(*) FILTER (
                WHERE status = 'resolvido'
                  AND due_at IS NOT NULL
                  AND resolved_at IS NOT NULL
                  AND resolved_at <= due_at
-                 AND opened_at >= ${SLA_START}
+                 AND opened_at >= $2 AND opened_at < $3
              ) / NULLIF(COUNT(*) FILTER (
                WHERE status = 'resolvido'
                  AND due_at IS NOT NULL
                  AND resolved_at IS NOT NULL
-                 AND opened_at >= ${SLA_START}
+                 AND opened_at >= $2 AND opened_at < $3
              ), 0)
            , 0) AS sla_rate,
-
            COUNT(*) FILTER (
              WHERE status NOT IN ('resolvido','cancelado')
                AND due_at IS NOT NULL
                AND due_at BETWEEN NOW() AND NOW() + INTERVAL '48 hours'
+               AND opened_at >= $2 AND opened_at < $3
            ) AS at_risk
-
          FROM saf_tickets
          WHERE department = ANY($1::text[])`,
-        [departments]
+        [departments, monthStart.toISOString(), monthEnd.toISOString()]
       );
       results[slug] = {
-        total:        Number(row?.total         ?? 0),
-        overdue:      Number(row?.overdue       ?? 0),
-        awaiting:     Number(row?.awaiting      ?? 0),
-        slaRate:      Number(row?.sla_rate      ?? 0),
-        atRisk:       Number(row?.at_risk       ?? 0),
-        monthlyTotal: Number(row?.monthly_total ?? 0),
+        total:    Number(row?.total    ?? 0),
+        overdue:  Number(row?.overdue  ?? 0),
+        awaiting: Number(row?.awaiting ?? 0),
+        slaRate:  Number(row?.sla_rate ?? 0),
+        atRisk:   Number(row?.at_risk  ?? 0),
       };
     })
   );
