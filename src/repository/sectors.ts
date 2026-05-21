@@ -23,9 +23,11 @@ export async function getSectorStats(
   let p = 2;
 
   const today = new Date().toISOString().slice(0, 10);
-  const isHistorical = !!(opts?.dateFrom && opts?.dateTo && opts.dateTo < today);
+  const hasDateRange = !!(opts?.dateFrom && opts?.dateTo);
+  const isHistorical = hasDateRange && opts!.dateTo! < today;
+
   let dateFilter: string;
-  if (isHistorical) {
+  if (hasDateRange) {
     dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
     params.push(opts!.dateFrom, opts!.dateTo);
   } else {
@@ -33,8 +35,6 @@ export async function getSectorStats(
   }
 
   const deptFilter = `AND department = ANY($1::text[])`;
-  // For historical periods, total counts all tickets opened then (including resolved),
-  // matching the landing page getLandingStats behaviour.
   const totalStatusFilter = isHistorical ? '' : `status NOT IN ('resolvido','cancelado') AND`;
 
   return queryOne(
@@ -67,9 +67,11 @@ export async function getSectorCategoryStats(
   let p = 2;
 
   const today = new Date().toISOString().slice(0, 10);
-  const isHistorical = !!(opts?.dateFrom && opts?.dateTo && opts.dateTo < today);
+  const hasDateRange = !!(opts?.dateFrom && opts?.dateTo);
+  const isHistorical = hasDateRange && opts!.dateTo! < today;
+
   let dateFilter: string;
-  if (isHistorical) {
+  if (hasDateRange) {
     dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
     params.push(opts!.dateFrom, opts!.dateTo);
   } else {
@@ -98,9 +100,11 @@ export async function getSectorDeptBreakdown(
   let p = 2;
 
   const today = new Date().toISOString().slice(0, 10);
-  const isHistorical = !!(opts?.dateFrom && opts?.dateTo && opts.dateTo < today);
+  const hasDateRange = !!(opts?.dateFrom && opts?.dateTo);
+  const isHistorical = hasDateRange && opts!.dateTo! < today;
+
   let dateFilter: string;
-  if (isHistorical) {
+  if (hasDateRange) {
     dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
     params.push(opts!.dateFrom, opts!.dateTo);
   } else {
