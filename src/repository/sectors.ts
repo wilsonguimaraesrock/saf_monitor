@@ -22,7 +22,8 @@ export async function getSectorStats(
   const params: unknown[] = [depts];
   let p = 2;
 
-  const isHistorical = !!(opts?.dateFrom && opts?.dateTo);
+  const today = new Date().toISOString().slice(0, 10);
+  const isHistorical = !!(opts?.dateFrom && opts?.dateTo && opts.dateTo < today);
   let dateFilter: string;
   if (isHistorical) {
     dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
@@ -65,7 +66,8 @@ export async function getSectorCategoryStats(
   const params: unknown[] = [departments];
   let p = 2;
 
-  const isHistorical = !!(opts?.dateFrom && opts?.dateTo);
+  const today = new Date().toISOString().slice(0, 10);
+  const isHistorical = !!(opts?.dateFrom && opts?.dateTo && opts.dateTo < today);
   let dateFilter: string;
   if (isHistorical) {
     dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
@@ -95,7 +97,8 @@ export async function getSectorDeptBreakdown(
   const params: unknown[] = [departments];
   let p = 2;
 
-  const isHistorical = !!(opts?.dateFrom && opts?.dateTo);
+  const today = new Date().toISOString().slice(0, 10);
+  const isHistorical = !!(opts?.dateFrom && opts?.dateTo && opts.dateTo < today);
   let dateFilter: string;
   if (isHistorical) {
     dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
