@@ -26,7 +26,7 @@ import {
   getSectorSubdepartment,
 } from '@/lib/sectors';
 import { MonthPickerNav } from '@/components/MonthPickerNav';
-import { parseMonthParam } from '@/lib/month';
+import { parseMonthParam, ymToDateRange } from '@/lib/month';
 import {
   getSectorStats,
   getSectorOverdueTickets,
@@ -74,14 +74,13 @@ async function SectorContent({ params, searchParams }: PageProps) {
   if (!sector) notFound();
   const selectedSubdepartment = getSectorSubdepartment(sector, sp.subdepartment);
 
-  const monthDateFrom = sp.month ? `${sp.month}-01` : undefined;
-  const monthDateTo   = sp.month
-    ? (() => {
-        const [y, m] = sp.month.split('-').map(Number);
-        const last = new Date(y, m, 0).getDate();
-        return `${sp.month}-${String(last).padStart(2, '0')}`;
-      })()
-    : undefined;
+  // Always use month range for stats (matches landing page behaviour).
+  const { ym: statsYm } = parseMonthParam(sp.month);
+  const { dateFrom: statsDateFrom, dateTo: statsDateTo } = ymToDateRange(statsYm);
+
+  // For ticket table: only filter by month when explicitly selected via URL param.
+  const monthDateFrom = sp.month ? statsDateFrom : undefined;
+  const monthDateTo   = sp.month ? statsDateTo   : undefined;
 
   const filters = {
     status:              sp.status,
@@ -120,13 +119,13 @@ async function SectorContent({ params, searchParams }: PageProps) {
     subdepartmentStats,
   ] =
     await Promise.all([
-      getSectorStats(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
+      getSectorStats(depts, { dateFrom: statsDateFrom, dateTo: statsDateTo }) as Promise<Record<string, string> | null>,
       getSectorOverdueTickets(depts, 10),
       getSectorAwaitingTickets(depts, 10),
       getSectorOldestTickets(depts, 5),
       getSectorNotOpenedTickets(depts, 20),
       getSectorNoResponseTickets(depts, 20),
-      getSectorDeptBreakdown(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }),
+      getSectorDeptBreakdown(depts, { dateFrom: statsDateFrom, dateTo: statsDateTo }),
       getSectorClusters(depts, 15),
       getSectorTicketsFiltered(depts, filters),
       getSectorSlaStats(depts),
@@ -144,8 +143,8 @@ async function SectorContent({ params, searchParams }: PageProps) {
               icon: sub.icon,
               color: sub.color,
               stats: await getSectorStats(sub.departments, {
-                dateFrom: monthDateFrom,
-                dateTo: monthDateTo,
+                dateFrom: statsDateFrom,
+                dateTo: statsDateTo,
               }) as Record<string, string> | null,
             }))
           )

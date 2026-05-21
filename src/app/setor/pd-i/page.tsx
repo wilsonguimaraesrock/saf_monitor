@@ -29,7 +29,7 @@ import { SectorChatwootLiveSection } from '@/components/SectorChatwootLiveSectio
 import { ChatwootSlaPanelLive } from '@/components/ChatwootSlaPanelLive';
 import { getSectorBySlug } from '@/lib/sectors';
 import { MonthPickerNav } from '@/components/MonthPickerNav';
-import { parseMonthParam } from '@/lib/month';
+import { parseMonthParam, ymToDateRange } from '@/lib/month';
 import {
   getSectorStats,
   getSectorCategoryStats,
@@ -71,14 +71,13 @@ async function PdiContent({ searchParams }: PageProps) {
   const depts  = sector.departments;
   const chatwoot = sector.chatwoot!;
 
-  const monthDateFrom = params.month ? `${params.month}-01` : undefined;
-  const monthDateTo   = params.month
-    ? (() => {
-        const [y, m] = params.month.split('-').map(Number);
-        const last = new Date(y, m, 0).getDate();
-        return `${params.month}-${String(last).padStart(2, '0')}`;
-      })()
-    : undefined;
+  // Always use month range for stats (matches landing page behaviour).
+  const { ym: statsYm } = parseMonthParam(params.month);
+  const { dateFrom: statsDateFrom, dateTo: statsDateTo } = ymToDateRange(statsYm);
+
+  // For ticket table: only filter by month when explicitly selected via URL param.
+  const monthDateFrom = params.month ? statsDateFrom : undefined;
+  const monthDateTo   = params.month ? statsDateTo   : undefined;
 
   const filters = {
     status:              params.status,
@@ -103,8 +102,8 @@ async function PdiContent({ searchParams }: PageProps) {
   // Breakdown por categoria — filtro por priority_category (mais confiável para DSA JOY / MyRock)
   const [sectorStats, catStats, oldest, overdue, awaiting, critical, notOpened, noRespStatus, trend, clusters, allTickets, slaStats, chatwootData, openConversations] =
     await Promise.all([
-      getSectorStats(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
-      getSectorCategoryStats(depts, { dateFrom: monthDateFrom, dateTo: monthDateTo }) as Promise<Record<string, string> | null>,
+      getSectorStats(depts, { dateFrom: statsDateFrom, dateTo: statsDateTo }) as Promise<Record<string, string> | null>,
+      getSectorCategoryStats(depts, { dateFrom: statsDateFrom, dateTo: statsDateTo }) as Promise<Record<string, string> | null>,
       getSectorOldestTickets(depts, 5),
       getSectorOverdueTickets(depts, 10),
       getSectorAwaitingTickets(depts, 10),
