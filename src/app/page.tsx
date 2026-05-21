@@ -94,7 +94,8 @@ async function LandingContent({ month }: { month: string }) {
   const [globalRow, sectorStats, chatwootResults] = await Promise.all([
     queryOne<{ total: string; overdue: string; awaiting: string }>(
       `SELECT
-         COUNT(*) FILTER (WHERE opened_at >= $1 AND opened_at < $2) AS total,
+         COUNT(*) FILTER (WHERE status NOT IN ('resolvido','cancelado')
+           AND opened_at >= $1 AND opened_at < $2) AS total,
          COUNT(*) FILTER (WHERE is_overdue
            AND status NOT IN ('resolvido','cancelado')
            AND opened_at >= $1 AND opened_at < $2) AS overdue,
@@ -142,7 +143,7 @@ async function LandingContent({ month }: { month: string }) {
       <div>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {SECTORS.map((sector) => {
-            const stats  = sectorStats[sector.slug] ?? { total: 0, overdue: 0, awaiting: 0 };
+            const stats  = sectorStats[sector.slug] ?? { total: 0, monthTotal: 0, overdue: 0, awaiting: 0, slaRate: 0, atRisk: 0 };
             const Icon   = sector.icon;
             const accent = LANDING_ACCENT_STYLES[sector.color];
 
@@ -185,6 +186,11 @@ async function LandingContent({ month }: { month: string }) {
                       <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-100 leading-none">
                         {stats.total}
                       </span>
+                      {stats.monthTotal > stats.total && (
+                        <div className="text-xs tabular-nums text-gray-400 dark:text-slate-500 leading-tight mt-0.5">
+                          {stats.monthTotal} no mês
+                        </div>
+                      )}
                     </div>
                   </div>
 

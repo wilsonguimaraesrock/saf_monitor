@@ -363,18 +363,29 @@ export async function getLandingStats(
   monthStart: Date,
   monthEnd: Date,
 ) {
-  const results: Record<string, { total: number; overdue: number; awaiting: number; slaRate: number; atRisk: number }> = {};
+  // Current month → total = open only (matches sector page); also expose monthTotal for display.
+  // Historical month → total = all tickets in period (volume view, matches sector page historical fix).
+  const isCurrentMonth = monthEnd.getTime() > Date.now();
+  const totalStatusClause = isCurrentMonth
+    ? `AND status NOT IN ('resolvido','cancelado')`
+    : '';
+
+  const results: Record<string, { total: number; monthTotal: number; overdue: number; awaiting: number; slaRate: number; atRisk: number }> = {};
 
   await Promise.all(
     Object.entries(sectorsMap).map(async ([slug, departments]) => {
       const row = await queryOne<{
-        total: string; overdue: string; awaiting: string;
+        total: string; month_total: string; overdue: string; awaiting: string;
         sla_rate: string; at_risk: string;
       }>(
         `SELECT
            COUNT(*) FILTER (
              WHERE opened_at >= $2 AND opened_at < $3
+             ${totalStatusClause}
            ) AS total,
+           COUNT(*) FILTER (
+             WHERE opened_at >= $2 AND opened_at < $3
+           ) AS month_total,
            COUNT(*) FILTER (
              WHERE is_overdue
                AND status NOT IN ('resolvido','cancelado')
@@ -410,11 +421,12 @@ export async function getLandingStats(
         [departments, monthStart.toISOString(), monthEnd.toISOString()]
       );
       results[slug] = {
-        total:    Number(row?.total    ?? 0),
-        overdue:  Number(row?.overdue  ?? 0),
-        awaiting: Number(row?.awaiting ?? 0),
-        slaRate:  Number(row?.sla_rate ?? 0),
-        atRisk:   Number(row?.at_risk  ?? 0),
+        total:      Number(row?.total       ?? 0),
+        monthTotal: Number(row?.month_total ?? 0),
+        overdue:    Number(row?.overdue     ?? 0),
+        awaiting:   Number(row?.awaiting    ?? 0),
+        slaRate:    Number(row?.sla_rate    ?? 0),
+        atRisk:     Number(row?.at_risk     ?? 0),
       };
     })
   );
