@@ -91,19 +91,23 @@ async function LandingContent({ month }: { month: string }) {
   const sectorsWithChatwoot = SECTORS.filter((s) => s.chatwoot);
 
   // Stats globais, por setor e WhatsApp em paralelo
+  // Current month: count ALL currently open (3-month window) — matches sector page + ticket tables.
+  // Historical month: count tickets opened in that period (any status, volume view).
+  const globalOpenFilter = isCurrentMonth
+    ? `status NOT IN ('resolvido','cancelado') AND opened_at >= NOW() - INTERVAL '3 months'`
+    : `status NOT IN ('resolvido','cancelado') AND opened_at >= $1 AND opened_at < $2`;
+  const globalActionFilter = isCurrentMonth
+    ? `status NOT IN ('resolvido','cancelado') AND opened_at >= NOW() - INTERVAL '3 months'`
+    : `status NOT IN ('resolvido','cancelado') AND opened_at >= $1 AND opened_at < $2`;
+
   const [globalRow, sectorStats, chatwootResults] = await Promise.all([
     queryOne<{ total: string; overdue: string; awaiting: string }>(
       `SELECT
-         COUNT(*) FILTER (WHERE status NOT IN ('resolvido','cancelado')
-           AND opened_at >= $1 AND opened_at < $2) AS total,
-         COUNT(*) FILTER (WHERE is_overdue
-           AND status NOT IN ('resolvido','cancelado')
-           AND opened_at >= $1 AND opened_at < $2) AS overdue,
-         COUNT(*) FILTER (WHERE awaiting_our_response
-           AND status NOT IN ('resolvido','cancelado')
-           AND opened_at >= $1 AND opened_at < $2) AS awaiting
+         COUNT(*) FILTER (WHERE ${globalOpenFilter}) AS total,
+         COUNT(*) FILTER (WHERE is_overdue AND ${globalActionFilter}) AS overdue,
+         COUNT(*) FILTER (WHERE awaiting_our_response AND ${globalActionFilter}) AS awaiting
        FROM saf_tickets`,
-      [start.toISOString(), end.toISOString()]
+      isCurrentMonth ? [] : [start.toISOString(), end.toISOString()]
     ),
     getLandingStats(sectorsMap, start, end),
     Promise.all(sectorsWithChatwoot.map((s) => getChatwootLandingStats(s.chatwoot!.inboxId, s.chatwoot!.teamId, start, end))),

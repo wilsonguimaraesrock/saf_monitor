@@ -23,8 +23,8 @@ Deployado em Vercel · banco PostgreSQL (Digital Ocean) · notificações via Te
 
 ## Visão geral
 
-- **Landing page** — resumo de todos os setores: total de SAFs abertos + total do mês corrente, atrasados, aguardando resposta, SLA (%) e indicadores WhatsApp por setor (total do mês, conversas abertas, CSAT); badge verde pulsante no card do setor quando há conversas WhatsApp pendentes; botão **"Conversas WhatsApp"** consolida o backlog de todos os setores com filtros
-- **Dashboard por setor** — filtros, tabelas de tickets, SLA SAF e SLA WhatsApp (após a tabela principal), breakdown por departamento e clusters de assunto
+- **Landing page** — resumo de todos os setores com filtro de mês (`MonthPickerNav`): total de SAFs em aberto no mês, atrasados, aguardando resposta, SLA (%) e indicadores WhatsApp por setor (total do mês, conversas abertas, CSAT); badge verde pulsante no card do setor quando há conversas WhatsApp pendentes; botão **"Conversas WhatsApp"** consolida o backlog de todos os setores com filtros
+- **Dashboard por setor** — filtro de mês, filtros de status/franquia, tabelas de tickets, SLA SAF e SLA WhatsApp (após a tabela principal), breakdown por departamento e clusters de assunto
 - **Dashboard PD&I** — igual ao genérico + indicadores de atendimentos WhatsApp via Chatwoot (cards, conversas abertas, breakdown, SLA WhatsApp, avaliação CSAT por departamento)
 - **Breakdown WhatsApp** — card com 3 abas por setor: **subdepartamento** (contagem + resolvidas), **assunto** (ranking de frequência) e **atendentes** (contagem + CSAT médio)
 - **Atribuição de agente inline** — dropdown diretamente na tabela de conversas abertas; ao atribuir, envia mensagem automática no WhatsApp informando o responsável ("Seu atendimento está com *[Nome]*.")
@@ -56,6 +56,7 @@ GitHub Actions (Playwright scraper)
   ├── src/app/page.tsx                       src/integrations/chatwoot.ts
   ├── src/app/setor/[slug]/page.tsx
   ├── src/app/setor/pd-i/page.tsx
+  ├── src/lib/month.ts             ← parseMonthParam + ymToDateRange (UTC)
   ├── src/repository/sectors.ts   ← queries SQL por setor
   ├── src/repository/tickets.ts   ← queries de tickets individuais
   └── src/components/             ← UI (StatCard, TicketTable, SlaPanel…)
@@ -71,6 +72,7 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 | Engine | `src/engine/` | Classifica, normaliza e pontua tickets |
 | Repository | `src/repository/` | Queries SQL parametrizadas por setor/departamento |
 | Integrations | `src/integrations/` | Clientes Chatwoot, Telegram, WhatsApp |
+| Lib | `src/lib/` | Utilitários compartilhados: `month.ts` (parse/range de mês, UTC), `sectors.ts` (config de setores), `db.ts` (pool PostgreSQL) |
 | UI | `src/app/` + `src/components/` | Server Components Next.js, renderização em tempo real |
 | API Routes | `src/app/api/` | Crons, scraper trigger, stats, debug |
 
@@ -197,15 +199,24 @@ Indicadores exibidos no painel "Atendimentos WhatsApp":
 - Conversas abertas, não atribuídas, pendentes, resolvidas, adiadas
 - **Avaliação média CSAT do mês** por departamento (escala 1–5, colorida: ≥4.0 verde / ≥3.0 amarelo / <3.0 vermelho); vazio quando não há avaliações no mês corrente
 
+**Filtro de mês (MonthPickerNav):**
+- Disponível na landing page e em todos os dashboards de setor (incluindo PD&I)
+- Permite navegar para meses anteriores via `?month=YYYY-MM` na URL
+- Mês atual é o padrão (sem parâmetro na URL); botão "Hoje" redefine para o mês corrente
+- Ao navegar para mês histórico, as contagens de SAFs e WA mostram os totais daquele período
+
 **Cards da landing page (por setor com WhatsApp):**
 - Badge verde pulsante (`animate-pulse`) com ícone WhatsApp + contagem aparece ao lado do nome do setor quando há conversas **pendentes** (`status=pending`)
 - `X total` — soma de open + pending + resolved + snoozed via `getConversationMeta` por status (mesma fonte do painel interno do setor)
-- `X abertas` — conversas em aberto no momento
-- Tempo médio de espera + CSAT do mês por setor
+- `X abertas` — conversas em aberto no momento (ocultadas em meses históricos)
+- Tempo médio de espera (ocultado em meses históricos) + CSAT do mês por setor
+- Em meses históricos: `getChatwootLandingStats` usa `getHistoricalMonthlyCount` (todos os 4 status, filtro `created_at` pelo range do mês)
 
 **Cards da landing page (SAFs por setor):**
-- Número grande = SAFs **em aberto** (últimos 3 meses)
-- `X no mês` abaixo do número grande = total de SAFs abertos no mês corrente (todos os status, via `DATE_TRUNC('month', NOW())`)
+- Número grande = SAFs **em aberto** no mês selecionado (status NOT IN resolvido/cancelado)
+- `X no mês` abaixo = total de SAFs abertos no mês (incluindo todos os status) — exibido apenas quando difere do número grande
+- Em meses históricos: conta todos os tickets do período (sem filtro de status), pois todos já foram resolvidos/cancelados
+- Contagem idêntica ao card "Todos" dentro do dashboard do setor (mesma query `getSectorStats`)
 
 **ChatwootPanel (painel de atendimentos):**
 - Fontes aumentadas: label `text-sm`, número `text-4xl`, subtítulo `text-sm`; ícones 15px

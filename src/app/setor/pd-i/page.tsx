@@ -12,7 +12,7 @@ import Image from 'next/image';
 import {
   AlertTriangle, Clock, CheckCircle2,
   Gamepad2, Monitor, BookOpen, Mail, LayoutGrid, School,
-  ArrowLeft, FlaskConical,
+  ArrowLeft, FlaskConical, CalendarDays,
 } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { FilterCardWrapper } from '@/components/FilterCardWrapper';
@@ -120,6 +120,7 @@ async function PdiContent({ searchParams }: PageProps) {
 
   const s = {
     totalOpen:             Number(sectorStats?.total_open             ?? 0),
+    totalMonth:            Number(sectorStats?.total_month            ?? 0),
     totalOverdue:          Number(sectorStats?.total_overdue          ?? 0),
     totalAwaiting:         Number(sectorStats?.total_awaiting         ?? 0),
     totalResolvedToday:    Number(sectorStats?.total_resolved_today   ?? 0),
@@ -166,10 +167,11 @@ async function PdiContent({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <FilterCardWrapper clearAll isActive={noFilter}>
-          <StatCard label="Todos" value={s.totalOpen} icon={LayoutGrid} variant="default" subtitle="tickets abertos" />
+          <StatCard label="Pendentes" value={s.totalOpen} icon={LayoutGrid} variant="default" subtitle="todos em aberto" />
         </FilterCardWrapper>
+        <StatCard label="Total do mês" value={s.totalMonth} icon={CalendarDays} variant="cyan" subtitle="abertos no mês" />
         <FilterCardWrapper filterKey="overdue" filterValue="true" isActive={ovActive}>
           <StatCard label="Atrasados" value={s.totalOverdue} icon={AlertTriangle} variant={s.totalOverdue > 0 ? 'critical' : 'success'} />
         </FilterCardWrapper>

@@ -18,7 +18,7 @@ export async function getSectorStats(
   departments: string[],
   opts?: { dateFrom?: string; dateTo?: string }
 ) {
-  const depts = departments; // array passado como $1
+  const depts = departments;
   const params: unknown[] = [depts];
   let p = 2;
 
@@ -26,34 +26,44 @@ export async function getSectorStats(
   const hasDateRange = !!(opts?.dateFrom && opts?.dateTo);
   const isHistorical = hasDateRange && opts!.dateTo! < today;
 
-  let dateFilter: string;
+  // Month range: used for total_month display and for historical total_open
+  let monthDateFilter: string;
   if (hasDateRange) {
-    dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
+    monthDateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
     params.push(opts!.dateFrom, opts!.dateTo);
   } else {
-    dateFilter = `AND opened_at >= NOW() - INTERVAL '3 months'`;
+    monthDateFilter = `AND opened_at >= DATE_TRUNC('month', NOW()) AND opened_at < DATE_TRUNC('month', NOW()) + INTERVAL '1 month'`;
   }
 
+  // Active counts (total_open, overdue, awaiting…):
+  // - Historical: use the month range (snapshot of that period)
+  // - Current month: use 3-month window so it matches the ticket table (all open regardless of when opened)
+  const activeDateFilter = isHistorical
+    ? monthDateFilter
+    : `AND opened_at >= NOW() - INTERVAL '3 months'`;
+
   const deptFilter = `AND department = ANY($1::text[])`;
-  const totalStatusFilter = isHistorical ? '' : `status NOT IN ('resolvido','cancelado') AND`;
+  const statusFilter = isHistorical ? '' : `status NOT IN ('resolvido','cancelado') AND`;
 
   return queryOne(
     `SELECT
        (SELECT COUNT(*) FROM saf_tickets
-        WHERE ${totalStatusFilter} TRUE ${dateFilter} ${deptFilter})                             AS total_open,
+        WHERE ${statusFilter} TRUE ${activeDateFilter} ${deptFilter})                             AS total_open,
        (SELECT COUNT(*) FROM saf_tickets
-        WHERE is_overdue AND status NOT IN ('resolvido','cancelado') ${dateFilter} ${deptFilter}) AS total_overdue,
+        WHERE TRUE ${monthDateFilter} ${deptFilter})                                              AS total_month,
        (SELECT COUNT(*) FROM saf_tickets
-        WHERE awaiting_our_response AND status NOT IN ('resolvido','cancelado') ${dateFilter} ${deptFilter}) AS total_awaiting,
+        WHERE is_overdue AND status NOT IN ('resolvido','cancelado') ${activeDateFilter} ${deptFilter}) AS total_overdue,
        (SELECT COUNT(*) FROM saf_tickets
-        WHERE status = 'aguardando_franquia' ${dateFilter} ${deptFilter})                        AS total_awaiting_school,
+        WHERE awaiting_our_response AND status NOT IN ('resolvido','cancelado') ${activeDateFilter} ${deptFilter}) AS total_awaiting,
        (SELECT COUNT(*) FROM saf_tickets
-        WHERE status = 'aberto' ${dateFilter} ${deptFilter})                                     AS total_not_opened,
+        WHERE status = 'aguardando_franquia' ${activeDateFilter} ${deptFilter})                   AS total_awaiting_school,
+       (SELECT COUNT(*) FROM saf_tickets
+        WHERE status = 'aberto' ${activeDateFilter} ${deptFilter})                                AS total_not_opened,
        (SELECT COUNT(*) FROM saf_tickets
         WHERE awaiting_our_response = false
-          AND status NOT IN ('resolvido','cancelado','aguardando_franquia') ${dateFilter} ${deptFilter}) AS total_no_response_status,
+          AND status NOT IN ('resolvido','cancelado','aguardando_franquia') ${activeDateFilter} ${deptFilter}) AS total_no_response_status,
        (SELECT COUNT(*) FROM saf_tickets
-        WHERE resolved_at::date = CURRENT_DATE ${deptFilter})                                    AS total_resolved_today`,
+        WHERE resolved_at::date = CURRENT_DATE ${deptFilter})                                     AS total_resolved_today`,
     params
   );
 }
@@ -70,13 +80,17 @@ export async function getSectorCategoryStats(
   const hasDateRange = !!(opts?.dateFrom && opts?.dateTo);
   const isHistorical = hasDateRange && opts!.dateTo! < today;
 
-  let dateFilter: string;
+  let monthDateFilter: string;
   if (hasDateRange) {
-    dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
+    monthDateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
     params.push(opts!.dateFrom, opts!.dateTo);
   } else {
-    dateFilter = `AND opened_at >= NOW() - INTERVAL '3 months'`;
+    monthDateFilter = `AND opened_at >= DATE_TRUNC('month', NOW()) AND opened_at < DATE_TRUNC('month', NOW()) + INTERVAL '1 month'`;
   }
+
+  const dateFilter = isHistorical
+    ? monthDateFilter
+    : `AND opened_at >= NOW() - INTERVAL '3 months'`;
 
   const deptFilter = `AND department = ANY($1::text[])`;
   const statusFilter = isHistorical ? '' : `AND status NOT IN ('resolvido','cancelado')`;
@@ -103,13 +117,17 @@ export async function getSectorDeptBreakdown(
   const hasDateRange = !!(opts?.dateFrom && opts?.dateTo);
   const isHistorical = hasDateRange && opts!.dateTo! < today;
 
-  let dateFilter: string;
+  let monthDateFilter: string;
   if (hasDateRange) {
-    dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
+    monthDateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
     params.push(opts!.dateFrom, opts!.dateTo);
   } else {
-    dateFilter = `AND opened_at >= NOW() - INTERVAL '3 months'`;
+    monthDateFilter = `AND opened_at >= DATE_TRUNC('month', NOW()) AND opened_at < DATE_TRUNC('month', NOW()) + INTERVAL '1 month'`;
   }
+
+  const dateFilter = isHistorical
+    ? monthDateFilter
+    : `AND opened_at >= NOW() - INTERVAL '3 months'`;
 
   const statusFilter = isHistorical ? '' : `AND status NOT IN ('resolvido','cancelado')`;
 
@@ -370,12 +388,22 @@ export async function getLandingStats(
   monthStart: Date,
   monthEnd: Date,
 ) {
-  // Current month → total = open only (matches sector page); also expose monthTotal for display.
-  // Historical month → total = all tickets in period (volume view, matches sector page historical fix).
+  // Current month → total = ALL currently open (3-month window, matches ticket table).
+  //                 month_total = all opened this month (any status, for "X no mês" display).
+  // Historical month → total = all tickets opened in that period (any status, volume view).
+  //                    month_total = same as total.
   const isCurrentMonth = monthEnd.getTime() > Date.now();
-  const totalStatusClause = isCurrentMonth
-    ? `AND status NOT IN ('resolvido','cancelado')`
-    : '';
+
+  // Date filters pre-built as SQL snippets (no extra params needed — uses $2/$3 or NOW())
+  const openFilter = isCurrentMonth
+    ? `opened_at >= NOW() - INTERVAL '3 months' AND status NOT IN ('resolvido','cancelado')`
+    : `opened_at >= $2 AND opened_at < $3`;
+  const actionFilter = isCurrentMonth
+    ? `status NOT IN ('resolvido','cancelado') AND opened_at >= NOW() - INTERVAL '3 months'`
+    : `status NOT IN ('resolvido','cancelado') AND opened_at >= $2 AND opened_at < $3`;
+  const atRiskFilter = isCurrentMonth
+    ? `status NOT IN ('resolvido','cancelado') AND due_at IS NOT NULL AND due_at BETWEEN NOW() AND NOW() + INTERVAL '48 hours' AND opened_at >= NOW() - INTERVAL '3 months'`
+    : `status NOT IN ('resolvido','cancelado') AND due_at IS NOT NULL AND due_at BETWEEN NOW() AND NOW() + INTERVAL '48 hours' AND opened_at >= $2 AND opened_at < $3`;
 
   const results: Record<string, { total: number; monthTotal: number; overdue: number; awaiting: number; slaRate: number; atRisk: number }> = {};
 
@@ -386,23 +414,12 @@ export async function getLandingStats(
         sla_rate: string; at_risk: string;
       }>(
         `SELECT
-           COUNT(*) FILTER (
-             WHERE opened_at >= $2 AND opened_at < $3
-             ${totalStatusClause}
-           ) AS total,
+           COUNT(*) FILTER (WHERE ${openFilter}) AS total,
            COUNT(*) FILTER (
              WHERE opened_at >= $2 AND opened_at < $3
            ) AS month_total,
-           COUNT(*) FILTER (
-             WHERE is_overdue
-               AND status NOT IN ('resolvido','cancelado')
-               AND opened_at >= $2 AND opened_at < $3
-           ) AS overdue,
-           COUNT(*) FILTER (
-             WHERE awaiting_our_response
-               AND status NOT IN ('resolvido','cancelado')
-               AND opened_at >= $2 AND opened_at < $3
-           ) AS awaiting,
+           COUNT(*) FILTER (WHERE is_overdue AND ${actionFilter}) AS overdue,
+           COUNT(*) FILTER (WHERE awaiting_our_response AND ${actionFilter}) AS awaiting,
            ROUND(
              100.0 * COUNT(*) FILTER (
                WHERE status = 'resolvido'
@@ -417,12 +434,7 @@ export async function getLandingStats(
                  AND opened_at >= $2 AND opened_at < $3
              ), 0)
            , 0) AS sla_rate,
-           COUNT(*) FILTER (
-             WHERE status NOT IN ('resolvido','cancelado')
-               AND due_at IS NOT NULL
-               AND due_at BETWEEN NOW() AND NOW() + INTERVAL '48 hours'
-               AND opened_at >= $2 AND opened_at < $3
-           ) AS at_risk
+           COUNT(*) FILTER (WHERE ${atRiskFilter}) AS at_risk
          FROM saf_tickets
          WHERE department = ANY($1::text[])`,
         [departments, monthStart.toISOString(), monthEnd.toISOString()]

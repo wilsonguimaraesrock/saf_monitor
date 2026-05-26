@@ -7,7 +7,7 @@ import { Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, AlertTriangle, Clock, CheckCircle2, LayoutGrid } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Clock, CheckCircle2, LayoutGrid, CalendarDays } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import { FilterCardWrapper } from '@/components/FilterCardWrapper';
 import { RefreshButton } from '@/components/RefreshButton';
@@ -153,6 +153,7 @@ async function SectorContent({ params, searchParams }: PageProps) {
 
   const s = {
     totalOpen:            Number(stats?.total_open            ?? 0),
+    totalMonth:           Number(stats?.total_month           ?? 0),
     totalOverdue:         Number(stats?.total_overdue         ?? 0),
     totalAwaiting:        Number(stats?.total_awaiting        ?? 0),
     totalAwaitingSchool:  Number(stats?.total_awaiting_school ?? 0),
@@ -187,10 +188,11 @@ async function SectorContent({ params, searchParams }: PageProps) {
     <div className="space-y-6">
 
       {/* ── Cards principais ───────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <FilterCardWrapper clearAll isActive={noFilter}>
-          <StatCard label="Todos" value={s.totalOpen} icon={LayoutGrid} variant="default" subtitle="tickets abertos" />
+          <StatCard label="Pendentes" value={s.totalOpen} icon={LayoutGrid} variant="default" subtitle="todos em aberto" />
         </FilterCardWrapper>
+        <StatCard label="Total do mês" value={s.totalMonth} icon={CalendarDays} variant="cyan" subtitle="abertos no mês" />
         <FilterCardWrapper filterKey="overdue" filterValue="true" isActive={ovActive}>
           <StatCard label="Atrasados" value={s.totalOverdue} icon={AlertTriangle} variant={s.totalOverdue > 0 ? 'critical' : 'success'} />
         </FilterCardWrapper>
