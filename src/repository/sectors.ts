@@ -80,17 +80,14 @@ export async function getSectorCategoryStats(
   const hasDateRange = !!(opts?.dateFrom && opts?.dateTo);
   const isHistorical = hasDateRange && opts!.dateTo! < today;
 
-  let monthDateFilter: string;
-  if (hasDateRange) {
-    monthDateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
+  // Only push date params when historical — non-historical uses NOW() literals (no params)
+  let dateFilter: string;
+  if (hasDateRange && isHistorical) {
+    dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
     params.push(opts!.dateFrom, opts!.dateTo);
   } else {
-    monthDateFilter = `AND opened_at >= DATE_TRUNC('month', NOW()) AND opened_at < DATE_TRUNC('month', NOW()) + INTERVAL '1 month'`;
+    dateFilter = `AND opened_at >= NOW() - INTERVAL '3 months'`;
   }
-
-  const dateFilter = isHistorical
-    ? monthDateFilter
-    : `AND opened_at >= NOW() - INTERVAL '3 months'`;
 
   const deptFilter = `AND department = ANY($1::text[])`;
   const statusFilter = isHistorical ? '' : `AND status NOT IN ('resolvido','cancelado')`;
@@ -117,17 +114,14 @@ export async function getSectorDeptBreakdown(
   const hasDateRange = !!(opts?.dateFrom && opts?.dateTo);
   const isHistorical = hasDateRange && opts!.dateTo! < today;
 
-  let monthDateFilter: string;
-  if (hasDateRange) {
-    monthDateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
+  // Only push date params when historical — non-historical uses NOW() literals (no params)
+  let dateFilter: string;
+  if (hasDateRange && isHistorical) {
+    dateFilter = `AND opened_at >= $${p++}::date AND opened_at < ($${p++}::date + INTERVAL '1 day')`;
     params.push(opts!.dateFrom, opts!.dateTo);
   } else {
-    monthDateFilter = `AND opened_at >= DATE_TRUNC('month', NOW()) AND opened_at < DATE_TRUNC('month', NOW()) + INTERVAL '1 month'`;
+    dateFilter = `AND opened_at >= NOW() - INTERVAL '3 months'`;
   }
-
-  const dateFilter = isHistorical
-    ? monthDateFilter
-    : `AND opened_at >= NOW() - INTERVAL '3 months'`;
 
   const statusFilter = isHistorical ? '' : `AND status NOT IN ('resolvido','cancelado')`;
 
