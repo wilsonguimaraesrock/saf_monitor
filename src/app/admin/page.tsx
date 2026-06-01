@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Plus, Pencil, Trash2, KeyRound,
   ToggleLeft, ToggleRight, Shield, User, X, Check,
-  BookOpen, Bot, Users, Phone, Loader2, ChevronDown, ChevronUp,
+  BookOpen, Bot, Users, Phone, Loader2, ChevronDown, ChevronUp, FileUp,
 } from 'lucide-react';
 import { SECTORS } from '@/lib/sectors';
 
@@ -525,13 +525,17 @@ const SECTOR_OPTIONS = [
 ];
 
 function KnowledgeTab() {
-  const [articles,   setArticles]   = useState<ArticleRow[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [deptFilter, setDeptFilter] = useState('');
-  const [showForm,   setShowForm]   = useState(false);
-  const [editing,    setEditing]    = useState<ArticleRow | null>(null);
-  const [confirm,    setConfirm]    = useState<ArticleRow | null>(null);
-  const [expanded,   setExpanded]   = useState<number | null>(null);
+  const [articles,    setArticles]    = useState<ArticleRow[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [deptFilter,  setDeptFilter]  = useState('');
+  const [showForm,    setShowForm]    = useState(false);
+  const [editing,     setEditing]     = useState<ArticleRow | null>(null);
+  const [confirm,     setConfirm]     = useState<ArticleRow | null>(null);
+  const [expanded,    setExpanded]    = useState<number | null>(null);
+  const [uploadDept,  setUploadDept]  = useState('global');
+  const [uploadCat,   setUploadCat]   = useState('documento');
+  const [uploading,   setUploading]   = useState(false);
+  const [uploadMsg,   setUploadMsg]   = useState('');
 
   async function load() {
     setLoading(true);
@@ -545,6 +549,29 @@ function KnowledgeTab() {
   }
 
   useEffect(() => { load(); }, [deptFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setUploading(true);
+    setUploadMsg('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('department', uploadDept);
+      fd.append('category', uploadCat);
+      const res = await fetch('/api/admin/knowledge/upload', { method: 'POST', body: fd });
+      const j   = await res.json() as { ok?: boolean; chunks?: number; pages?: number; error?: string };
+      if (!res.ok) throw new Error(j.error ?? 'Erro no upload');
+      setUploadMsg(`✅ ${file.name} importado — ${j.chunks} trechos criados (${j.pages} páginas)`);
+      await load();
+    } catch (err) {
+      setUploadMsg(`❌ ${(err as Error).message}`);
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function deleteArticle(id: number) {
     await fetch(`/api/admin/knowledge/${id}`, { method: 'DELETE' });
@@ -563,7 +590,8 @@ function KnowledgeTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      {/* Toolbar */}
+      <div className="flex items-start gap-3 flex-wrap">
         <select
           value={deptFilter}
           onChange={(e) => setDeptFilter(e.target.value)}
@@ -572,13 +600,42 @@ function KnowledgeTab() {
           <option value="">Todos os departamentos</option>
           {SECTOR_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <button
-          onClick={() => { setEditing(null); setShowForm(true); }}
-          className="flex items-center gap-2 px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-lg"
-        >
-          <Plus size={14} /> Novo artigo
-        </button>
+        <div className="ml-auto flex items-center gap-2 flex-wrap">
+          {/* PDF Upload */}
+          <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-lg px-2 py-1.5 text-xs">
+            <select
+              value={uploadDept}
+              onChange={(e) => setUploadDept(e.target.value)}
+              className="bg-transparent text-gray-700 dark:text-slate-300 text-xs"
+              title="Departamento do PDF"
+            >
+              {SECTOR_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <input
+              value={uploadCat}
+              onChange={(e) => setUploadCat(e.target.value)}
+              placeholder="categoria"
+              className="w-20 bg-transparent border-l border-gray-200 dark:border-slate-600 pl-1.5 text-gray-700 dark:text-slate-300"
+            />
+            <label className={`flex items-center gap-1 cursor-pointer px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900/60 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+              {uploading ? <Loader2 size={12} className="animate-spin" /> : <FileUp size={12} />}
+              {uploading ? 'Importando…' : 'Importar PDF'}
+              <input type="file" accept=".pdf" className="hidden" onChange={handlePdfUpload} disabled={uploading} />
+            </label>
+          </div>
+          <button
+            onClick={() => { setEditing(null); setShowForm(true); }}
+            className="flex items-center gap-2 px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-lg"
+          >
+            <Plus size={14} /> Novo artigo
+          </button>
+        </div>
       </div>
+      {uploadMsg && (
+        <p className={`text-xs px-3 py-2 rounded-lg ${uploadMsg.startsWith('✅') ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'}`}>
+          {uploadMsg}
+        </p>
+      )}
 
       {showForm && (
         <ArticleForm
