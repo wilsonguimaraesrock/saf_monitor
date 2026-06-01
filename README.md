@@ -33,6 +33,8 @@ Deployado em Vercel · banco PostgreSQL (Digital Ocean) · notificações via Te
 - **Resposta a SAFs pelo dashboard** — atendentes respondem tickets do dfranquias diretamente no modal de ticket, com autenticação individual (credenciais por atendente salvas em localStorage)
 - **Coleta de dados** — scraper Playwright roda via GitHub Actions a cada hora (seg–sex, 8h–20h BRT) e popula o banco
 - **Relatórios Telegram** — enviados 4×/dia via Vercel Crons e a cada hora via GitHub Actions
+- **API pública v1** — endpoints REST autenticados por `X-API-Key` para consumo externo; webhooks POST automáticos após cada scraper
+- **Painel super admin** — `/admin` para criação e gestão de usuários com autenticação individual por email/senha
 
 ### UI
 
@@ -56,12 +58,17 @@ GitHub Actions (Playwright scraper)
   ├── src/app/page.tsx                       src/integrations/chatwoot.ts
   ├── src/app/setor/[slug]/page.tsx
   ├── src/app/setor/pd-i/page.tsx
+  ├── src/app/admin/page.tsx               ← painel super admin (gestão de usuários)
+  ├── src/app/api/v1/                      ← API pública REST
   ├── src/lib/month.ts             ← parseMonthParam + ymToDateRange (UTC)
+  ├── src/lib/auth.ts              ← JWT (jose) + hash de senha (bcryptjs)
+  ├── src/lib/webhooks.ts          ← buildSectorsPayload + dispatchWebhooks
   ├── src/repository/sectors.ts   ← queries SQL por setor
   ├── src/repository/tickets.ts   ← queries de tickets individuais
   └── src/components/             ← UI (StatCard, TicketTable, SlaPanel…)
 
 Vercel Crons  ──→  /api/cron/report  ──→  Telegram
+              ──→  /api/cron/scrape  ──→  dispatchWebhooks  ──→  WEBHOOK_URL_N
 ```
 
 ### Camadas
@@ -72,9 +79,9 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 | Engine | `src/engine/` | Classifica, normaliza e pontua tickets |
 | Repository | `src/repository/` | Queries SQL parametrizadas por setor/departamento |
 | Integrations | `src/integrations/` | Clientes Chatwoot, Telegram, WhatsApp |
-| Lib | `src/lib/` | Utilitários compartilhados: `month.ts` (parse/range de mês, UTC), `sectors.ts` (config de setores), `db.ts` (pool PostgreSQL) |
+| Lib | `src/lib/` | Utilitários: `month.ts` (mês UTC), `auth.ts` (JWT + bcrypt), `webhooks.ts` (dispatch + payload), `sectors.ts` (config), `db.ts` (pool) |
 | UI | `src/app/` + `src/components/` | Server Components Next.js, renderização em tempo real |
-| API Routes | `src/app/api/` | Crons, scraper trigger, stats, debug |
+| API Routes | `src/app/api/` | Crons, scraper trigger, stats, API v1 pública, admin |
 
 ---
 
@@ -272,6 +279,7 @@ PostgreSQL (Digital Ocean). Tabelas principais:
 | `saf_daily_stats` | Snapshots diários para gráfico de tendência |
 | `sector_contacts` | Chat IDs Telegram por setor |
 | `cron_runs` | Log de execuções do scraper/cron |
+| `users` | Usuários do dashboard (email, senha hash bcrypt, role, departments, is_active) |
 
 ### SLA
 
@@ -332,14 +340,90 @@ PostgreSQL (Digital Ocean). Tabelas principais:
 
 | Variável | Descrição |
 |---|---|
-| `DASHBOARD_PASSWORD` | Senha de acesso ao dashboard |
-| `JWT_SECRET` | Segredo para assinar tokens de sessão |
+| `JWT_SECRET` | Segredo para assinar JWTs de sessão — gere com `openssl rand -hex 32` |
+| `SUPERADMIN_EMAIL` | Email do super admin criado na migration inicial |
+| `SUPERADMIN_PASSWORD` | Senha do super admin criado na migration inicial |
+
+> Após configurar as variáveis, rode `POST /api/cron/migrate` (com header `Authorization: Bearer <CRON_SECRET>`) uma única vez para criar a tabela `users` e o super admin. Depois acesse `/admin` para gerenciar usuários.
+
+### API pública v1
+
+| Variável | Descrição |
+|---|---|
+| `SAF_API_KEY` | Chave para autenticar consumidores externos — gere com `openssl rand -hex 32` |
+| `WEBHOOK_URL_1` | URL para receber payload POST após cada scraper (opcional) |
+| `WEBHOOK_URL_2` | Segunda URL de webhook (opcional; adicione quantas precisar) |
+| `WEBHOOK_SECRET` | Segredo para assinar `X-SAF-Signature: sha256=<hex>` no payload (opcional) |
 
 ### Vercel
 
 | Variável | Descrição |
 |---|---|
 | `VERCEL_APP_URL` | URL pública do deploy (ex: `https://safs.vercel.app`) |
+
+---
+
+## API pública v1
+
+Endpoints REST para consumo externo. Autenticação via header `X-API-Key: <SAF_API_KEY>`.
+
+### Endpoints
+
+| Método | Endpoint | Auth | Descrição |
+|---|---|---|---|
+| `GET` | `/api/v1/health` | — | Status do banco; sem autenticação |
+| `GET` | `/api/v1/sectors` | ✓ | Stats + SLA + WhatsApp de todos os setores |
+| `GET` | `/api/v1/sectors/:slug` | ✓ | Setor individual (ex: `pd-i`, `operacoes`) |
+| `GET` | `/api/v1/global` | ✓ | Totais consolidados de todos os setores |
+
+Todos aceitam `?month=YYYY-MM` para filtrar por mês histórico.
+
+### Formato de resposta
+
+```json
+{
+  "month": "2026-06",
+  "timestamp": "2026-06-01T18:00:00.000Z",
+  "sectors": [
+    {
+      "slug": "pd-i",
+      "name": "PD&I",
+      "safs": { "open": 16, "overdue": 6, "awaiting": 12, "monthTotal": 44, "resolvedToday": 2 },
+      "sla":  { "rate": 39, "atRisk": 1, "avgResolutionDays": 5.2, "avgFirstResponseHours": 3.1, "noDeadline": 8 },
+      "whatsapp": { "open": 0, "pending": 3, "monthlyTotal": 8, "csatAvg": 4.6 },
+      "subdepartments": [...]
+    }
+  ]
+}
+```
+
+### Webhooks
+
+Após cada execução do scraper (`/api/cron/scrape`), o servidor faz `POST` para `WEBHOOK_URL_1`, `WEBHOOK_URL_2`, etc. com o payload completo:
+
+```json
+{ "event": "scraper_complete", "timestamp": "...", "data": { "month": "...", "sectors": [...] } }
+```
+
+Se `WEBHOOK_SECRET` estiver configurado, o header `X-SAF-Signature: sha256=<hmac-hex>` é enviado para verificação.
+
+## Painel super admin
+
+Acessível em `/admin` — exclusivo para usuários com `role = superadmin`.
+
+**Funcionalidades:**
+- Listar todos os usuários com status ativo/inativo
+- Criar usuário: email, nome, senha, função (superadmin / usuário), departamentos designados
+- Editar usuário: nome, departamentos, função
+- Alterar senha individual
+- Ativar / desativar usuário (toggle)
+- Remover usuário (com confirmação)
+
+**Setup inicial (uma única vez):**
+```bash
+curl -X POST https://<seu-dominio>/api/cron/migrate \
+  -H "Authorization: Bearer <CRON_SECRET>"
+```
 
 ---
 
