@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Create users table
+  // Users table
   await execute(`
     CREATE TABLE IF NOT EXISTS users (
       id            SERIAL PRIMARY KEY,
@@ -31,6 +31,47 @@ export async function POST(req: NextRequest) {
       is_active     BOOLEAN NOT NULL DEFAULT true,
       created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  // Knowledge base articles (RAG) — separated by department
+  await execute(`
+    CREATE TABLE IF NOT EXISTS knowledge_base (
+      id         SERIAL PRIMARY KEY,
+      title      TEXT    NOT NULL,
+      content    TEXT    NOT NULL,
+      category   TEXT    NOT NULL DEFAULT 'geral',
+      department TEXT    NOT NULL DEFAULT 'global',
+      embedding  FLOAT8[],
+      is_active  BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  // Bot configuration (key-value)
+  await execute(`
+    CREATE TABLE IF NOT EXISTS bot_settings (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
+
+  // Seed default bot settings (idempotent)
+  await execute(`
+    INSERT INTO bot_settings (key, value) VALUES
+      ('test_phone_numbers', '[]'),
+      ('enabled_departments', '[]'),
+      ('system_prompt', 'Você é um assistente de atendimento da Rockfeller. Responda de forma clara, objetiva e amigável em português. Use apenas as informações da base de conhecimento fornecida. Se não souber a resposta, diga que vai transferir para um consultor.')
+    ON CONFLICT (key) DO NOTHING
+  `);
+
+  // Conversation state for escalation flow
+  await execute(`
+    CREATE TABLE IF NOT EXISTS bot_conversations (
+      chatwoot_conversation_id INTEGER PRIMARY KEY,
+      state                    TEXT NOT NULL DEFAULT 'active',
+      last_bot_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
 
