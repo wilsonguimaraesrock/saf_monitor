@@ -116,11 +116,10 @@ function UserForm({ initial, isEdit, onSubmit, onClose }: UserFormProps) {
         <label className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Email</label>
         <input
           type="email"
-          className="w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-slate-100 disabled:opacity-50"
+          className="w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-slate-100"
           value={form.email}
           onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-          disabled={isEdit}
-          required={!isEdit}
+          required
         />
       </div>
       <div>
@@ -220,7 +219,7 @@ export default function AdminPage() {
     await load();
   }
 
-  async function updateUser(id: number, data: Partial<{ name: string; departments: string[]; role: string; is_active: boolean; password: string }>) {
+  async function updateUser(id: number, data: Partial<{ email: string; name: string; departments: string[]; role: string; is_active: boolean; password: string }>) {
     const res = await fetch(`/api/admin/users/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -379,6 +378,7 @@ export default function AdminPage() {
             isEdit
             initial={modal.edit}
             onSubmit={(data) => updateUser(modal.edit.id, {
+              email: data.email,
               name: data.name,
               departments: data.departments,
               role: data.role,

@@ -28,7 +28,7 @@ export async function PUT(
   if (!existing) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
 
   const body = await req.json() as {
-    name?: string; departments?: string[]; role?: string;
+    email?: string; name?: string; departments?: string[]; role?: string;
     is_active?: boolean; password?: string;
   };
 
@@ -36,6 +36,7 @@ export async function PUT(
   const values: unknown[]  = [];
   let p = 1;
 
+  if (body.email      !== undefined) { updates.push(`email = $${p++}`);        values.push(body.email.trim().toLowerCase()); }
   if (body.name       !== undefined) { updates.push(`name = $${p++}`);        values.push(body.name.trim()); }
   if (body.departments !== undefined) { updates.push(`departments = $${p++}`); values.push(body.departments); }
   if (body.role       !== undefined) {
