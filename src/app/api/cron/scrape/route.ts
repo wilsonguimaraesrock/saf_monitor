@@ -2,9 +2,11 @@
  * GET /api/cron/scrape
  * Chamado pela Vercel a cada 10 minutos.
  * Apenas coleta + persiste dados. Não envia Telegram.
+ * Após o scraper concluir, dispara webhooks externos (WEBHOOK_URL_1, …) se configurados.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { runScraper } from '@/scraper/runner';
+import { dispatchWebhooks, buildSectorsPayload } from '@/lib/webhooks';
 
 export const maxDuration = 300; // 5 min timeout
 
@@ -21,5 +23,13 @@ export async function GET(req: NextRequest) {
   }
 
   const result = await runScraper('cron:scrape');
+
+  // Dispatch webhooks in background — don't block the cron response
+  if (process.env.WEBHOOK_URL_1) {
+    buildSectorsPayload().then((data) =>
+      dispatchWebhooks({ event: 'scraper_complete', timestamp: new Date().toISOString(), data })
+    ).catch(() => {/* errors already logged inside dispatchWebhooks */});
+  }
+
   return NextResponse.json(result);
 }
