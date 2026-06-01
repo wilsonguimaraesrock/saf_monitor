@@ -2,7 +2,7 @@
 
 import { useState, FormEvent, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
+// eslint-disable-next-line @next/next/no-img-element
 import { Lock } from 'lucide-react';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 
@@ -119,13 +119,11 @@ export default function LoginPage() {
       <header className="bg-gradient-to-r from-orange-600 to-amber-600 border-b border-orange-700 dark:from-slate-900 dark:to-slate-900 dark:border-slate-800">
         <div className="max-w-screen-2xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src="/logo-rockfeller-branca.png"
               alt="Rockfeller"
-              width={794}
-              height={77}
-              className="h-3.5 w-auto"
-              priority
+              className="h-5 w-auto"
             />
             <div className="w-px h-6 bg-orange-300/50 dark:bg-slate-700" />
             <div>
