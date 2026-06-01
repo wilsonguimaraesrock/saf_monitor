@@ -1,45 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { jwtVerify } from 'jose';
 
-const LOGIN_PATH = '/login';
+const LOGIN_PATH  = '/login';
 const COOKIE_NAME = 'saf_session';
 
-/** sha256 via Web Crypto API — compatível com Edge Runtime */
-async function sha256(text: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const buffer  = await crypto.subtle.digest('SHA-256', encoder.encode(text));
-  return Array.from(new Uint8Array(buffer))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+function getSecret(): Uint8Array {
+  return new TextEncoder().encode(process.env.JWT_SECRET?.trim() ?? '');
+}
+
+async function getSessionRole(req: NextRequest): Promise<string | null> {
+  const token = req.cookies.get(COOKIE_NAME)?.value;
+  if (!token) return null;
+  try {
+    const { payload } = await jwtVerify(token, getSecret());
+    return (payload as { role?: string }).role ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Rotas que nunca precisam de auth
+  // Public routes — no auth needed
   if (
     pathname.startsWith('/login') ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/cron') ||
     pathname.startsWith('/api/health') ||
+    pathname.startsWith('/api/v1/health') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon')
   ) {
     return NextResponse.next();
   }
 
-  const pwd = process.env.APP_PASSWORD?.trim();
+  // JWT_SECRET not configured — allow everything (dev without DB)
+  if (!process.env.JWT_SECRET?.trim()) return NextResponse.next();
 
-  // Se APP_PASSWORD não estiver configurada, deixa passar
-  if (!pwd) return NextResponse.next();
+  const role = await getSessionRole(req);
 
-  const expectedToken  = await sha256(pwd);
-  const sessionCookie  = req.cookies.get(COOKIE_NAME)?.value;
-
-  if (sessionCookie !== expectedToken) {
+  if (!role) {
     const loginUrl = req.nextUrl.clone();
     loginUrl.pathname = LOGIN_PATH;
     loginUrl.searchParams.set('from', pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Admin routes — superadmin only
+  if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
+    if (role !== 'superadmin') {
+      return NextResponse.json({ error: 'Acesso restrito a super admins' }, { status: 403 });
+    }
   }
 
   return NextResponse.next();

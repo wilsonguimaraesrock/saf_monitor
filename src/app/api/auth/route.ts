@@ -1,32 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHash } from 'crypto';
+import { queryOne } from '@/lib/db';
+import { verifyPassword, signToken, COOKIE_NAME, COOKIE_MAX_AGE } from '@/lib/auth';
 
-const COOKIE_NAME = 'saf_session';
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 dias
+interface DbUser {
+  id: number;
+  email: string;
+  name: string;
+  role: 'superadmin' | 'user';
+  departments: string[];
+  is_active: boolean;
+  password_hash: string;
+}
 
 export async function POST(req: NextRequest) {
-  const { password } = await req.json() as { password?: string };
-  const expected = process.env.APP_PASSWORD?.trim();
+  const body = await req.json() as { email?: string; password?: string };
+  const { email, password } = body;
 
-  if (!expected) {
-    return NextResponse.json({ error: 'APP_PASSWORD não configurada' }, { status: 500 });
+  if (!email || !password) {
+    return NextResponse.json({ error: 'Email e senha são obrigatórios' }, { status: 400 });
   }
 
-  if (!password || password.trim() !== expected) {
-    return NextResponse.json({ error: 'Senha incorreta' }, { status: 401 });
+  const user = await queryOne<DbUser>(
+    'SELECT id, email, name, role, departments, is_active, password_hash FROM users WHERE email = $1',
+    [email.trim().toLowerCase()]
+  );
+
+  if (!user || !user.is_active) {
+    return NextResponse.json({ error: 'Credenciais inválidas' }, { status: 401 });
   }
 
-  const token = createHash('sha256').update(expected).digest('hex');
-  const from   = req.nextUrl.searchParams.get('from') ?? '/';
+  const valid = await verifyPassword(password, user.password_hash);
+  if (!valid) {
+    return NextResponse.json({ error: 'Credenciais inválidas' }, { status: 401 });
+  }
 
-  const res = NextResponse.json({ ok: true, redirect: from });
+  const token = await signToken({
+    id:          user.id,
+    email:       user.email,
+    name:        user.name,
+    role:        user.role,
+    departments: user.departments ?? [],
+  });
+
+  const from = req.nextUrl.searchParams.get('from') ?? '/';
+  const res  = NextResponse.json({ ok: true, redirect: from, name: user.name, role: user.role });
+
   res.cookies.set(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure:   process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: COOKIE_MAX_AGE,
-    path: '/',
+    maxAge:   COOKIE_MAX_AGE,
+    path:     '/',
   });
+
   return res;
 }
 
