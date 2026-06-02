@@ -20,12 +20,21 @@ const API_TOKEN  = process.env.CHATWOOT_API_TOKEN;
 // ── Chatwoot helpers ──────────────────────────────────────────
 
 async function chatwootPost(path: string, body: unknown) {
-  const res = await fetch(`${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}${path}`, {
+  const url = `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}${path}`;
+  log.info(`Chatwoot POST ${url}`);
+  if (!BASE_URL) { log.error('CHATWOOT_BASE_URL não configurada'); return null; }
+  if (!API_TOKEN) { log.error('CHATWOOT_API_TOKEN não configurada'); return null; }
+  const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'api_access_token': API_TOKEN! },
+    headers: { 'Content-Type': 'application/json', 'api_access_token': API_TOKEN },
     body: JSON.stringify(body),
   });
-  return res.ok ? res.json() : null;
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    log.error(`Chatwoot ${res.status} ${url}: ${text.slice(0, 200)}`);
+    return null;
+  }
+  return res.json();
 }
 
 async function sendMessage(conversationId: number, content: string) {
@@ -200,6 +209,8 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   if (isFirstInteraction) {
     await sendMessage(conversationId, WELCOME_MESSAGE);
   }
+
+  log.info(`Bot: passou todas as checagens — iniciando RAG para conv=${conversationId}`);
 
   // 4. RAG: generate embedding + search knowledge base
   const systemPrompt = (await getSetting('system_prompt')) ??
