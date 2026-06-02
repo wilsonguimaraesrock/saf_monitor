@@ -103,6 +103,8 @@ async function searchKnowledge(
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);
 
+  log.info(`RAG top-${topK} for dept="${department}": ${scored.map((r) => `"${r.title}" (${r.score.toFixed(3)})`).join(', ')}`);
+
   return scored.map((r) => `**${r.title}**\n${r.content}`);
 }
 
