@@ -114,13 +114,20 @@ async function setConvState(conversationId: number, state: string) {
 
 function wantsEscalation(text: string): boolean {
   const t = text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  return /\b(nao|nope|consultor|humano|atendente|pessoa|falar|quero|sim.*consultor)\b/.test(t);
+  // Direct keywords: HUMANO, ATENDENTE, CONSULTOR + negations and requests
+  return /\b(humano|atendente|consultor|nao|nope|pessoa|quero falar|falar com|preciso de ajuda humana)\b/.test(t);
 }
 
 function wantsResolved(text: string): boolean {
   const t = text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  return /\b(sim|ok|obrigad|resolvid|ajudou|certo|perfeito|entendi)\b/.test(t);
+  return /\b(sim|ok|obrigad|resolvid|ajudou|certo|perfeito|entendi|valeu|tudo certo)\b/.test(t);
 }
+
+const WELCOME_MESSAGE = `Olá! 👋 Sou a *Roxy*, assistente de IA pedagógica da Rockfeller. Estou aqui para te ajudar com suas dúvidas! 🤖
+
+Pode me fazer sua pergunta e farei o meu melhor para te responder. 😊
+
+_Dica: a qualquer momento, se preferir falar com um atendente humano, basta digitar_ *ATENDENTE*_._`;
 
 // ── Main handler ──────────────────────────────────────────────
 
@@ -166,30 +173,37 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   // 3. Check conversation state
   const state = await getConvState(conversationId);
 
+  // 3a. Handle escalation requests at any point (even outside awaiting_escalation)
+  if (wantsEscalation(messageText) && state !== 'escalated') {
+    await sendMessage(conversationId,
+      '👋 Claro! Vou te transferir para um atendente humano agora. Aguarde um momento! 🙋'
+    );
+    await assignToTeam(conversationId, teamId);
+    await setConvState(conversationId, 'escalated');
+    return;
+  }
+
   if (state === 'awaiting_escalation') {
-    if (wantsEscalation(messageText)) {
+    if (wantsResolved(messageText)) {
       await sendMessage(conversationId,
-        '👋 Vou te transferir para um consultor agora. Aguarde um momento!'
-      );
-      await assignToTeam(conversationId, teamId);
-      await setConvState(conversationId, 'escalated');
-    } else if (wantsResolved(messageText)) {
-      await sendMessage(conversationId,
-        '✅ Ótimo! Fico feliz em ter ajudado. Se precisar de algo mais, é só chamar!'
+        '✅ Ótimo! Fico feliz em ter ajudado. Se precisar de algo mais, é só chamar! 😊'
       );
       await setConvState(conversationId, 'resolved');
     } else {
-      // Ambíguo — repetir a pergunta
-      await sendMessage(conversationId,
-        'Desculpe, não entendi. Sua dúvida foi solucionada? Responda:\n• *SIM* — para encerrar\n• *NÃO* — para falar com um consultor'
-      );
+      // Não entendeu — responde como nova pergunta (continua o fluxo RAG abaixo)
     }
-    return;
+    if (wantsResolved(messageText)) return;
+  }
+
+  // 3b. First interaction in this conversation — send welcome message
+  const isFirstInteraction = !state;
+  if (isFirstInteraction) {
+    await sendMessage(conversationId, WELCOME_MESSAGE);
   }
 
   // 4. RAG: generate embedding + search knowledge base
   const systemPrompt = (await getSetting('system_prompt')) ??
-    'Você é um assistente de atendimento da Rockfeller. Responda de forma clara, objetiva e amigável em português. Use apenas as informações da base de conhecimento fornecida. Se não souber a resposta, diga que vai transferir para um consultor.';
+    'Você é a Roxy, assistente de IA pedagógica da Rockfeller. Responda de forma clara, objetiva e amigável em português. Use apenas as informações da base de conhecimento fornecida. Se não souber a resposta, diga que vai transferir para um atendente humano.';
 
   let chunks: string[] = [];
   try {
@@ -213,7 +227,7 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   }
 
   // 6. Send answer + escalation prompt
-  const fullMessage = `${answer}\n\n---\n💬 Sua dúvida foi solucionada?\n• Responda *SIM* para encerrar\n• Responda *NÃO* para falar com um consultor`;
+  const fullMessage = `${answer}\n\n---\n💬 Consegui te ajudar?\n• Responda *SIM* se a dúvida foi resolvida\n• Responda *NÃO* ou *ATENDENTE* para falar com um atendente humano`;
   await sendMessage(conversationId, fullMessage);
   await setConvState(conversationId, 'awaiting_escalation');
 }

@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     INSERT INTO bot_settings (key, value) VALUES
       ('test_phone_numbers', '[]'),
       ('enabled_departments', '[]'),
-      ('system_prompt', 'Você é um assistente de atendimento da Rockfeller. Responda de forma clara, objetiva e amigável em português. Use apenas as informações da base de conhecimento fornecida. Se não souber a resposta, diga que vai transferir para um consultor.')
+      ('system_prompt', 'Você é a Roxy, assistente de IA pedagógica da Rockfeller. Responda de forma clara, objetiva e amigável em português. Use apenas as informações da base de conhecimento fornecida. Nunca invente informações. Se não souber a resposta, diga que vai transferir para um atendente humano.')
     ON CONFLICT (key) DO NOTHING
   `);
 
