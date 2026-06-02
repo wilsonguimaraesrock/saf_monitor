@@ -45,6 +45,12 @@ async function sendMessage(conversationId: number, content: string) {
   });
 }
 
+async function setTyping(conversationId: number, on: boolean) {
+  return chatwootPost(`/conversations/${conversationId}/typing_status`, {
+    typing_status: on ? 'on' : 'off',
+  });
+}
+
 async function assignToTeam(conversationId: number, teamId: number) {
   return fetch(`${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${conversationId}/assignments`, {
     method: 'POST',
@@ -212,6 +218,9 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
 
   log.info(`Bot: passou todas as checagens — iniciando RAG para conv=${conversationId}`);
 
+  // Mostrar "digitando..." enquanto a Roxy processa
+  await setTyping(conversationId, true);
+
   // 4. RAG: generate embedding + search knowledge base
   const systemPrompt = (await getSetting('system_prompt')) ??
     'Você é a Roxy, assistente de IA pedagógica da Rockfeller. Responda de forma clara, objetiva e amigável em português. Use apenas as informações da base de conhecimento fornecida. Se não souber a resposta, diga que vai transferir para um atendente humano.';
@@ -230,7 +239,8 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
     answer = await chatCompletion(systemPrompt, messageText, chunks);
   } catch (err) {
     log.error(`Erro no GPT-4o: ${(err as Error).message}`);
-    answer = 'Desculpe, tive um problema ao processar sua mensagem. Vou te transferir para um consultor.';
+    await setTyping(conversationId, false);
+    answer = 'Desculpe, tive um problema ao processar sua mensagem. Vou te transferir para um atendente humano.';
     await sendMessage(conversationId, answer);
     await assignToTeam(conversationId, teamId);
     await setConvState(conversationId, 'escalated');
@@ -238,6 +248,7 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   }
 
   // 6. Send answer + escalation prompt
+  await setTyping(conversationId, false);
   const fullMessage = `${answer}\n\n---\n💬 Consegui te ajudar?\n• Responda *SIM* se a dúvida foi resolvida\n• Responda *NÃO* ou *ATENDENTE* para falar com um atendente humano`;
   await sendMessage(conversationId, fullMessage);
   await setConvState(conversationId, 'awaiting_escalation');
