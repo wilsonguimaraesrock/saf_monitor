@@ -67,8 +67,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }
 
-  // Fire-and-forget
-  processEvent(payload).catch((err: Error) => log.error(`processEvent error: ${err.message}`));
+  // Await processing — Vercel kills fire-and-forget before async work finishes
+  try {
+    await processEvent(payload);
+  } catch (err) {
+    log.error(`processEvent error: ${(err as Error).message}`);
+  }
 
   return NextResponse.json({ ok: true });
 }
