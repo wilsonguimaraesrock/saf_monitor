@@ -87,15 +87,24 @@ function cosineSimilarity(a: number[], b: number[]): number {
 async function searchKnowledge(
   questionEmbedding: number[],
   department: string,
-  topK = 3
+  topK = 3,
+  category?: string
 ): Promise<string[]> {
+  // If a specific category is known, prefer those articles (fall back to all dept articles)
+  const params: unknown[] = [department];
+  const categoryFilter = category
+    ? `AND (category = $2 OR category = 'geral')`
+    : '';
+  if (category) params.push(category);
+
   const rows = await query<{ title: string; content: string; embedding: number[] }>(
     `SELECT title, content, embedding
      FROM knowledge_base
      WHERE is_active = true
        AND (department = $1 OR department = 'global')
+       ${categoryFilter}
        AND embedding IS NOT NULL`,
-    [department]
+    params
   );
 
   const scored = rows
@@ -226,15 +235,19 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   let chunks: string[] = [];
   try {
     const embedding = await generateEmbedding(messageText);
-    chunks = await searchKnowledge(embedding, department);
+    chunks = await searchKnowledge(embedding, department, 3, subjectName);
   } catch (err) {
     log.error(`Erro no RAG: ${(err as Error).message}`);
   }
 
-  // 5. Generate response
+  // 5. Generate response — include subject context so model doesn't mix topics
+  const contextualMessage = subjectName
+    ? `[Contexto: o usuário está perguntando sobre "${subjectName}"]\n\n${messageText}`
+    : messageText;
+
   let answer = '';
   try {
-    answer = await chatCompletion(systemPrompt, messageText, chunks);
+    answer = await chatCompletion(systemPrompt, contextualMessage, chunks);
   } catch (err) {
     log.error(`Erro no GPT-4o: ${(err as Error).message}`);
     await setTyping(conversationId, false);
