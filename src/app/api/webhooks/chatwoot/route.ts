@@ -35,9 +35,10 @@ interface ChatwootEvent {
   conversation?: {
     id?: number;
     inbox_id?: number;
+    custom_attributes?: Record<string, string>;
     meta?: {
       team?: { id?: number; name?: string };
-      sender?: { phone_number?: string };
+      sender?: { phone_number?: string; name?: string };
     };
   };
   // some versions put sender at top level
@@ -106,11 +107,13 @@ async function processEvent(payload: ChatwootEvent) {
     return;
   }
 
-  const department = departmentFromTeamId(teamId);
+  const department  = departmentFromTeamId(teamId);
+  const contactName = payload.conversation?.meta?.sender?.name ?? undefined;
+  const subjectName = (payload.conversation?.custom_attributes as Record<string, string> | undefined)?.subjectName ?? undefined;
 
   log.info(
-    `Webhook msg: conv=${conversationId} phone="${contactPhone}" team=${teamId} dept=${department} text="${messageText.slice(0, 60)}"`
+    `Webhook msg: conv=${conversationId} phone="${contactPhone}" team=${teamId} dept=${department} subject="${subjectName}" text="${messageText.slice(0, 60)}"`
   );
 
-  await handleIncomingMessage({ conversationId, contactPhone, messageText, department, teamId });
+  await handleIncomingMessage({ conversationId, contactPhone, messageText, department, teamId, contactName, subjectName });
 }

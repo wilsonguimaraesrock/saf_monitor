@@ -138,24 +138,26 @@ function wantsResolved(text: string): boolean {
   return /\b(sim|ok|obrigad|resolvid|ajudou|certo|perfeito|entendi|valeu|tudo certo)\b/.test(t);
 }
 
-const WELCOME_MESSAGE = `Olá! 👋 Sou a *Roxy*, assistente de IA pedagógica da Rockfeller. Estou aqui para te ajudar com suas dúvidas! 🤖
-
-Pode me fazer sua pergunta e farei o meu melhor para te responder. 😊
-
-_Dica: a qualquer momento, se preferir falar com um atendente humano, basta digitar_ *ATENDENTE*_._`;
+function buildWelcomeHeader(contactName?: string, subjectName?: string): string {
+  const greeting = contactName ? `Olá, *${contactName}*! 👋` : `Olá! 👋`;
+  const subject  = subjectName ? ` sobre *${subjectName}*` : '';
+  return `${greeting} Sou a *Roxy*, assistente de IA pedagógica da Rockfeller. 🤖\n\nRecebi sua dúvida${subject} e já estou buscando a melhor resposta para você!\n\n_Se preferir falar com um atendente humano a qualquer momento, basta digitar_ *ATENDENTE*_._ 😊`;
+}
 
 // ── Main handler ──────────────────────────────────────────────
 
 export interface IncomingMessage {
   conversationId: number;
-  contactPhone: string;     // ex: "+5511999999999"
+  contactPhone: string;
   messageText: string;
-  department: string;       // sector slug from Chatwoot team
+  department: string;
   teamId: number;
+  contactName?: string;   // from conversation.meta.sender.name
+  subjectName?: string;   // from conversation.custom_attributes.subjectName
 }
 
 export async function handleIncomingMessage(msg: IncomingMessage): Promise<void> {
-  const { conversationId, contactPhone, messageText, department, teamId } = msg;
+  const { conversationId, contactPhone, messageText, department, teamId, contactName, subjectName } = msg;
 
   // 1. Check test phone list — normalize both sides, handling BR 9-digit mobile format
   const testPhones = await getTestPhones();
@@ -210,11 +212,7 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
     if (wantsResolved(messageText)) return;
   }
 
-  // 3b. First interaction in this conversation — send welcome message
   const isFirstInteraction = !state;
-  if (isFirstInteraction) {
-    await sendMessage(conversationId, WELCOME_MESSAGE);
-  }
 
   log.info(`Bot: passou todas as checagens — iniciando RAG para conv=${conversationId}`);
 
@@ -247,9 +245,12 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
     return;
   }
 
-  // 6. Send answer + escalation prompt
+  // 6. Send answer (with welcome header on first interaction) + escalation prompt
   await setTyping(conversationId, false);
-  const fullMessage = `${answer}\n\n---\n💬 Consegui te ajudar?\n• Responda *SIM* se a dúvida foi resolvida\n• Responda *NÃO* ou *ATENDENTE* para falar com um atendente humano`;
+  const welcomeHeader = isFirstInteraction
+    ? buildWelcomeHeader(contactName, subjectName) + '\n\n'
+    : '';
+  const fullMessage = `${welcomeHeader}${answer}\n\n---\n💬 Consegui te ajudar?\n• Responda *SIM* se a dúvida foi resolvida\n• Responda *NÃO* ou *ATENDENTE* para falar com um atendente humano`;
   await sendMessage(conversationId, fullMessage);
   await setConvState(conversationId, 'awaiting_escalation');
 }
