@@ -80,9 +80,11 @@ async function processEvent(payload: ChatwootEvent) {
   const conversationId = payload.conversation?.id ?? payload.id;
   const messageText    = payload.content?.trim();
 
-  // Phone can be in several places depending on Chatwoot version
+  // For incoming messages: sender = contact (has phone_number)
+  // For outgoing messages: sender = agent (no phone_number, but we already filtered those out)
+  // Fallback: conversation.meta.sender has the contact's phone
   const rawPhone =
-    payload.sender?.phone_number ??
+    (payload.sender as { phone_number?: string; type?: string })?.phone_number ??
     payload.contact?.phone_number ??
     payload.conversation?.meta?.sender?.phone_number ??
     '';

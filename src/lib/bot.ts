@@ -135,14 +135,23 @@ export interface IncomingMessage {
 export async function handleIncomingMessage(msg: IncomingMessage): Promise<void> {
   const { conversationId, contactPhone, messageText, department, teamId } = msg;
 
-  // 1. Check test phone list — normalize both sides to +digits for comparison
+  // 1. Check test phone list — normalize both sides, handling BR 9-digit mobile format
   const testPhones = await getTestPhones();
   if (testPhones.length > 0) {
-    const normalize = (p: string) => '+' + p.replace(/\D/g, '');
-    const normalizedIncoming = normalize(contactPhone);
-    const matched = testPhones.some((t) => normalize(t) === normalizedIncoming);
+    // Normalize to digits only; for BR numbers (+55 + 2-digit area + 8 or 9 digits),
+    // strip the leading 9 after the area code so both formats compare equal.
+    const normalizeBR = (p: string) => {
+      const d = p.replace(/\D/g, '');
+      // Brazil: 55 + 2-digit DDD + 9-digit number → strip leading 9 of the local part
+      if (d.startsWith('55') && (d.length === 13)) {
+        return '55' + d.slice(2, 4) + d.slice(5); // remove the 9 after DDD
+      }
+      return d;
+    };
+    const normalizedIncoming = normalizeBR(contactPhone);
+    const matched = testPhones.some((t) => normalizeBR(t) === normalizedIncoming);
     if (!matched) {
-      log.info(`Bot: número ${contactPhone} não está na lista de teste — ignorando`);
+      log.info(`Bot: número ${contactPhone} (norm: ${normalizedIncoming}) não está na lista de teste — ignorando`);
       return;
     }
   }
