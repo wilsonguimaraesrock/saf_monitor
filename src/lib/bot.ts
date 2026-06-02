@@ -135,11 +135,16 @@ export interface IncomingMessage {
 export async function handleIncomingMessage(msg: IncomingMessage): Promise<void> {
   const { conversationId, contactPhone, messageText, department, teamId } = msg;
 
-  // 1. Check test phone list
+  // 1. Check test phone list — normalize both sides to +digits for comparison
   const testPhones = await getTestPhones();
-  if (testPhones.length > 0 && !testPhones.includes(contactPhone)) {
-    log.info(`Bot: número ${contactPhone} não está na lista de teste — ignorando`);
-    return;
+  if (testPhones.length > 0) {
+    const normalize = (p: string) => '+' + p.replace(/\D/g, '');
+    const normalizedIncoming = normalize(contactPhone);
+    const matched = testPhones.some((t) => normalize(t) === normalizedIncoming);
+    if (!matched) {
+      log.info(`Bot: número ${contactPhone} não está na lista de teste — ignorando`);
+      return;
+    }
   }
 
   // 2. Check if bot is enabled for this department
