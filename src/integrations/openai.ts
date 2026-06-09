@@ -25,8 +25,8 @@ export async function chatCompletion(
   contextChunks: string[]
 ): Promise<string> {
   const context = contextChunks.length > 0
-    ? `\n\nBase de conhecimento relevante:\n${contextChunks.map((c, i) => `[${i + 1}] ${c}`).join('\n\n')}`
-    : '';
+    ? `\n\n# BASE DE CONHECIMENTO (única fonte de verdade)\n${contextChunks.map((c, i) => `[${i + 1}] ${c}`).join('\n\n')}\n\n# REGRAS OBRIGATÓRIAS\n- Responda usando SOMENTE as informações da base acima.\n- NUNCA invente, suponha ou use conhecimento externo.\n- Os trechos acima são todos do MESMO documento/assunto — não misture com outros produtos ou tópicos.\n- Se a resposta não estiver claramente na base acima, responda exatamente: "Não tenho essa informação aqui. Posso te transferir para um atendente humano?"\n- Seja direto e objetivo; cite procedimentos passo a passo quando houver.`
+    : `\n\n# ATENÇÃO\nNenhum documento relevante foi encontrado na base de conhecimento. NÃO invente uma resposta. Responda exatamente: "Não tenho essa informação aqui. Posso te transferir para um atendente humano?"`;
 
   const res = await getClient().chat.completions.create({
     model: 'gpt-4o',
@@ -34,8 +34,8 @@ export async function chatCompletion(
       { role: 'system', content: systemPrompt + context },
       { role: 'user',   content: userMessage },
     ],
-    max_tokens: 600,
-    temperature: 0.3,
+    max_tokens: 900,
+    temperature: 0.2,
   });
 
   return res.choices[0].message.content ?? '';

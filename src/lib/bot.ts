@@ -84,10 +84,15 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-10);
 }
 
+/** Remove o sufixo "— parte N" para agrupar chunks do mesmo documento */
+function docNameOf(title: string): string {
+  return title.replace(/\s*[—–-]\s*parte\s*\d+\s*$/i, '').trim();
+}
+
 async function searchKnowledge(
   questionEmbedding: number[],
   department: string,
-  topK = 3,
+  topK = 6,
 ): Promise<string[]> {
   const rows = await query<{ title: string; content: string; embedding: number[] }>(
     `SELECT title, content, embedding
@@ -100,12 +105,25 @@ async function searchKnowledge(
 
   const scored = rows
     .map((r) => ({ ...r, score: cosineSimilarity(questionEmbedding, r.embedding) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topK);
+    .sort((a, b) => b.score - a.score);
 
-  log.info(`RAG top-${topK} for dept="${department}": ${scored.map((r) => `"${r.title}" (${r.score.toFixed(3)})`).join(', ')}`);
+  if (scored.length === 0) {
+    log.info(`RAG: nenhum artigo com embedding para dept="${department}"`);
+    return [];
+  }
 
-  return scored.map((r) => `**${r.title}**\n${r.content}`);
+  // Ancora a resposta no documento do melhor match para evitar misturar
+  // assuntos (ex: responder sobre Joy com conteúdo do MyRock).
+  const topDoc  = docNameOf(scored[0].title);
+  const sameDoc = scored.filter((r) => docNameOf(r.title) === topDoc);
+  const others  = scored.filter((r) => docNameOf(r.title) !== topDoc);
+  const selected = [...sameDoc, ...others].slice(0, topK);
+
+  log.info(
+    `RAG dept="${department}" doc-âncora="${topDoc}" → ${selected.map((r) => `"${r.title}" (${r.score.toFixed(3)})`).join(', ')}`
+  );
+
+  return selected.map((r) => `**${r.title}**\n${r.content}`);
 }
 
 // ── Conversation state ────────────────────────────────────────

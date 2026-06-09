@@ -19,7 +19,7 @@ async function requireSuperAdmin(req: NextRequest) {
   return u?.role === 'superadmin' ? u : null;
 }
 
-function chunkText(text: string, maxChars = 800, overlap = 100): string[] {
+function chunkText(text: string, maxChars = 1500, overlap = 200): string[] {
   const paragraphs = text
     .split(/\n{2,}/)
     .map((p) => p.replace(/\s+/g, ' ').trim())
