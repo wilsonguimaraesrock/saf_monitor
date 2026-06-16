@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
+import { queryOne } from '@/lib/db';
 
 const BASE_URL = process.env.CHATWOOT_BASE_URL?.replace(/\/$/, '');
 const ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID ?? '1';
@@ -11,18 +12,35 @@ function chatwootHeaders() {
   return { api_access_token: TOKEN! };
 }
 
-/** Nome do atendente logado na nossa plataforma (via JWT) */
-async function getAgentName(req: NextRequest): Promise<string | null> {
-  const token = req.cookies.get(COOKIE_NAME)?.value;
-  if (!token) return null;
-  const user = await verifyToken(token);
-  return user?.name ?? null;
+/**
+ * Resolve a identidade do atendente logado:
+ * - Se tiver token pessoal do Chatwoot → autoria nativa (usa o token dele, sem prefixo)
+ * - Senão → usa o token compartilhado e prefixa o nome na mensagem
+ */
+async function resolveAgent(req: NextRequest): Promise<{ token: string; prefixName: string | null }> {
+  const jwt = req.cookies.get(COOKIE_NAME)?.value;
+  const fallback = { token: TOKEN!, prefixName: null as string | null };
+  if (!jwt) return fallback;
+
+  const user = await verifyToken(jwt);
+  if (!user) return fallback;
+
+  const row = await queryOne<{ chatwoot_token: string | null }>(
+    'SELECT chatwoot_token FROM users WHERE id = $1',
+    [user.id]
+  );
+
+  if (row?.chatwoot_token) {
+    // Autoria nativa: mensagem é atribuída ao próprio agente no Chatwoot
+    return { token: row.chatwoot_token, prefixName: null };
+  }
+  // Sem token pessoal: token compartilhado + prefixo de nome
+  return { token: TOKEN!, prefixName: user.name };
 }
 
-/** Prefixa o nome do atendente para que apareça no Chatwoot/WhatsApp */
-function withAgentPrefix(content: string, agentName: string | null): string {
-  if (!agentName) return content;
-  return `*${agentName}:*\n${content}`;
+function withAgentPrefix(content: string, prefixName: string | null): string {
+  if (!prefixName) return content;
+  return `*${prefixName}:*\n${content}`;
 }
 
 export async function GET(
@@ -57,10 +75,11 @@ export async function POST(
 
   const { id } = await params;
   const contentType = req.headers.get('content-type') ?? '';
-  const agentName = await getAgentName(req);
+  const { token: agentToken, prefixName } = await resolveAgent(req);
+  const authHeader = { api_access_token: agentToken };
 
   let body: BodyInit;
-  let headers: Record<string, string> = chatwootHeaders();
+  let headers: Record<string, string> = authHeader;
 
   if (contentType.includes('multipart/form-data')) {
     // Attachment (image or audio) — proxy FormData directly to Chatwoot
@@ -69,7 +88,7 @@ export async function POST(
     outgoing.append('message_type', 'outgoing');
     outgoing.append('private', 'false');
     const content = incoming.get('content');
-    if (content) outgoing.append('content', withAgentPrefix(content as string, agentName));
+    if (content) outgoing.append('content', withAgentPrefix(content as string, prefixName));
     const file = incoming.get('file');
     if (!file) return NextResponse.json({ error: 'Arquivo ausente' }, { status: 400 });
     outgoing.append('attachments[]', file as Blob);
@@ -80,9 +99,9 @@ export async function POST(
     if (!json.content?.trim()) {
       return NextResponse.json({ error: 'Mensagem vazia' }, { status: 400 });
     }
-    const content = withAgentPrefix(json.content.trim(), agentName);
+    const content = withAgentPrefix(json.content.trim(), prefixName);
     body = JSON.stringify({ content, message_type: 'outgoing', private: false });
-    headers = { 'Content-Type': 'application/json', ...chatwootHeaders() };
+    headers = { 'Content-Type': 'application/json', ...authHeader };
   }
 
   const res = await fetch(

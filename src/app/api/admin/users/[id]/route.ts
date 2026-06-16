@@ -29,7 +29,7 @@ export async function PUT(
 
   const body = await req.json() as {
     email?: string; name?: string; departments?: string[]; role?: string;
-    is_active?: boolean; password?: string;
+    is_active?: boolean; password?: string; chatwootToken?: string;
   };
 
   const updates: string[] = [];
@@ -49,6 +49,9 @@ export async function PUT(
   if (body.password   !== undefined) {
     const hash = await hashPassword(body.password);
     updates.push(`password_hash = $${p++}`); values.push(hash);
+  }
+  if (body.chatwootToken !== undefined) {
+    updates.push(`chatwoot_token = $${p++}`); values.push(body.chatwootToken.trim() || null);
   }
 
   if (updates.length === 0) {

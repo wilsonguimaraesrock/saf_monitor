@@ -34,6 +34,9 @@ export async function POST(req: NextRequest) {
     )
   `);
 
+  // Token pessoal do agente no Chatwoot (autoria nativa das mensagens)
+  await execute(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chatwoot_token TEXT`);
+
   // Knowledge base articles (RAG) — separated by department
   await execute(`
     CREATE TABLE IF NOT EXISTS knowledge_base (

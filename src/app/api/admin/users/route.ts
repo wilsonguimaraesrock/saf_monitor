@@ -22,7 +22,9 @@ export async function GET(req: NextRequest) {
   const rows = await query<{
     id: number; email: string; name: string; role: string;
     departments: string[]; is_active: boolean; created_at: string;
-  }>(`SELECT id, email, name, role, departments, is_active, created_at
+    has_chatwoot_token: boolean;
+  }>(`SELECT id, email, name, role, departments, is_active, created_at,
+             (chatwoot_token IS NOT NULL AND chatwoot_token <> '') AS has_chatwoot_token
       FROM users ORDER BY created_at ASC`);
 
   return NextResponse.json({ users: rows });
@@ -35,10 +37,10 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as {
     email?: string; name?: string; password?: string;
-    role?: string; departments?: string[];
+    role?: string; departments?: string[]; chatwootToken?: string;
   };
 
-  const { email, name, password, role = 'user', departments = [] } = body;
+  const { email, name, password, role = 'user', departments = [], chatwootToken } = body;
 
   if (!email || !name || !password) {
     return NextResponse.json({ error: 'email, name e password são obrigatórios' }, { status: 400 });
@@ -52,9 +54,9 @@ export async function POST(req: NextRequest) {
 
   try {
     await execute(
-      `INSERT INTO users (email, name, password_hash, role, departments, is_active)
-       VALUES ($1, $2, $3, $4, $5, true)`,
-      [email.trim().toLowerCase(), name.trim(), hash, role, departments]
+      `INSERT INTO users (email, name, password_hash, role, departments, is_active, chatwoot_token)
+       VALUES ($1, $2, $3, $4, $5, true, $6)`,
+      [email.trim().toLowerCase(), name.trim(), hash, role, departments, chatwootToken?.trim() || null]
     );
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (err: unknown) {

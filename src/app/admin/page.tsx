@@ -37,6 +37,7 @@ interface UserRow {
   departments: string[];
   is_active: boolean;
   created_at: string;
+  has_chatwoot_token?: boolean;
 }
 
 // All unique departments from all sectors
@@ -80,6 +81,7 @@ interface UserFormData {
   password: string;
   role: 'superadmin' | 'user';
   departments: string[];
+  chatwootToken: string;
 }
 
 interface UserFormProps {
@@ -91,12 +93,14 @@ interface UserFormProps {
 
 function UserForm({ initial, isEdit, onSubmit, onClose }: UserFormProps) {
   const [form, setForm] = useState<UserFormData>({
-    name:        initial?.name        ?? '',
-    email:       initial?.email       ?? '',
-    password:    '',
-    role:        initial?.role        ?? 'user',
-    departments: initial?.departments ?? [],
+    name:          initial?.name          ?? '',
+    email:         initial?.email         ?? '',
+    password:      '',
+    role:          initial?.role          ?? 'user',
+    departments:   initial?.departments   ?? [],
+    chatwootToken: '',
   });
+  const hasToken = (initial as UserRow | undefined)?.has_chatwoot_token ?? false;
   const [saving, setSaving]   = useState(false);
   const [error,  setError]    = useState('');
 
@@ -186,6 +190,21 @@ function UserForm({ initial, isEdit, onSubmit, onClose }: UserFormProps) {
           ))}
         </div>
       </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">
+          Token Chatwoot (Access Token do agente)
+        </label>
+        <input
+          type="password"
+          className="w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-slate-100"
+          value={form.chatwootToken}
+          onChange={(e) => setForm((f) => ({ ...f, chatwootToken: e.target.value }))}
+          placeholder={hasToken ? '•••••••• (configurado — deixe em branco para manter)' : 'Cole o Access Token do Chatwoot'}
+        />
+        <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">
+          Com token, as mensagens são atribuídas nativamente a este agente no Chatwoot. Sem token, usa o prefixo de nome.
+        </p>
+      </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
       <div className="flex justify-end gap-2 pt-2">
         <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800">
@@ -226,7 +245,7 @@ export default function AdminPage() {
     setTimeout(() => setFeedback(''), 3000);
   }
 
-  async function createUser(data: { name: string; email: string; password: string; role: string; departments: string[] }) {
+  async function createUser(data: { name: string; email: string; password: string; role: string; departments: string[]; chatwootToken?: string }) {
     const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -241,7 +260,7 @@ export default function AdminPage() {
     await load();
   }
 
-  async function updateUser(id: number, data: Partial<{ email: string; name: string; departments: string[]; role: string; is_active: boolean; password: string }>) {
+  async function updateUser(id: number, data: Partial<{ email: string; name: string; departments: string[]; role: string; is_active: boolean; password: string; chatwootToken: string }>) {
     const res = await fetch(`/api/admin/users/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -436,6 +455,7 @@ export default function AdminPage() {
               departments: data.departments,
               role: data.role,
               ...(data.password ? { password: data.password } : {}),
+              ...(data.chatwootToken ? { chatwootToken: data.chatwootToken } : {}),
             })}
             onClose={() => setModal(null)}
           />
