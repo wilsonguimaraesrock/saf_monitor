@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 
 const BASE_URL = process.env.CHATWOOT_BASE_URL?.replace(/\/$/, '');
 const ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID ?? '1';
@@ -8,6 +9,20 @@ export const dynamic = 'force-dynamic';
 
 function chatwootHeaders() {
   return { api_access_token: TOKEN! };
+}
+
+/** Nome do atendente logado na nossa plataforma (via JWT) */
+async function getAgentName(req: NextRequest): Promise<string | null> {
+  const token = req.cookies.get(COOKIE_NAME)?.value;
+  if (!token) return null;
+  const user = await verifyToken(token);
+  return user?.name ?? null;
+}
+
+/** Prefixa o nome do atendente para que apareça no Chatwoot/WhatsApp */
+function withAgentPrefix(content: string, agentName: string | null): string {
+  if (!agentName) return content;
+  return `*${agentName}:*\n${content}`;
 }
 
 export async function GET(
@@ -42,6 +57,7 @@ export async function POST(
 
   const { id } = await params;
   const contentType = req.headers.get('content-type') ?? '';
+  const agentName = await getAgentName(req);
 
   let body: BodyInit;
   let headers: Record<string, string> = chatwootHeaders();
@@ -53,7 +69,7 @@ export async function POST(
     outgoing.append('message_type', 'outgoing');
     outgoing.append('private', 'false');
     const content = incoming.get('content');
-    if (content) outgoing.append('content', content as string);
+    if (content) outgoing.append('content', withAgentPrefix(content as string, agentName));
     const file = incoming.get('file');
     if (!file) return NextResponse.json({ error: 'Arquivo ausente' }, { status: 400 });
     outgoing.append('attachments[]', file as Blob);
@@ -64,7 +80,8 @@ export async function POST(
     if (!json.content?.trim()) {
       return NextResponse.json({ error: 'Mensagem vazia' }, { status: 400 });
     }
-    body = JSON.stringify({ content: json.content.trim(), message_type: 'outgoing', private: false });
+    const content = withAgentPrefix(json.content.trim(), agentName);
+    body = JSON.stringify({ content, message_type: 'outgoing', private: false });
     headers = { 'Content-Type': 'application/json', ...chatwootHeaders() };
   }
 
