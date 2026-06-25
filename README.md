@@ -14,6 +14,9 @@ Deployado em Vercel · banco PostgreSQL (Digital Ocean) · notificações via Te
 - [Integrações](#integrações)
 - [Banco de dados](#banco-de-dados)
 - [Variáveis de ambiente](#variáveis-de-ambiente)
+- [API pública v1](#api-pública-v1)
+- [Painel super admin](#painel-super-admin)
+- [Roxy — bot de IA com RAG](#roxy--bot-de-ia-com-rag)
 - [Automações](#automações)
 - [Rodando localmente](#rodando-localmente)
 - [Deploy](#deploy)
@@ -29,12 +32,14 @@ Deployado em Vercel · banco PostgreSQL (Digital Ocean) · notificações via Te
 - **Breakdown WhatsApp** — card com 3 abas por setor: **subdepartamento** (contagem + resolvidas), **assunto** (ranking de frequência) e **atendentes** (contagem + CSAT médio)
 - **Atribuição de agente inline** — dropdown diretamente na tabela de conversas abertas; ao atribuir, envia mensagem automática no WhatsApp informando o responsável ("Seu atendimento está com *[Nome]*.")
 - **Chat nativo Chatwoot** — modal de conversa completo: histórico de mensagens, envio de texto/áudio/imagem, botão Resolver, botão **Transferir** (muda o team/departamento da conversa) e link externo para o Chatwoot
+- **Autoria por atendente** — mensagens enviadas pelo dashboard são atribuídas ao atendente logado: com token Chatwoot pessoal cadastrado, usa autoria nativa; sem token, prefixa `*Nome:*` no conteúdo
+- **Roxy — bot de IA com RAG** — assistente que responde dúvidas no WhatsApp usando uma base de conhecimento por departamento (busca semântica + GPT-4o); transborda para atendente humano via palavra-chave ou quando não sabe a resposta
 - **Backlog mensal Chatwoot** — botão "Backlog do mês" na área WhatsApp exibe histórico de todas as conversas do mês com status, agente e nota CSAT; navegação por mês
 - **Resposta a SAFs pelo dashboard** — atendentes respondem tickets do dfranquias diretamente no modal de ticket, com autenticação individual (credenciais por atendente salvas em localStorage)
 - **Coleta de dados** — scraper Playwright roda via GitHub Actions a cada hora (seg–sex, 8h–20h BRT) e popula o banco
 - **Relatórios Telegram** — enviados 4×/dia via Vercel Crons e a cada hora via GitHub Actions
 - **API pública v1** — endpoints REST autenticados por `X-API-Key` para consumo externo; webhooks POST automáticos após cada scraper
-- **Painel super admin** — `/admin` para criação e gestão de usuários com autenticação individual por email/senha
+- **Painel super admin** — `/admin` com 3 abas: gestão de usuários (email/senha individual), base de conhecimento da Roxy e configuração do bot WhatsApp
 
 ### UI
 
@@ -56,12 +61,14 @@ GitHub Actions (Playwright scraper)
         ▼
   Next.js App Router (Vercel)          ←→  Chatwoot API (WhatsApp)
   ├── src/app/page.tsx                       src/integrations/chatwoot.ts
-  ├── src/app/setor/[slug]/page.tsx
+  ├── src/app/setor/[slug]/page.tsx          src/integrations/openai.ts (RAG)
   ├── src/app/setor/pd-i/page.tsx
-  ├── src/app/admin/page.tsx               ← painel super admin (gestão de usuários)
+  ├── src/app/admin/page.tsx               ← super admin (usuários, RAG, bot)
   ├── src/app/api/v1/                      ← API pública REST
+  ├── src/app/api/webhooks/chatwoot/       ← entrada do bot Roxy
   ├── src/lib/month.ts             ← parseMonthParam + ymToDateRange (UTC)
   ├── src/lib/auth.ts              ← JWT (jose) + hash de senha (bcryptjs)
+  ├── src/lib/bot.ts               ← orquestração RAG + escalada da Roxy
   ├── src/lib/webhooks.ts          ← buildSectorsPayload + dispatchWebhooks
   ├── src/repository/sectors.ts   ← queries SQL por setor
   ├── src/repository/tickets.ts   ← queries de tickets individuais
@@ -69,6 +76,7 @@ GitHub Actions (Playwright scraper)
 
 Vercel Crons  ──→  /api/cron/report  ──→  Telegram
               ──→  /api/cron/scrape  ──→  dispatchWebhooks  ──→  WEBHOOK_URL_N
+WhatsApp ──→ Chatwoot webhook ──→ /api/webhooks/chatwoot ──→ Roxy (RAG + GPT-4o)
 ```
 
 ### Camadas
@@ -78,10 +86,10 @@ Vercel Crons  ──→  /api/cron/report  ──→  Telegram
 | Scraper | `src/scraper/` + GitHub Actions | Coleta tickets do dfranquias via Playwright |
 | Engine | `src/engine/` | Classifica, normaliza e pontua tickets |
 | Repository | `src/repository/` | Queries SQL parametrizadas por setor/departamento |
-| Integrations | `src/integrations/` | Clientes Chatwoot, Telegram, WhatsApp |
-| Lib | `src/lib/` | Utilitários: `month.ts` (mês UTC), `auth.ts` (JWT + bcrypt), `webhooks.ts` (dispatch + payload), `sectors.ts` (config), `db.ts` (pool) |
+| Integrations | `src/integrations/` | Clientes Chatwoot, Telegram, WhatsApp, OpenAI (embeddings + GPT-4o) |
+| Lib | `src/lib/` | Utilitários: `month.ts` (mês UTC), `auth.ts` (JWT + bcrypt), `bot.ts` (RAG/Roxy), `webhooks.ts` (dispatch + payload), `sectors.ts` (config), `db.ts` (pool) |
 | UI | `src/app/` + `src/components/` | Server Components Next.js, renderização em tempo real |
-| API Routes | `src/app/api/` | Crons, scraper trigger, stats, API v1 pública, admin |
+| API Routes | `src/app/api/` | Crons, scraper trigger, stats, API v1 pública, admin, webhook do bot |
 
 ---
 
@@ -235,6 +243,7 @@ Tabela de conversas abertas com etiquetas coloridas (hash determinístico → co
 - Busca conversas de todos os status (open/resolved/pending/snoozed) do mês selecionado filtrando por `inbox_id` **e** `team_id` — garantindo contagem consistente com o card "X total" da landing
 - Pagina até 6 páginas × 25 por status, para quando encontra itens anteriores ao mês
 - Exibe nota CSAT por conversa (estrelas 1–5) e feedback textual quando disponível
+- CSAT buscado com paginação (até 6 páginas), filtrando por `inbox_id` **e** `team_id`; casa por `conversation_id` direto **ou** `conversation.id` aninhado (varia por versão do Chatwoot)
 - Navegação entre meses (mês atual é o limite superior)
 - Clicar em uma conversa abre o modal de chat nativo para responder
 
@@ -257,7 +266,7 @@ Tabela de conversas abertas com etiquetas coloridas (hash determinístico → co
   "created_at": 1777926417
 }
 ```
-> `rating` é numérico (1–5). O join com conversas usa `conversation_id` (campo direto, não `conversation.id`).
+> `rating` é numérico (1–5). O join com conversas usa `conversation_id` (campo direto) com fallback para `conversation.id` aninhado, pois o formato varia entre versões do Chatwoot.
 
 ### Telegram
 
@@ -279,7 +288,12 @@ PostgreSQL (Digital Ocean). Tabelas principais:
 | `saf_daily_stats` | Snapshots diários para gráfico de tendência |
 | `sector_contacts` | Chat IDs Telegram por setor |
 | `cron_runs` | Log de execuções do scraper/cron |
-| `users` | Usuários do dashboard (email, senha hash bcrypt, role, departments, is_active) |
+| `users` | Usuários do dashboard (email, senha hash bcrypt, role, departments, is_active, chatwoot_token) |
+| `knowledge_base` | Artigos da base de conhecimento da Roxy (title, content, category, department, embedding `FLOAT8[]`, is_active) |
+| `bot_settings` | Configuração do bot (key-value): `test_phone_numbers`, `enabled_departments`, `system_prompt` |
+| `bot_conversations` | Estado da conversa do bot por `chatwoot_conversation_id` (active / awaiting_escalation / escalated / resolved) |
+
+> As tabelas `users`, `knowledge_base`, `bot_settings` e `bot_conversations` são criadas/atualizadas via `POST /api/cron/migrate` (idempotente).
 
 ### SLA
 
@@ -318,7 +332,16 @@ PostgreSQL (Digital Ocean). Tabelas principais:
 |---|---|
 | `CHATWOOT_BASE_URL` | URL da instância (ex: `https://chatwoot.exemplo.com`) |
 | `CHATWOOT_ACCOUNT_ID` | ID da conta (padrão `1`) |
-| `CHATWOOT_API_TOKEN` | Token de acesso — **deve ser de um Administrador** |
+| `CHATWOOT_API_TOKEN` | Token compartilhado — **deve ser de um Administrador**; usado como fallback quando o atendente não tem token pessoal |
+| `CHATWOOT_WEBHOOK_SECRET` | (Opcional) Segredo para validar `x-chatwoot-signature` no webhook da Roxy |
+
+> Cada atendente pode ter um **Access Token pessoal do Chatwoot** cadastrado no painel admin (campo "Token Chatwoot"). Quando presente, as mensagens enviadas por ele têm autoria nativa no Chatwoot.
+
+### Bot Roxy / IA (RAG)
+
+| Variável | Descrição |
+|---|---|
+| `OPENAI_API_KEY` | Chave da OpenAI — usada para embeddings (`text-embedding-3-small`) e respostas (`gpt-4o`) |
 
 ### Telegram
 
@@ -409,21 +432,54 @@ Se `WEBHOOK_SECRET` estiver configurado, o header `X-SAF-Signature: sha256=<hmac
 
 ## Painel super admin
 
-Acessível em `/admin` — exclusivo para usuários com `role = superadmin`.
+Acessível em `/admin` — exclusivo para usuários com `role = superadmin`. Organizado em 3 abas.
 
-**Funcionalidades:**
+**Aba Usuários:**
 - Listar todos os usuários com status ativo/inativo
-- Criar usuário: email, nome, senha, função (superadmin / usuário), departamentos designados
-- Editar usuário: nome, departamentos, função
+- Criar usuário: email, nome, senha, função (superadmin / usuário), departamentos designados, token Chatwoot
+- Editar usuário: email, nome, departamentos, função, token Chatwoot
 - Alterar senha individual
 - Ativar / desativar usuário (toggle)
 - Remover usuário (com confirmação)
+
+**Aba Base de Conhecimento (RAG da Roxy):**
+- Artigos por departamento (ou `global`) com título, conteúdo e categoria
+- Criar artigo manualmente (texto) ou **importar PDF** (extraído, dividido em chunks de ~1500 chars e vetorizado automaticamente)
+- Embedding gerado via OpenAI ao salvar (`text-embedding-3-small`)
+- Filtro por departamento, toggle ativo/inativo, edição e remoção
+
+**Aba Bot WhatsApp:**
+- Toggle de ativação do bot **por departamento**
+- **Números de teste** — bot só responde a esses números (vazio = responde a todos os departamentos ativos)
+- Edição do **prompt do sistema** da Roxy
 
 **Setup inicial (uma única vez):**
 ```bash
 curl -X POST https://<seu-dominio>/api/cron/migrate \
   -H "Authorization: Bearer <CRON_SECRET>"
 ```
+
+---
+
+## Roxy — bot de IA com RAG
+
+Assistente de IA que responde dúvidas no WhatsApp usando a base de conhecimento por departamento.
+
+**Pipeline** (`src/lib/bot.ts` + `src/integrations/openai.ts`):
+1. Webhook do Chatwoot (`POST /api/webhooks/chatwoot`, evento `message_created`) recebe a mensagem `incoming`
+2. Valida número de teste e se o bot está habilitado para o departamento (mapeado por `teamId` do Chatwoot)
+3. Gera embedding da pergunta e busca por similaridade de cosseno na `knowledge_base` do departamento
+4. **Ancoragem em documento**: prioriza chunks do documento com melhor match (evita misturar assuntos), top-6 trechos
+5. GPT-4o responde usando **somente** o contexto recuperado (grounding forte; se não souber, oferece transbordo)
+6. Mostra "digitando…" enquanto processa; envia resposta + pergunta de escalada
+
+**Fluxo de escalada:**
+- 1ª interação: mensagem de boas-vindas da Roxy personalizada (nome + assunto), sem o usuário repetir a dúvida
+- Palavras-chave (`ATENDENTE`, `HUMANO`, `CONSULTOR`, `NÃO`) → transborda para o time humano no Chatwoot
+- Estado da conversa rastreado em `bot_conversations`
+
+**Configuração do webhook no Chatwoot:**
+`Settings → Integrations → Webhooks → New Webhook` → URL `https://<dominio>/api/webhooks/chatwoot` → evento `message_created`.
 
 ---
 
