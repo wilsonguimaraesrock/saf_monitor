@@ -7,6 +7,7 @@ import { ChatwootPanel } from '@/components/ChatwootPanel';
 import { ChatwootConversationTable } from '@/components/ChatwootConversationTable';
 import { ChatwootBacklogModal } from '@/components/ChatwootBacklogModal';
 import { ChatwootBreakdownCard } from '@/components/ChatwootBreakdownCard';
+import { NewMessageNotifier } from '@/components/NewMessageNotifier';
 
 const LIVE_REFRESH_MS = 30 * 1000;
 
@@ -75,10 +76,9 @@ export function SectorChatwootLiveSection({
     const refreshChatwootData = async () => {
       clearScheduledRefresh();
 
-      if (document.visibilityState === 'hidden') {
-        scheduleRefresh();
-        return;
-      }
+      // Continua buscando mesmo com a aba em segundo plano — necessário para
+      // as notificações de nova mensagem dispararem quando o atendente está
+      // em outra aba/aplicativo.
 
       abortRef.current?.abort();
       const controller = new AbortController();
@@ -177,6 +177,7 @@ export function SectorChatwootLiveSection({
           {hasPollingError ? 'Chatwoot ao vivo em reconexao' : 'Chatwoot ao vivo'}
         </span>
         <div className="flex items-center gap-3">
+          <NewMessageNotifier conversations={openConversations} sectorName={inboxName} />
           <button
             onClick={() => setBacklogOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
