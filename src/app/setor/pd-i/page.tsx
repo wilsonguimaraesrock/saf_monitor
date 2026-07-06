@@ -19,6 +19,7 @@ import { FilterCardWrapper } from '@/components/FilterCardWrapper';
 import { RefreshButton } from '@/components/RefreshButton';
 import { ScraperTriggerButton } from '@/components/ScraperTriggerButton';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
+import { UserMenu } from '@/components/UserMenu';
 import { TicketTable } from '@/components/TicketTable';
 import { TrendChart } from '@/components/TrendChart';
 import { CategoryChart } from '@/components/CategoryChart';
@@ -291,6 +292,8 @@ export default async function PdiPage(props: PageProps) {
             <DarkModeToggle />
             <ScraperTriggerButton />
             <RefreshButton />
+            <div className="w-px h-6 bg-white/20 dark:bg-slate-700" />
+            <UserMenu />
           </div>
         </div>
       </header>

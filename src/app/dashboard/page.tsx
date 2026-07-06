@@ -7,6 +7,7 @@ import { SECTORS } from '@/lib/sectors';
 import { getMonthlySectorStats, type MonthlyStats } from '@/repository/analytics';
 import { getCsatForPeriod } from '@/integrations/chatwoot';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
+import { UserMenu } from '@/components/UserMenu';
 
 export const dynamic = 'force-dynamic';
 
@@ -423,7 +424,11 @@ export default async function DashboardPage({
               </div>
             </div>
           </div>
-          <DarkModeToggle />
+          <div className="flex items-center gap-2">
+            <DarkModeToggle />
+            <div className="w-px h-6 bg-white/20 dark:bg-slate-700" />
+            <UserMenu />
+          </div>
         </div>
       </header>
 

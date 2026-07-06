@@ -10,6 +10,7 @@ import { StatCard } from '@/components/StatCard';
 import { RefreshButton } from '@/components/RefreshButton';
 import { ScraperTriggerButton } from '@/components/ScraperTriggerButton';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
+import { UserMenu } from '@/components/UserMenu';
 import { SECTORS } from '@/lib/sectors';
 import { getSectorDisplayDepartments } from '@/lib/sectors';
 import type { SectorColor } from '@/lib/sectors';
@@ -334,6 +335,8 @@ export default async function LandingPage({
             <DarkModeToggle />
             <ScraperTriggerButton />
             <RefreshButton />
+            <div className="w-px h-6 bg-white/20 dark:bg-slate-700" />
+            <UserMenu />
           </div>
         </div>
       </header>

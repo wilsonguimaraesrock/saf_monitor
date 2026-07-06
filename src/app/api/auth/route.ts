@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
-import { verifyPassword, signToken, COOKIE_NAME, COOKIE_MAX_AGE } from '@/lib/auth';
+import { verifyPassword, signToken, verifyToken, COOKIE_NAME, COOKIE_MAX_AGE } from '@/lib/auth';
+
+export const dynamic = 'force-dynamic';
+
+/** GET /api/auth — retorna o usuário logado (via JWT do cookie) */
+export async function GET(req: NextRequest) {
+  const token = req.cookies.get(COOKIE_NAME)?.value;
+  if (!token) return NextResponse.json({ user: null });
+  const user = await verifyToken(token);
+  if (!user) return NextResponse.json({ user: null });
+  return NextResponse.json({
+    user: { id: user.id, name: user.name, email: user.email, role: user.role },
+  });
+}
 
 interface DbUser {
   id: number;
