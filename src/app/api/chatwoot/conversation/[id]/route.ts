@@ -140,7 +140,9 @@ export async function POST(
     if (content) outgoing.append('content', withAgentPrefix(content as string, prefixName));
     const file = incoming.get('file');
     if (!file) return NextResponse.json({ error: 'Arquivo ausente' }, { status: 400 });
-    outgoing.append('attachments[]', file as Blob);
+    // Preserva o nome/extensão do arquivo para o Chatwoot (ex.: .pdf, .docx)
+    const fileName = file instanceof File ? file.name : 'arquivo';
+    outgoing.append('attachments[]', file as Blob, fileName);
     body = outgoing;
     // Let fetch set the correct multipart Content-Type with boundary
   } else {

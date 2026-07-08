@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   X, ExternalLink, Send, UserX, Phone, Building2, Tag,
   RefreshCw, CheckCircle, Image as ImageIcon, Mic, MicOff, ArrowLeftRight, ArrowDown,
+  Paperclip, FileText,
 } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
 
@@ -58,6 +59,26 @@ function fmtSec(s: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+// Limite de upload do Chatwoot (padrão 40 MB)
+const MAX_UPLOAD_BYTES = 40 * 1024 * 1024;
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Extrai um nome de arquivo legível da URL do anexo do Chatwoot
+function fileNameFromUrl(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    const raw = decodeURIComponent(path.split('/').filter(Boolean).pop() ?? '');
+    return raw || 'Arquivo';
+  } catch {
+    return 'Arquivo';
+  }
+}
+
 // Renderiza markdown estilo WhatsApp: *bold* _italic_ ~strike~ `code`
 function renderWhatsApp(text: string): React.ReactNode {
   const regex = /(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|`[^`\n]+`)/g;
@@ -102,9 +123,10 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
   const [transferDone, setTransferDone] = useState(false);
   const transferLoadedRef = useRef(false);
 
-  // Image
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  // Attachment (imagem ou arquivo genérico)
+  const [attachFile, setAttachFile] = useState<File | null>(null);
+  const [attachPreview, setAttachPreview] = useState<string | null>(null); // object URL — só para imagens
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Audio
@@ -169,7 +191,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     setTransferDone(false);
     setAutoScrollEnabled(true);
     transferLoadedRef.current = false;
-    clearImage();
+    clearAttachment();
     setLoading(true);
     fetchMessages(conversation.id).finally(() => setLoading(false));
   }, [conversation?.id, fetchMessages]);
@@ -199,18 +221,27 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     if (recTimerRef.current) clearInterval(recTimerRef.current);
   }
 
-  function clearImage() {
-    setImageFile(null);
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
-    setImagePreview(null);
+  function clearAttachment() {
+    setAttachFile(null);
+    if (attachPreview) URL.revokeObjectURL(attachPreview);
+    setAttachPreview(null);
+    if (imageInputRef.current) imageInputRef.current.value = '';
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
-  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  function selectAttachment(file: File) {
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setSendError(`Arquivo muito grande (máx. ${formatBytes(MAX_UPLOAD_BYTES)}).`);
+      return;
+    }
+    setSendError('');
+    setAttachFile(file);
+    setAttachPreview(file.type.startsWith('image/') ? URL.createObjectURL(file) : null);
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    if (file) selectAttachment(file);
   }
 
   async function sendAttachment(file: Blob, filename: string) {
@@ -227,7 +258,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
       });
       if (!res.ok) { setSendError('Falha ao enviar. Tente novamente.'); return; }
       setReply('');
-      clearImage();
+      clearAttachment();
       await fetchMessages(conversation.id);
     } catch {
       setSendError('Erro de conexão.');
@@ -239,8 +270,8 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
   async function handleSend() {
     if (!conversation || sending) return;
 
-    if (imageFile) {
-      await sendAttachment(imageFile, imageFile.name);
+    if (attachFile) {
+      await sendAttachment(attachFile, attachFile.name);
       return;
     }
 
@@ -362,7 +393,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     });
   }
 
-  const canSend = !sending && !recording && (!!reply.trim() || !!imageFile);
+  const canSend = !sending && !recording && (!!reply.trim() || !!attachFile);
 
   if (!conversation) return null;
 
@@ -507,7 +538,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
           )}
 
           {/* Auto-scroll control */}
-          <div className="flex items-center justify-between gap-3 px-5 py-2 border-b border-gray-100 dark:border-slate-800 shrink-0">
+          <div className="flex items-center gap-2 px-5 py-2 border-b border-gray-100 dark:border-slate-800 shrink-0">
             <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-slate-400">
               <ArrowDown size={13} />
               Auto-scroll
@@ -587,16 +618,21 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                           {att.file_type === 'audio' && (
                             <audio controls src={att.data_url} className="max-w-[240px]" />
                           )}
+                          {att.file_type === 'video' && (
+                            <video controls src={att.data_url} className="max-w-[240px] max-h-[200px]" />
+                          )}
                           {att.file_type === 'file' && (
                             <a
                               href={att.data_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className={`flex items-center gap-2 px-4 py-2.5 text-sm underline ${
+                              download
+                              className={`flex items-center gap-2 px-4 py-2.5 text-sm ${
                                 isOutgoing ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800 dark:bg-slate-800 dark:text-slate-200'
                               }`}
                             >
-                              📎 Arquivo
+                              <FileText size={15} className="shrink-0" />
+                              <span className="truncate max-w-[200px] underline">{fileNameFromUrl(att.data_url)}</span>
                             </a>
                           )}
                         </div>
@@ -629,16 +665,33 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
           {/* Reply box */}
           <div className="px-5 py-4 border-t border-gray-100 dark:border-slate-800 shrink-0">
 
-            {/* Image preview */}
-            {imagePreview && (
-              <div className="relative inline-block mb-3">
-                <img src={imagePreview} alt="preview" className="h-20 rounded-xl object-cover border border-gray-200 dark:border-slate-700" />
-                <button
-                  onClick={clearImage}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-800 text-white flex items-center justify-center"
-                >
-                  <X size={10} />
-                </button>
+            {/* Attachment preview (imagem ou chip de arquivo) */}
+            {attachFile && (
+              <div className="mb-3">
+                {attachPreview ? (
+                  <div className="relative inline-block">
+                    <img src={attachPreview} alt="preview" className="h-20 rounded-xl object-cover border border-gray-200 dark:border-slate-700" />
+                    <button
+                      onClick={clearAttachment}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-800 text-white flex items-center justify-center"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative inline-flex items-center gap-2 max-w-full pl-3 pr-8 py-2 rounded-xl
+                    bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700">
+                    <FileText size={16} className="shrink-0 text-gray-500 dark:text-slate-400" />
+                    <span className="text-sm text-gray-700 dark:text-slate-200 truncate max-w-[200px]">{attachFile.name}</span>
+                    <span className="text-xs text-gray-400 dark:text-slate-500 shrink-0">{formatBytes(attachFile.size)}</span>
+                    <button
+                      onClick={clearAttachment}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-800 text-white flex items-center justify-center"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -654,18 +707,24 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
             {sendError && <p className="text-xs text-red-500 mb-2">{sendError}</p>}
 
             <div className="flex items-end gap-2">
-              {/* Hidden file input */}
+              {/* Hidden inputs: imagem e arquivo genérico */}
               <input
-                ref={fileInputRef}
+                ref={imageInputRef}
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={handleImageSelect}
+                onChange={handleFileSelect}
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleFileSelect}
               />
 
               {/* Image button */}
               <button
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => imageInputRef.current?.click()}
                 disabled={recording || sending}
                 className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl
                   bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400
@@ -676,10 +735,23 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                 <ImageIcon size={17} />
               </button>
 
+              {/* File button */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={recording || sending}
+                className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl
+                  bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400
+                  hover:bg-gray-200 dark:hover:bg-slate-700
+                  disabled:opacity-40 transition-colors"
+                title="Enviar arquivo"
+              >
+                <Paperclip size={17} />
+              </button>
+
               {/* Mic button */}
               <button
                 onClick={handleRecordToggle}
-                disabled={sending || !!imageFile}
+                disabled={sending || !!attachFile}
                 className={`shrink-0 flex items-center justify-center w-10 h-10 rounded-xl transition-colors
                   disabled:opacity-40 ${
                     recording
@@ -701,7 +773,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                 placeholder={
                   recording
                     ? 'Gravando áudio…'
-                    : imageFile
+                    : attachFile
                     ? 'Legenda opcional… (Enter para enviar)'
                     : 'Digite sua resposta… (Enter para enviar, Shift+Enter para nova linha)'
                 }
