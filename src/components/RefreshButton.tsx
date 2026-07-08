@@ -1,35 +1,46 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { RefreshCw } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const AUTO_REFRESH_MS = 5 * 60 * 1000; // 5 minutos
 
 export function RefreshButton() {
+  const router = useRouter();
   const [loading, setLoading]         = useState(false);
   const [countdown, setCountdown]     = useState(AUTO_REFRESH_MS / 1000);
 
-  // Auto-refresh a cada 5 minutos
+  // Atualiza os dados em background (sem recarregar a página) para não
+  // perder o que o usuário estiver digitando (ex.: resposta no chat).
+  const refreshData = useCallback(() => {
+    setLoading(true);
+    router.refresh();
+    // router.refresh() não retorna promise; libera o botão após um instante.
+    setTimeout(() => setLoading(false), 1200);
+  }, [router]);
+
+  // Auto-refresh a cada 5 minutos (em background)
   useEffect(() => {
-    const refreshAt = Date.now() + AUTO_REFRESH_MS;
+    let refreshAt = Date.now() + AUTO_REFRESH_MS;
 
     const tick = setInterval(() => {
       const remaining = Math.ceil((refreshAt - Date.now()) / 1000);
       if (remaining <= 0) {
-        clearInterval(tick);
-        window.location.reload();
+        refreshData();
+        refreshAt = Date.now() + AUTO_REFRESH_MS;
+        setCountdown(AUTO_REFRESH_MS / 1000);
       } else {
         setCountdown(remaining);
       }
     }, 1000);
 
     return () => clearInterval(tick);
-  }, []);
+  }, [refreshData]);
 
   function handleRefresh() {
-    setLoading(true);
-    window.location.reload();
+    refreshData();
   }
 
   const minutes = Math.floor(countdown / 60);
