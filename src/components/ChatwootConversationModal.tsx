@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   X, ExternalLink, Send, UserX, Phone, Building2, Tag,
-  RefreshCw, CheckCircle, Image as ImageIcon, Mic, MicOff, ArrowLeftRight,
+  RefreshCw, CheckCircle, Image as ImageIcon, Mic, MicOff, ArrowLeftRight, ArrowDown,
 } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
 
@@ -91,6 +91,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
   const [sendError, setSendError] = useState('');
   const [resolving, setResolving] = useState(false);
   const [confirmResolve, setConfirmResolve] = useState(false);
+  const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
 
   // Transfer
   const [showTransfer, setShowTransfer] = useState(false);
@@ -166,6 +167,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     setSelectedTeamId('');
     setTransferError('');
     setTransferDone(false);
+    setAutoScrollEnabled(true);
     transferLoadedRef.current = false;
     clearImage();
     setLoading(true);
@@ -181,8 +183,10 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
 
   // Scroll para o fim após carregar/atualizar
   useEffect(() => {
-    if (messages.length > 0) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (autoScrollEnabled && messages.length > 0) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [autoScrollEnabled, messages]);
 
   // Cleanup stream ao desmontar
   useEffect(() => {
@@ -346,6 +350,18 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     }
   }
 
+  function toggleAutoScroll() {
+    setAutoScrollEnabled((enabled) => {
+      const next = !enabled;
+      if (next) {
+        requestAnimationFrame(() => {
+          chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        });
+      }
+      return next;
+    });
+  }
+
   const canSend = !sending && !recording && (!!reply.trim() || !!imageFile);
 
   if (!conversation) return null;
@@ -489,6 +505,32 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
               )}
             </div>
           )}
+
+          {/* Auto-scroll control */}
+          <div className="flex items-center justify-between gap-3 px-5 py-2 border-b border-gray-100 dark:border-slate-800 shrink-0">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-slate-400">
+              <ArrowDown size={13} />
+              Auto-scroll
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={autoScrollEnabled}
+              onClick={toggleAutoScroll}
+              className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${
+                autoScrollEnabled
+                  ? 'bg-blue-600'
+                  : 'bg-gray-200 dark:bg-slate-700'
+              }`}
+              title={autoScrollEnabled ? 'Desativar auto-scroll' : 'Ativar auto-scroll'}
+            >
+              <span
+                className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                  autoScrollEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-5 py-4 min-h-0">
