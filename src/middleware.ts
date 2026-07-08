@@ -28,7 +28,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/cron') ||
     pathname.startsWith('/api/health') ||
-    pathname.startsWith('/api/v1/health') ||
+    pathname.startsWith('/api/v1') ||
     pathname.startsWith('/api/webhooks') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon')
