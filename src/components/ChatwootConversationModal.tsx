@@ -505,6 +505,22 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
               <div className="space-y-3">
                 {messages.map((m) => {
                   const isOutgoing = m.message_type === 1;
+
+                  // Nota interna (ex: registro de transferência) — bloco central destacado
+                  if (m.private) {
+                    return (
+                      <div key={m.id} className="flex flex-col items-center gap-0.5 my-1">
+                        <div className="max-w-[85%] px-3 py-2 rounded-lg text-xs leading-relaxed whitespace-pre-wrap break-words text-center
+                          bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                          {renderWhatsApp(m.content)}
+                        </div>
+                        <span className="text-xs text-gray-300 dark:text-slate-700">
+                          {formatTime(m.created_at)} · nota interna
+                        </span>
+                      </div>
+                    );
+                  }
+
                   return (
                     <div
                       key={m.id}

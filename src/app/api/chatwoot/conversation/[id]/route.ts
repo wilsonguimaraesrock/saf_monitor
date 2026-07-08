@@ -12,6 +12,14 @@ function chatwootHeaders() {
   return { api_access_token: TOKEN! };
 }
 
+/** Nome do atendente logado (via JWT) — usado nas notas de transferência */
+async function getAgentName(req: NextRequest): Promise<string | null> {
+  const jwt = req.cookies.get(COOKIE_NAME)?.value;
+  if (!jwt) return null;
+  const user = await verifyToken(jwt);
+  return user?.name ?? null;
+}
+
 /**
  * Resolve a identidade do atendente logado:
  * - Se tiver token pessoal do Chatwoot → autoria nativa (usa o token dele, sem prefixo)
@@ -36,6 +44,47 @@ async function resolveAgent(req: NextRequest): Promise<{ token: string; prefixNa
   }
   // Sem token pessoal: token compartilhado + prefixo de nome
   return { token: TOKEN!, prefixName: user.name };
+}
+
+/** Nome do time atual da conversa (origem da transferência) */
+async function getCurrentTeamName(id: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}`, {
+      headers: chatwootHeaders(), cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { meta?: { team?: { name?: string } } };
+    return data?.meta?.team?.name ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Resolve o nome de um time pelo id */
+async function getTeamName(teamId: number): Promise<string | null> {
+  try {
+    const res = await fetch(`${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/teams`, {
+      headers: chatwootHeaders(), cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const teams = await res.json() as Array<{ id: number; name: string }>;
+    return teams.find((t) => t.id === teamId)?.name ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Grava uma nota interna (private) registrando a transferência no histórico */
+async function postTransferNote(id: string, from: string | null, to: string | null, agent: string | null) {
+  const origem  = from ?? 'desconhecido';
+  const destino = to   ?? 'outro departamento';
+  const porQuem = agent ? ` · por *${agent}*` : '';
+  const content = `🔀 *Transferência de atendimento*\nDe: *${origem}* → Para: *${destino}*${porQuem}`;
+  await fetch(`${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...chatwootHeaders() },
+    body: JSON.stringify({ content, message_type: 'outgoing', private: true }),
+  });
 }
 
 function withAgentPrefix(content: string, prefixName: string | null): string {
@@ -158,9 +207,19 @@ export async function PUT(
     return NextResponse.json({ error: 'teamId ou agentId obrigatório' }, { status: 400 });
   }
 
-  const payload = teamId !== undefined
+  const isTransfer = teamId !== undefined;
+  const payload = isTransfer
     ? { team_id: teamId }
     : { assignee_id: agentId ?? null };
+
+  // Captura o time de origem ANTES da transferência, para registrar no histórico
+  const [originTeam, destTeam, agentName] = isTransfer
+    ? await Promise.all([
+        getCurrentTeamName(id),
+        getTeamName(Number(teamId)),
+        getAgentName(req),
+      ])
+    : [null, null, null];
 
   const res = await fetch(
     `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}/assignments`,
@@ -173,6 +232,11 @@ export async function PUT(
 
   if (!res.ok) {
     return NextResponse.json({ error: `Erro na atribuição: ${res.status}` }, { status: res.status });
+  }
+
+  // Registra a transferência como nota interna no histórico da conversa
+  if (isTransfer) {
+    await postTransferNote(id, originTeam, destTeam, agentName);
   }
 
   return NextResponse.json(await res.json());
