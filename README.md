@@ -44,8 +44,10 @@ Deployado em Vercel · banco PostgreSQL (Digital Ocean) · notificações via Te
 ### UI
 
 - Header laranja gradiente (`from-orange-500 to-amber-500`) com logo Rockfeller branca em todas as páginas; dark mode mantém fundo slate-900
+- **Tema claro é o padrão**; o modo escuro só é aplicado quando o usuário escolhe (persistido em `localStorage`). Inicializado sem flash via script inline em `layout.tsx`
+- Nome do usuário logado + botão de logout no header (`UserMenu`); favicon da aba em `src/app/icon.png`
 - Cards de indicadores com cores sólidas em gradiente no light mode e altura uniforme (`h-full`)
-- Card "Todos" com fundo cinza gradiente no light mode
+- Cards de subdepartamento em grid de até 4 por linha
 - SLA medido a partir de 2026-05-01; exibido em todas as páginas de setor e na landing
 
 ---
@@ -95,17 +97,29 @@ WhatsApp ──→ Chatwoot webhook ──→ /api/webhooks/chatwoot ──→ R
 
 ## Setores monitorados
 
-| Slug | Nome | Departamentos (dfranquias) |
+| Slug | Nome | Departamentos |
 |---|---|---|
 | `pd-i` | PD&I | DSA JOY, MyRock, My Rock, Plataformas de Aulas, Suporte E-mails |
-| `operacoes` | Operações | Atendimento e Sistema de Gestão, Implantação, Relacionamento, Gerencia, Material Didático, Material didático, Pedidos |
+| `administrativo` | Administrativo | Adm · Turmas e Aulas, Adm · Alunos e Contratos, Adm · Materiais Didáticos, Adm · Financeiro, Adm · Outros, Relacionamento |
+| `logistica` | Logística | Logística |
+| `implantacao` | Implantação | Implantação |
 | `pedagogico` | Pedagógico | Adults 60', Pedagógico |
 | `comercial` | Comercial | Comercial |
 | `mkt` | MKT | Relacionamento |
 | `treinamentos` | Treinamentos | Rockfeller Academy |
 | `financeiro` | Financeiro | Financeiro |
 
-> Os nomes em `departments` devem ser exatamente iguais ao campo Departamento do dfranquias (case-sensitive). Configuração central em `src/lib/sectors.ts`.
+> Configuração central em `src/lib/sectors.ts`. Para PD&I e demais setores, os `departments` são valores exatos da coluna "Departamento" do dfranquias (case-sensitive).
+
+### Operações → Administrativo · Logística · Implantação (classificação por Assunto)
+
+O antigo setor **Operações** foi dividido em 3 setores. Como o dfranquias **não** possui esses departamentos, o **engine reclassifica** cada SAF de Operações com base no **Assunto (`title`)** e sobrescreve o campo `department` com um rótulo fino (o department original fica preservado em `raw_data`).
+
+- Lógica: `classifyOperationsDepartment()` em `src/engine/classifier.ts` — casa o Assunto contra listas de palavras-chave; aplicada no `src/scraper/runner.ts` a cada coleta.
+- **Administrativo** tem 5 subdepartamentos: Turmas e Aulas · Alunos e Contratos · Materiais Didáticos · Financeiro · Outros.
+- `Relacionamento` fica em Administrativo (subgrupo "Outros") **e** no MKT; `Gerência` e assuntos não mapeados caem em `Adm · Outros`.
+- **Backfill** de SAFs já existentes: `POST /api/cron/reclassify-operacoes` (protegido por `CRON_SECRET`).
+- **Diagnóstico** dos assuntos por department: `GET /api/cron/ops-assuntos?dept=...` — ajuda a afinar o mapa de palavras-chave.
 
 ---
 
@@ -135,7 +149,9 @@ WhatsApp ──→ Chatwoot webhook ──→ /api/webhooks/chatwoot ──→ R
 | Setor (slug) | Team no Chatwoot | Team ID | Inbox compartilhada |
 |---|---|---|---|
 | `pd-i` | tecnologia | 3 | WhatsApp – Rockfeller (11) |
-| `operacoes` | operações | 2 | WhatsApp – Rockfeller (11) |
+| `administrativo` | administrativo | 10 | WhatsApp – Rockfeller (11) |
+| `logistica` | logística | 9 | WhatsApp – Rockfeller (11) |
+| `implantacao` | implantação | 11 | WhatsApp – Rockfeller (11) |
 | `pedagogico` | pedagógico | 7 | WhatsApp – Rockfeller (11) |
 | `comercial` | comercial | 5 | WhatsApp – Rockfeller (11) |
 | `mkt` | marketing | 4 | WhatsApp – Rockfeller (11) |
@@ -350,14 +366,17 @@ PostgreSQL (Digital Ocean). Tabelas principais:
 | `TELEGRAM_BOT_TOKEN` | Token do bot |
 | `TELEGRAM_CHAT_ID` | Chat ID do grupo Geral |
 | `TELEGRAM_CHAT_ID_PDI` | Chat ID do grupo PD&I |
-| `TELEGRAM_CHAT_ID_OPERACOES` | Chat ID do grupo Operações |
+| `TELEGRAM_CHAT_ID_ADMINISTRATIVO` | Chat ID Administrativo (fallback → Operações) |
+| `TELEGRAM_CHAT_ID_LOGISTICA` | Chat ID Logística (fallback → Operações) |
+| `TELEGRAM_CHAT_ID_IMPLANTACAO` | Chat ID Implantação (fallback → Operações) |
+| `TELEGRAM_CHAT_ID_OPERACOES` | Chat ID do grupo Operações (fallback dos 3 acima) |
 | `TELEGRAM_CHAT_ID_PEDAGOGICO` | Chat ID Pedagógico |
 | `TELEGRAM_CHAT_ID_COMERCIAL` | Chat ID Comercial |
 | `TELEGRAM_CHAT_ID_MKT` | Chat ID MKT |
 | `TELEGRAM_CHAT_ID_TREINAMENTOS` | Chat ID Treinamentos |
 | `TELEGRAM_CHAT_ID_FINANCEIRO` | Chat ID Financeiro |
 
-> Se `TELEGRAM_CHAT_ID_OPERACOES` não estiver configurado, o código usa os grupos legados `TELEGRAM_CHAT_ID_ATENDIMENTO_ADM` e `TELEGRAM_CHAT_ID_MATERIAL_DIDATICO` como fallback.
+> Administrativo, Logística e Implantação usam seu próprio grupo se configurado; caso contrário caem no `TELEGRAM_CHAT_ID_OPERACOES`.
 
 ### Autenticação (dashboard)
 
@@ -396,7 +415,7 @@ Endpoints REST para consumo externo. Autenticação via header `X-API-Key: <SAF_
 |---|---|---|---|
 | `GET` | `/api/v1/health` | — | Status do banco; sem autenticação |
 | `GET` | `/api/v1/sectors` | ✓ | Stats + SLA + WhatsApp de todos os setores |
-| `GET` | `/api/v1/sectors/:slug` | ✓ | Setor individual (ex: `pd-i`, `operacoes`) |
+| `GET` | `/api/v1/sectors/:slug` | ✓ | Setor individual (ex: `pd-i`, `administrativo`, `logistica`) |
 | `GET` | `/api/v1/global` | ✓ | Totais consolidados de todos os setores |
 
 Todos aceitam `?month=YYYY-MM` para filtrar por mês histórico.
