@@ -45,6 +45,16 @@ function waitingLabel(waitingSinceSec: number): string {
   return `${Math.floor(diffSec / 86400)}d`;
 }
 
+function waitingTimestamp(waitingSinceSec: number): string {
+  if (!waitingSinceSec) return '';
+  return new Date(waitingSinceSec * 1000).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function waitingColor(waitingSinceSec: number): string {
   if (!waitingSinceSec) return 'text-gray-400 dark:text-slate-600';
   const diffSec = Math.floor(Date.now() / 1000) - waitingSinceSec;
@@ -192,8 +202,15 @@ export function ChatwootConversationTable({ conversations, title = 'Conversas Ab
                         </div>
                       </td>
 
-                      <td className={`px-4 py-3 text-sm tabular-nums ${waitingColor(c.waitingSinceSec)}`}>
-                        {waitingLabel(c.waitingSinceSec)}
+                      <td className="px-4 py-3 tabular-nums">
+                        <span className={`text-sm ${waitingColor(c.waitingSinceSec)}`}>
+                          {waitingLabel(c.waitingSinceSec)}
+                        </span>
+                        {c.waitingSinceSec > 0 && (
+                          <span className="block text-xs text-gray-400 dark:text-slate-500">
+                            {waitingTimestamp(c.waitingSinceSec)}
+                          </span>
+                        )}
                       </td>
 
                       {/* Agente — dropdown inline */}
