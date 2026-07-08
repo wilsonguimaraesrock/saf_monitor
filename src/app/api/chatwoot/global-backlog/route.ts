@@ -7,13 +7,15 @@ const ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID ?? '1';
 const TOKEN      = process.env.CHATWOOT_API_TOKEN;
 
 const CW_SECTORS = [
-  { slug: 'pd-i',         name: 'PD&I',          teamId: 3, inboxId: 11 },
-  { slug: 'operacoes',    name: 'Operações',      teamId: 2, inboxId: 11 },
-  { slug: 'pedagogico',   name: 'Pedagógico',     teamId: 7, inboxId: 11 },
-  { slug: 'comercial',    name: 'Comercial',      teamId: 5, inboxId: 11 },
-  { slug: 'mkt',          name: 'MKT',            teamId: 4, inboxId: 11 },
-  { slug: 'treinamentos', name: 'Treinamentos',   teamId: 8, inboxId: 11 },
-  { slug: 'financeiro',   name: 'Financeiro',     teamId: 6, inboxId: 11 },
+  { slug: 'pd-i',           name: 'PD&I',           teamId: 3,  inboxId: 11 },
+  { slug: 'administrativo', name: 'Administrativo', teamId: 10, inboxId: 11 },
+  { slug: 'logistica',      name: 'Logística',      teamId: 9,  inboxId: 11 },
+  { slug: 'implantacao',    name: 'Implantação',    teamId: 11, inboxId: 11 },
+  { slug: 'pedagogico',     name: 'Pedagógico',     teamId: 7,  inboxId: 11 },
+  { slug: 'comercial',      name: 'Comercial',      teamId: 5,  inboxId: 11 },
+  { slug: 'mkt',            name: 'MKT',            teamId: 4,  inboxId: 11 },
+  { slug: 'treinamentos',   name: 'Treinamentos',   teamId: 8,  inboxId: 11 },
+  { slug: 'financeiro',     name: 'Financeiro',     teamId: 6,  inboxId: 11 },
 ];
 
 export interface GlobalBacklogConversation {

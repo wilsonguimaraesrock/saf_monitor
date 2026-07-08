@@ -206,3 +206,79 @@ Descrição: ${(raw.description ?? '').slice(0, 300)}`;
     return localResult;
   }
 }
+
+// =======================================================
+// Classificação de OPERAÇÕES por Assunto (title)
+// Divide Operações em: Administrativo (5 subgrupos), Logística, Implantação.
+// O resultado sobrescreve o `department` do ticket (o original fica no raw_data).
+// =======================================================
+
+/** Departamentos ORIGINAIS do dfranquias que pertencem a Operações e devem ser reclassificados.
+ *  'Relacionamento' NÃO entra aqui — pertence ao MKT e é mantido intacto. */
+const OPERATIONS_SOURCE_DEPARTMENTS = new Set(
+  [
+    'Atendimento e Sistema de Gestão',
+    'Implantação',
+    'Gerencia',
+    'Gerência',
+    'Material Didático',
+    'Material didático',
+    'Pedidos',
+  ].map(normalizeText)
+);
+
+// Rótulos finos de department gerados (usados em src/lib/sectors.ts)
+export const OPS_DEPT = {
+  turmas:     'Adm · Turmas e Aulas',
+  alunos:     'Adm · Alunos e Contratos',
+  materiais:  'Adm · Materiais Didáticos',
+  financeiro: 'Adm · Financeiro',
+  outros:     'Adm · Outros',
+  logistica:  'Logística',
+  implantacao:'Implantação',
+} as const;
+
+// Assunto (title) → rótulo fino. Ordem importa (mais específico primeiro).
+const OPS_ASSUNTO_MAP: Array<{ dept: string; terms: string[] }> = [
+  { dept: OPS_DEPT.turmas, terms: [
+    'abrir sala', 'ajustar aulas', 'alterar turma', 'calendario academico',
+    'capacidade da sala', 'editar turma', 'excluir atividade', 'reabrir turma',
+    'relatorio de menores',
+  ] },
+  { dept: OPS_DEPT.alunos, terms: [
+    'cadastro do aluno', 'lista de chamada', 'renovacao de contrato',
+  ] },
+  { dept: OPS_DEPT.materiais, terms: [
+    'atualizar material', 'compra avulsa', 'estorno mat', 'historico pedagogico',
+    'material didatico', 'material nao aparece', 'material on demand',
+    'material sem compra', 'trocar material',
+  ] },
+  { dept: OPS_DEPT.financeiro, terms: [
+    'duvidas contas a receber', 'contas a receber', 'erro ao enviar boletos',
+    'boletos', 'plano de contas',
+  ] },
+  { dept: OPS_DEPT.logistica, terms: [
+    'estoque pulmao', 'livro com defeito', 'nf de patrocinador',
+    'pedido de alunos', 'pedido no dfranquias', 'outros assuntos',
+  ] },
+];
+
+/**
+ * Classifica um SAF de Operações num dos rótulos finos, com base no Assunto (title).
+ * Retorna `null` quando o ticket NÃO é de Operações (department deve ficar intacto).
+ */
+export function classifyOperationsDepartment(raw: RawTicket): string | null {
+  const origDept = normalizeText(raw.department ?? '');
+  if (!OPERATIONS_SOURCE_DEPARTMENTS.has(origDept)) return null;
+
+  // Implantação é decidida pelo departamento original (limpo)
+  if (origDept === normalizeText('Implantação')) return OPS_DEPT.implantacao;
+
+  const title = normalizeText(raw.title ?? '');
+  for (const { dept, terms } of OPS_ASSUNTO_MAP) {
+    if (terms.some((t) => title.includes(t))) return dept;
+  }
+
+  // Fallback seguro: Administrativo · Outros (inclui Gerência e assuntos não mapeados)
+  return OPS_DEPT.outros;
+}

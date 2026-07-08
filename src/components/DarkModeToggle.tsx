@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Sun, Moon } from 'lucide-react';
 
 export function DarkModeToggle() {
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
     setIsDark(document.documentElement.classList.contains('dark'));

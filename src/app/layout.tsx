@@ -13,10 +13,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
-        {/* Inicializa dark mode antes de renderizar para evitar flash */}
+        {/* Inicializa tema antes de renderizar para evitar flash.
+            Padrão = claro; só aplica dark se o usuário escolheu explicitamente. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){var t=localStorage.getItem('theme');if(t==='light'){document.documentElement.classList.remove('dark')}else{document.documentElement.classList.add('dark')}})();`,
+            __html: `(function(){var t=localStorage.getItem('theme');if(t==='dark'){document.documentElement.classList.add('dark')}else{document.documentElement.classList.remove('dark')}})();`,
           }}
         />
       </head>

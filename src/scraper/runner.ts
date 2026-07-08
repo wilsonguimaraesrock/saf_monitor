@@ -14,7 +14,7 @@
 import '../lib/env'; // carrega .env.local quando rodado via ts-node
 import { collectAllTickets, enrichTicketsInBatch } from './collector';
 import { normalizeTicket } from '../engine/normalizer';
-import { classifyCategory } from '../engine/classifier';
+import { classifyCategory, classifyOperationsDepartment } from '../engine/classifier';
 import { calculatePriorityScore } from '../engine/scorer';
 import { clusterTickets } from '../engine/clustering';
 import { upsertTicket, saveSnapshot, saveDailyStats, saveTicketUpdates, createCronRun, finishCronRun, markDisappearedTicketsResolved, getTicketsNeedingEnrichment } from '../repository/tickets';
@@ -53,6 +53,9 @@ export async function runScraper(triggeredBy = 'scheduled'): Promise<{
       try {
         const ticket = normalizeTicket(raw);
         ticket.priorityCategory = classifyCategory(raw);
+        // Reclassifica department de Operações por Assunto (Administrativo/Logística/Implantação)
+        const opsDept = classifyOperationsDepartment(raw);
+        if (opsDept) ticket.department = opsDept;
         const scoreResult = calculatePriorityScore(ticket);
         ticket.priorityScore = scoreResult.score;
 

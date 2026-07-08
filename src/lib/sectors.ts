@@ -13,6 +13,8 @@
 import {
   FlaskConical, Headphones, BookOpen, GraduationCap,
   TrendingUp, Megaphone, Award, LayoutGrid, Landmark,
+  ClipboardList, Package, Rocket, Users2, GraduationCap as CapIcon,
+  DollarSign, MoreHorizontal,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -53,18 +55,13 @@ export interface Sector {
   showCategoryBreakdown?: boolean;
 }
 
-const OPERATIONS_ADM_DEPARTMENTS = [
-  'Atendimento e Sistema de Gestão',
-  'Implantação',
-  'Relacionamento',
-  'Gerencia',
-];
-
-const OPERATIONS_MATERIAL_DEPARTMENTS = [
-  'Material Didático',
-  'Material didático',
-  'Pedidos',
-];
+// Rótulos finos de department gerados pelo classificador de Operações
+// (ver classifyOperationsDepartment em src/engine/classifier.ts).
+const ADM_TURMAS      = 'Adm · Turmas e Aulas';
+const ADM_ALUNOS      = 'Adm · Alunos e Contratos';
+const ADM_MATERIAIS   = 'Adm · Materiais Didáticos';
+const ADM_FINANCEIRO  = 'Adm · Financeiro';
+const ADM_OUTROS      = 'Adm · Outros';
 
 export const SECTORS: Sector[] = [
   {
@@ -79,29 +76,37 @@ export const SECTORS: Sector[] = [
     showCategoryBreakdown: true,
   },
   {
-    slug:   'operacoes',
-    name:   'Operações',
-    departments: [...OPERATIONS_ADM_DEPARTMENTS, ...OPERATIONS_MATERIAL_DEPARTMENTS],
-    displayDepartments: ['Atendimento ADM', 'Material Didático'],
-    icon:   Headphones,
+    slug:   'administrativo',
+    name:   'Administrativo',
+    // 'Relacionamento' é compartilhado com o MKT — mantido aqui no subgrupo "Outros"
+    departments: [ADM_TURMAS, ADM_ALUNOS, ADM_MATERIAIS, ADM_FINANCEIRO, ADM_OUTROS, 'Relacionamento'],
+    displayDepartments: ['Turmas e Aulas', 'Alunos e Contratos', 'Materiais Didáticos', 'Financeiro', 'Outros'],
+    icon:   ClipboardList,
     color:  'cyan',
     subdepartments: [
-      {
-        slug: 'atendimento-adm',
-        name: 'Atendimento ADM',
-        departments: OPERATIONS_ADM_DEPARTMENTS,
-        icon: Headphones,
-        color: 'cyan',
-      },
-      {
-        slug: 'material-didatico',
-        name: 'Material Didático',
-        departments: OPERATIONS_MATERIAL_DEPARTMENTS,
-        icon: BookOpen,
-        color: 'orange',
-      },
+      { slug: 'turmas-e-aulas',      name: 'Turmas e Aulas',      departments: [ADM_TURMAS],                   icon: CapIcon,          color: 'cyan' },
+      { slug: 'alunos-e-contratos',  name: 'Alunos e Contratos',  departments: [ADM_ALUNOS],                   icon: Users2,           color: 'purple' },
+      { slug: 'materiais-didaticos', name: 'Materiais Didáticos', departments: [ADM_MATERIAIS],                icon: BookOpen,         color: 'orange' },
+      { slug: 'financeiro',          name: 'Financeiro',          departments: [ADM_FINANCEIRO],               icon: DollarSign,       color: 'emerald' },
+      { slug: 'outros',              name: 'Outros',              departments: [ADM_OUTROS, 'Relacionamento'], icon: MoreHorizontal,   color: 'default' },
     ],
-    chatwoot: { teamId: 2, inboxId: 11, inboxName: 'WhatsApp – Rockfeller' },
+    chatwoot: { teamId: 10, inboxId: 11, inboxName: 'WhatsApp – Rockfeller' },
+  },
+  {
+    slug:   'logistica',
+    name:   'Logística',
+    departments: ['Logística'],
+    icon:   Package,
+    color:  'orange',
+    chatwoot: { teamId: 9, inboxId: 11, inboxName: 'WhatsApp – Rockfeller' },
+  },
+  {
+    slug:   'implantacao',
+    name:   'Implantação',
+    departments: ['Implantação'],
+    icon:   Rocket,
+    color:  'warning',
+    chatwoot: { teamId: 11, inboxId: 11, inboxName: 'WhatsApp – Rockfeller' },
   },
   {
     slug:   'pedagogico',
@@ -168,12 +173,10 @@ export function getSectorSubdepartment(sector: Sector, slug?: string): SectorSub
 }
 
 export function getLegacySectorRedirect(slug: string): { slug: string; subdepartment?: string } | null {
-  if (slug === 'atendimento-adm') {
-    return { slug: 'operacoes', subdepartment: 'atendimento-adm' };
-  }
-  if (slug === 'material-didatico') {
-    return { slug: 'operacoes', subdepartment: 'material-didatico' };
-  }
+  // Operações foi dividido em Administrativo / Logística / Implantação
+  if (slug === 'operacoes')          return { slug: 'administrativo' };
+  if (slug === 'atendimento-adm')    return { slug: 'administrativo' };
+  if (slug === 'material-didatico')  return { slug: 'administrativo', subdepartment: 'materiais-didaticos' };
   return null;
 }
 
@@ -187,27 +190,20 @@ export function getAllDepartments(): string[] {
  * Inclui automaticamente o chat ID do grupo "Geral" se configurado.
  */
 export function getSectorTelegramChatIds(slug: string): string[] {
-  if (slug === 'operacoes') {
-    const operationsId = process.env.TELEGRAM_CHAT_ID_OPERACOES?.trim();
-    if (operationsId) return [operationsId];
+  const opsFallback = process.env.TELEGRAM_CHAT_ID_OPERACOES?.trim();
 
-    return [...new Set(
-      [
-        process.env.TELEGRAM_CHAT_ID_ATENDIMENTO_ADM,
-        process.env.TELEGRAM_CHAT_ID_MATERIAL_DIDATICO,
-      ]
-        .map((value) => value?.trim())
-        .filter((value): value is string => !!value)
-    )];
-  }
-
+  // Os 3 setores nascidos de Operações usam o próprio grupo se configurado,
+  // senão caem no grupo legado de Operações (evita perder notificação).
   const envMap: Record<string, string | undefined> = {
-    'pd-i':          process.env.TELEGRAM_CHAT_ID_PDI,
-    'pedagogico':    process.env.TELEGRAM_CHAT_ID_PEDAGOGICO,
-    'comercial':     process.env.TELEGRAM_CHAT_ID_COMERCIAL,
-    'mkt':           process.env.TELEGRAM_CHAT_ID_MKT,
-    'treinamentos':  process.env.TELEGRAM_CHAT_ID_TREINAMENTOS,
-    'financeiro':    process.env.TELEGRAM_CHAT_ID_FINANCEIRO,
+    'pd-i':           process.env.TELEGRAM_CHAT_ID_PDI,
+    'administrativo': process.env.TELEGRAM_CHAT_ID_ADMINISTRATIVO ?? opsFallback,
+    'logistica':      process.env.TELEGRAM_CHAT_ID_LOGISTICA ?? opsFallback,
+    'implantacao':    process.env.TELEGRAM_CHAT_ID_IMPLANTACAO ?? opsFallback,
+    'pedagogico':     process.env.TELEGRAM_CHAT_ID_PEDAGOGICO,
+    'comercial':      process.env.TELEGRAM_CHAT_ID_COMERCIAL,
+    'mkt':            process.env.TELEGRAM_CHAT_ID_MKT,
+    'treinamentos':   process.env.TELEGRAM_CHAT_ID_TREINAMENTOS,
+    'financeiro':     process.env.TELEGRAM_CHAT_ID_FINANCEIRO,
   };
 
   const ids: string[] = [];

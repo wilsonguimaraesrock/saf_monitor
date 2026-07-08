@@ -7,13 +7,15 @@ import {
 import type { GlobalBacklogConversation } from '@/app/api/chatwoot/global-backlog/route';
 
 const CW_SECTOR_NAMES = [
-  { slug: 'pd-i',         name: 'PD&I' },
-  { slug: 'operacoes',    name: 'Operações' },
-  { slug: 'pedagogico',   name: 'Pedagógico' },
-  { slug: 'comercial',    name: 'Comercial' },
-  { slug: 'mkt',          name: 'MKT' },
-  { slug: 'treinamentos', name: 'Treinamentos' },
-  { slug: 'financeiro',   name: 'Financeiro' },
+  { slug: 'pd-i',           name: 'PD&I' },
+  { slug: 'administrativo', name: 'Administrativo' },
+  { slug: 'logistica',      name: 'Logística' },
+  { slug: 'implantacao',    name: 'Implantação' },
+  { slug: 'pedagogico',     name: 'Pedagógico' },
+  { slug: 'comercial',      name: 'Comercial' },
+  { slug: 'mkt',            name: 'MKT' },
+  { slug: 'treinamentos',   name: 'Treinamentos' },
+  { slug: 'financeiro',     name: 'Financeiro' },
 ];
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
