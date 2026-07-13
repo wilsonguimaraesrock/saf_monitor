@@ -138,7 +138,7 @@ export function GlobalChatwootBacklogModal({ onClose }: Props) {
 
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div
-          className="pointer-events-auto w-full max-w-7xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl
+          className="pointer-events-auto w-full max-w-[96vw] max-h-[92vh] flex flex-col rounded-2xl shadow-2xl
             bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800"
           onClick={(e) => e.stopPropagation()}
         >
@@ -296,7 +296,7 @@ export function GlobalChatwootBacklogModal({ onClose }: Props) {
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-950/80 backdrop-blur-sm">
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide w-8">#</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide w-20">Contato</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide w-36">Contato</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Escola</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Setor</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Departamento</th>
@@ -315,7 +315,7 @@ export function GlobalChatwootBacklogModal({ onClose }: Props) {
                       <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
                         <td className="px-3 py-3 text-gray-400 dark:text-slate-600 tabular-nums">{i + 1}</td>
 
-                        <td className="px-3 py-3 max-w-[5rem]">
+                        <td className="px-3 py-3 max-w-[9rem]">
                           <p className="font-medium text-gray-800 dark:text-slate-100 truncate" title={c.contactName}>{c.contactName}</p>
                           {c.contactPhone && (
                             <p className="text-xs text-gray-400 dark:text-slate-500 truncate" title={c.contactPhone}>{c.contactPhone}</p>
