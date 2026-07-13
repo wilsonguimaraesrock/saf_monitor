@@ -150,9 +150,13 @@ export async function POST(
     if (!json.content?.trim()) {
       return NextResponse.json({ error: 'Mensagem vazia' }, { status: 400 });
     }
-    const content = withAgentPrefix(json.content.trim(), prefixName);
+    // Mensagens automáticas do sistema (ex: notificação de atribuição de agente)
+    // são assinadas como "Rockfeller Franchising", não com o nome de quem clicou.
+    const content = json.asSystem
+      ? withAgentPrefix(json.content.trim(), 'Rockfeller Franchising')
+      : withAgentPrefix(json.content.trim(), prefixName);
     body = JSON.stringify({ content, message_type: 'outgoing', private: false });
-    headers = { 'Content-Type': 'application/json', ...authHeader };
+    headers = { 'Content-Type': 'application/json', ...(json.asSystem ? { api_access_token: TOKEN! } : authHeader) };
   }
 
   const res = await fetch(

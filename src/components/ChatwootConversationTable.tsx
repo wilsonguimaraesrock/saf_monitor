@@ -109,7 +109,7 @@ export function ChatwootConversationTable({ conversations, title = 'Conversas Ab
           fetch(`/api/chatwoot/conversation/${convId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: `Seu atendimento está com *${agent.name}*.` }),
+            body: JSON.stringify({ content: `Seu atendimento está com *${agent.name}*.`, asSystem: true }),
           }).catch(() => {});
         }
       }
