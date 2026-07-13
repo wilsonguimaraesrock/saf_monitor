@@ -152,28 +152,37 @@ export interface ChatwootConversation {
 export async function getOpenConversations(
   teamId: number,
   limit = 50,
-  options?: ChatwootRequestOptions
+  options?: ChatwootRequestOptions,
+  maxPages = 10
 ): Promise<ChatwootConversation[]> {
-  try {
-    const data = await chatwootFetch<{
-      data: {
-        payload: Array<{
-          id: number;
-          status: string;
-          waiting_since: number;
-          labels: string[];
-          meta: {
-            sender: { name: string; phone_number: string };
-            assignee: { id: number; name: string } | null;
-          };
-          custom_attributes: Record<string, string>;
-          last_non_activity_message: { content: string } | null;
-        }>;
-      };
-    }>(`/conversations?status=open&team_id=${teamId}&page=1`, options);
+  type RawConversation = {
+    id: number;
+    status: string;
+    waiting_since: number;
+    labels: string[];
+    meta: {
+      sender: { name: string; phone_number: string };
+      assignee: { id: number; name: string } | null;
+    };
+    custom_attributes: Record<string, string>;
+    last_non_activity_message: { content: string } | null;
+  };
 
-    const payload = data?.data?.payload ?? [];
-    return payload.slice(0, limit).map((c) => ({
+  try {
+    const all: RawConversation[] = [];
+
+    for (let page = 1; page <= maxPages; page++) {
+      const data = await chatwootFetch<{ data: { payload: RawConversation[] } }>(
+        `/conversations?status=open&team_id=${teamId}&page=${page}`,
+        options
+      );
+      const payload = data?.data?.payload ?? [];
+      if (payload.length === 0) break;
+      all.push(...payload);
+      if (all.length >= limit) break;
+    }
+
+    return all.slice(0, limit).map((c) => ({
       id: c.id,
       contactName:    c.meta?.sender?.name ?? '—',
       contactPhone:   c.meta?.sender?.phone_number ?? '',

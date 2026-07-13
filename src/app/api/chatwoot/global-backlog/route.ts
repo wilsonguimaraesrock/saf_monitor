@@ -56,7 +56,8 @@ type RawMessage = {
 
 type RawCsatResponse = {
   rating: number;
-  conversation_id: number;
+  conversation_id?: number;
+  conversation?: { id?: number };
 };
 
 async function cwFetch<T>(path: string): Promise<T> {
@@ -175,17 +176,22 @@ export async function GET(req: NextRequest) {
     const convArray = Array.from(convMap.values())
       .sort((a, b) => b.created_at - a.created_at);
 
-    // Fetch CSAT for the shared inbox (one call covers all sectors)
-    let csatMap = new Map<number, number>();
+    // Fetch CSAT for the shared inbox (one call covers all sectors) — paginate
+    // and match by conversation_id (direct field) or nested conversation.id
+    // (varies by Chatwoot version).
+    const csatMap = new Map<number, number>();
     try {
       const inboxId = CW_SECTORS[0].inboxId;
-      const csatData = await cwFetch<RawCsatResponse[]>(
-        `/csat_survey_responses?inbox_id=${inboxId}&since=${since}&page=1`
-      );
-      if (Array.isArray(csatData)) {
+      for (let page = 1; page <= 6; page++) {
+        const csatData = await cwFetch<RawCsatResponse[]>(
+          `/csat_survey_responses?inbox_id=${inboxId}&since=${since}&page=${page}`
+        );
+        if (!Array.isArray(csatData) || csatData.length === 0) break;
         for (const r of csatData) {
-          if (r.conversation_id) csatMap.set(r.conversation_id, Number(r.rating));
+          const convId = r.conversation_id ?? r.conversation?.id;
+          if (convId) csatMap.set(convId, Number(r.rating));
         }
+        if (csatData.length < 25) break; // last page
       }
     } catch { /* CSAT is optional */ }
 
