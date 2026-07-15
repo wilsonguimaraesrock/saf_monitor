@@ -102,16 +102,43 @@ export async function GET(
 
   const { id } = await params;
 
-  const res = await fetch(
-    `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}/messages`,
-    { headers: chatwootHeaders(), cache: 'no-store' }
-  );
+  // O endpoint de mensagens do Chatwoot é paginado por cursor: retorna as ~20
+  // mensagens mais recentes e exige `?before=<id da mais antiga>` para buscar a
+  // página anterior. Sem paginar, só a parte final da conversa aparece — problema
+  // que piora após uma transferência (a nota interna e as mensagens de sistema
+  // empurram o histórico real para páginas anteriores). Percorremos as páginas
+  // para trás até esgotar o histórico e devolvemos tudo em um único payload.
+  const MAX_PAGES = 50; // trava de segurança (~1000 mensagens)
+  const all: Array<{ id: number }> = [];
+  let before: number | undefined;
+  let meta: unknown;
 
-  if (!res.ok) {
-    return NextResponse.json({ error: `Chatwoot error: ${res.status}` }, { status: res.status });
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const url = new URL(
+      `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}/messages`
+    );
+    if (before !== undefined) url.searchParams.set('before', String(before));
+
+    const res = await fetch(url, { headers: chatwootHeaders(), cache: 'no-store' });
+
+    if (!res.ok) {
+      return NextResponse.json({ error: `Chatwoot error: ${res.status}` }, { status: res.status });
+    }
+
+    const data = (await res.json()) as { meta?: unknown; payload?: Array<{ id: number }> };
+    const payload = data?.payload ?? [];
+    if (page === 0) meta = data?.meta;
+    if (payload.length === 0) break;
+
+    all.push(...payload);
+
+    // Próxima página: mensagens anteriores à mais antiga desta página.
+    const oldestId = payload.reduce((min, m) => (m.id < min ? m.id : min), payload[0].id);
+    if (before !== undefined && oldestId >= before) break; // sem progresso — evita loop
+    before = oldestId;
   }
 
-  return NextResponse.json(await res.json());
+  return NextResponse.json({ meta, payload: all });
 }
 
 export async function POST(
