@@ -80,8 +80,15 @@ function fileNameFromUrl(url: string): string {
 }
 
 // Renderiza markdown estilo WhatsApp: *bold* _italic_ ~strike~ `code`
-function renderWhatsApp(text: string): React.ReactNode {
-  const regex = /(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|`[^`\n]+`)/g;
+// Linha composta só por --- / *** / ___ (regra horizontal do Markdown)
+const HR_RE = /^[ \t]*([-*_])\1{2,}[ \t]*$/;
+
+/** Formatação inline: negrito, itálico, tachado e código.
+ *  Aceita tanto o estilo WhatsApp (*negrito*, _itálico_) quanto o
+ *  Markdown padrão que atendentes e respostas prontas costumam enviar
+ *  (**negrito**, __negrito__). */
+function renderInline(text: string, keyBase: string): React.ReactNode[] {
+  const regex = /(\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|`[^`\n]+`)/g;
   const parts: React.ReactNode[] = [];
   let last = 0;
   let key = 0;
@@ -89,19 +96,44 @@ function renderWhatsApp(text: string): React.ReactNode {
   while ((match = regex.exec(text)) !== null) {
     if (match.index > last) parts.push(text.slice(last, match.index));
     const raw = match[0];
-    const inner = raw.slice(1, -1);
-    if      (raw[0] === '*') parts.push(<strong key={key++}>{inner}</strong>);
-    else if (raw[0] === '_') parts.push(<em key={key++}>{inner}</em>);
-    else if (raw[0] === '~') parts.push(<s key={key++}>{inner}</s>);
-    else parts.push(
-      <code key={key++} className="font-mono text-[0.85em] bg-black/10 dark:bg-white/10 px-1 rounded">
-        {inner}
-      </code>
-    );
+    if (raw.startsWith('**') || raw.startsWith('__')) {
+      parts.push(<strong key={`${keyBase}-${key++}`}>{raw.slice(2, -2)}</strong>);
+    } else if (raw[0] === '*') {
+      parts.push(<strong key={`${keyBase}-${key++}`}>{raw.slice(1, -1)}</strong>);
+    } else if (raw[0] === '_') {
+      parts.push(<em key={`${keyBase}-${key++}`}>{raw.slice(1, -1)}</em>);
+    } else if (raw[0] === '~') {
+      parts.push(<s key={`${keyBase}-${key++}`}>{raw.slice(1, -1)}</s>);
+    } else {
+      parts.push(
+        <code key={`${keyBase}-${key++}`} className="font-mono text-[0.85em] bg-black/10 dark:bg-white/10 px-1 rounded">
+          {raw.slice(1, -1)}
+        </code>
+      );
+    }
     last = regex.lastIndex;
   }
   if (last < text.length) parts.push(text.slice(last));
-  return <>{parts}</>;
+  return parts;
+}
+
+function renderWhatsApp(text: string): React.ReactNode {
+  // Respostas prontas às vezes chegam em Markdown "solto": remove as barras
+  // invertidas de quebra de linha ( "texto \" ) que apareceriam literalmente.
+  const cleaned = text.replace(/[ \t]*\\(?=\r?\n|$)/g, '');
+
+  const lines = cleaned.split(/\r?\n/);
+  const nodes: React.ReactNode[] = [];
+  lines.forEach((line, i) => {
+    const isHr = HR_RE.test(line);
+    if (i > 0 && !isHr) nodes.push('\n');
+    if (isHr) {
+      nodes.push(<hr key={`hr-${i}`} className="my-1.5 border-t border-current opacity-20" />);
+    } else {
+      nodes.push(...renderInline(line, `l${i}`));
+    }
+  });
+  return <>{nodes}</>;
 }
 
 export function ChatwootConversationModal({ conversation, onClose }: Props) {
