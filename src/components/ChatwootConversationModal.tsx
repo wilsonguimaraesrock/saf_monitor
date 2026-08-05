@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   X, ExternalLink, Send, UserX, Phone, Building2, Tag,
   RefreshCw, CheckCircle, Image as ImageIcon, Mic, MicOff, ArrowLeftRight, ArrowDown,
-  Paperclip, FileText,
+  Paperclip, FileText, StickyNote, Lock,
 } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
 
@@ -146,10 +146,15 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
   const [confirmResolve, setConfirmResolve] = useState(false);
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
 
+  // Nota interna: mensagem que fica no histórico da conversa mas o Chatwoot
+  // não entrega no WhatsApp — só os atendentes veem.
+  const [isNote, setIsNote] = useState(false);
+
   // Transfer
   const [showTransfer, setShowTransfer] = useState(false);
   const [teams, setTeams] = useState<Array<{ id: number; name: string }>>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string>('');
+  const [transferNote, setTransferNote] = useState('');
   const [transferring, setTransferring] = useState(false);
   const [transferError, setTransferError] = useState('');
   const [transferDone, setTransferDone] = useState(false);
@@ -219,9 +224,11 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     setConfirmResolve(false);
     setShowTransfer(false);
     setSelectedTeamId('');
+    setTransferNote('');
     setTransferError('');
     setTransferDone(false);
     setAutoScrollEnabled(true);
+    setIsNote(false);
     transferLoadedRef.current = false;
     clearAttachment();
     setLoading(true);
@@ -283,6 +290,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     try {
       const fd = new FormData();
       fd.append('file', file, filename);
+      fd.append('private', String(isNote));
       if (reply.trim()) fd.append('content', reply.trim());
       const res = await fetch(`/api/chatwoot/conversation/${conversation.id}`, {
         method: 'POST',
@@ -314,7 +322,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
       const res = await fetch(`/api/chatwoot/conversation/${conversation.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: reply.trim() }),
+        body: JSON.stringify({ content: reply.trim(), private: isNote }),
       });
       if (!res.ok) { setSendError('Falha ao enviar. Tente novamente.'); return; }
       setReply('');
@@ -380,7 +388,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
       const res = await fetch(`/api/chatwoot/conversation/${conversation.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teamId: Number(selectedTeamId) }),
+        body: JSON.stringify({ teamId: Number(selectedTeamId), note: transferNote.trim() }),
       });
       if (!res.ok) {
         setTransferError('Falha ao transferir. Tente novamente.');
@@ -388,6 +396,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
       }
       setTransferDone(true);
       setShowTransfer(false);
+      setTransferNote('');
       await fetchMessages(conversation.id);
     } catch {
       setTransferError('Erro de conexão.');
@@ -563,6 +572,25 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                   Transferir
                 </button>
               </div>
+
+              {/* Observação interna: entra como nota privada junto ao registro
+                  da transferência — o cliente não recebe nada disso. */}
+              <textarea
+                value={transferNote}
+                onChange={(e) => setTransferNote(e.target.value)}
+                rows={2}
+                placeholder="Observação para o próximo departamento (opcional) — ex.: cliente já enviou o contrato, falta validar o CNPJ"
+                className="w-full mt-3 resize-none rounded-lg px-3 py-2 text-sm
+                  bg-white dark:bg-slate-800
+                  border border-gray-200 dark:border-slate-700
+                  text-gray-800 dark:text-slate-100
+                  placeholder-gray-400 dark:placeholder-slate-600
+                  focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+              <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 mt-1.5">
+                <Lock size={11} className="shrink-0" />
+                Fica no histórico como nota interna — visível só para os atendentes, nunca para o cliente.
+              </p>
               {transferError && (
                 <p className="text-xs text-red-500 mt-2">{transferError}</p>
               )}
@@ -611,16 +639,55 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                 {messages.map((m) => {
                   const isOutgoing = m.message_type === 1;
 
-                  // Nota interna (ex: registro de transferência) — bloco central destacado
+                  // Nota interna (transferência ou recado entre atendentes) —
+                  // bloco âmbar destacado; o cliente nunca recebe isso no WhatsApp.
                   if (m.private) {
                     return (
                       <div key={m.id} className="flex flex-col items-center gap-0.5 my-1">
-                        <div className="max-w-[85%] px-3 py-2 rounded-lg text-xs leading-relaxed whitespace-pre-wrap break-words text-center
-                          bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                          {renderWhatsApp(m.content)}
+                        <div className="w-[92%] px-3 py-2 rounded-lg
+                          bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                          <div className="flex items-center gap-1.5 mb-1 text-xs font-semibold
+                            text-amber-700 dark:text-amber-400">
+                            <Lock size={10} className="shrink-0" />
+                            Nota interna · só atendentes
+                            {m.sender?.name && (
+                              <span className="font-normal opacity-75 truncate">· {m.sender.name}</span>
+                            )}
+                          </div>
+                          <div className="text-xs leading-relaxed whitespace-pre-wrap break-words
+                            text-amber-900 dark:text-amber-200">
+                            {renderWhatsApp(m.content)}
+                          </div>
+                          {m.attachments?.map((att) => (
+                            <div key={att.id} className="mt-2">
+                              {att.file_type === 'image' ? (
+                                <a href={att.data_url} target="_blank" rel="noopener noreferrer">
+                                  <img
+                                    src={att.thumb_url ?? att.data_url}
+                                    alt="imagem"
+                                    className="max-w-[200px] max-h-[160px] object-cover rounded-lg"
+                                  />
+                                </a>
+                              ) : att.file_type === 'audio' ? (
+                                <audio controls src={att.data_url} className="max-w-[240px]" />
+                              ) : (
+                                <a
+                                  href={att.data_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  download
+                                  className="inline-flex items-center gap-1.5 text-xs underline
+                                    text-amber-800 dark:text-amber-300"
+                                >
+                                  <FileText size={13} className="shrink-0" />
+                                  <span className="truncate max-w-[200px]">{fileNameFromUrl(att.data_url)}</span>
+                                </a>
+                              )}
+                            </div>
+                          ))}
                         </div>
                         <span className="text-xs text-gray-300 dark:text-slate-700">
-                          {formatTime(m.created_at)} · nota interna
+                          {formatTime(m.created_at)}
                         </span>
                       </div>
                     );
@@ -695,7 +762,45 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
           </div>
 
           {/* Reply box */}
-          <div className="px-5 py-4 border-t border-gray-100 dark:border-slate-800 shrink-0">
+          <div
+            className={`px-5 py-4 border-t shrink-0 transition-colors ${
+              isNote
+                ? 'border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20'
+                : 'border-gray-100 dark:border-slate-800'
+            }`}
+          >
+            {/* Modo de envio: resposta ao cliente x nota interna entre atendentes */}
+            <div className="flex items-center gap-1 mb-3">
+              <button
+                type="button"
+                onClick={() => setIsNote(false)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  !isNote
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Send size={11} />Responder ao cliente
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsNote(true)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  isNote
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+                }`}
+              >
+                <StickyNote size={11} />Nota interna
+              </button>
+            </div>
+
+            {isNote && (
+              <p className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 mb-3">
+                <Lock size={11} className="shrink-0" />
+                O cliente não recebe esta mensagem — ela fica no histórico só para os atendentes.
+              </p>
+            )}
 
             {/* Attachment preview (imagem ou chip de arquivo) */}
             {attachFile && (
@@ -807,31 +912,37 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                     ? 'Gravando áudio…'
                     : attachFile
                     ? 'Legenda opcional… (Enter para enviar)'
+                    : isNote
+                    ? 'Nota interna para os outros atendentes… (Enter para salvar)'
                     : 'Digite sua resposta… (Enter para enviar, Shift+Enter para nova linha)'
                 }
                 rows={2}
-                className="flex-1 resize-none rounded-xl px-4 py-2.5 text-sm
-                  bg-gray-50 dark:bg-slate-800
-                  border border-gray-200 dark:border-slate-700
-                  text-gray-800 dark:text-slate-100
+                className={`flex-1 resize-none rounded-xl px-4 py-2.5 text-sm
+                  border text-gray-800 dark:text-slate-100
                   placeholder-gray-400 dark:placeholder-slate-600
-                  focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600
-                  disabled:opacity-50 transition-colors"
+                  focus:outline-none focus:ring-2
+                  disabled:opacity-50 transition-colors ${
+                    isNote
+                      ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 focus:ring-amber-500'
+                      : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 focus:ring-blue-500 dark:focus:ring-blue-600'
+                  }`}
               />
 
               {/* Send button */}
               <button
                 onClick={handleSend}
                 disabled={!canSend}
-                className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl
-                  bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 dark:disabled:bg-slate-700
+                className={`shrink-0 flex items-center justify-center w-10 h-10 rounded-xl
+                  disabled:bg-gray-200 dark:disabled:bg-slate-700
                   text-white disabled:text-gray-400 dark:disabled:text-slate-500
-                  transition-colors"
-                title="Enviar (Enter)"
+                  transition-colors ${
+                    isNote ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                title={isNote ? 'Salvar nota interna (Enter)' : 'Enviar (Enter)'}
               >
                 {sending
                   ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : <Send size={16} />
+                  : isNote ? <StickyNote size={16} /> : <Send size={16} />
                 }
               </button>
             </div>

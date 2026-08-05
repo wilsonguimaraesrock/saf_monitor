@@ -75,11 +75,18 @@ async function getTeamName(teamId: number): Promise<string | null> {
 }
 
 /** Grava uma nota interna (private) registrando a transferência no histórico */
-async function postTransferNote(id: string, from: string | null, to: string | null, agent: string | null) {
+async function postTransferNote(
+  id: string,
+  from: string | null,
+  to: string | null,
+  agent: string | null,
+  note?: string | null
+) {
   const origem  = from ?? 'desconhecido';
   const destino = to   ?? 'outro departamento';
   const porQuem = agent ? ` · por *${agent}*` : '';
-  const content = `🔀 *Transferência de atendimento*\nDe: *${origem}* → Para: *${destino}*${porQuem}`;
+  const observacao = note?.trim() ? `\n📝 ${note.trim()}` : '';
+  const content = `🔀 *Transferência de atendimento*\nDe: *${origem}* → Para: *${destino}*${porQuem}${observacao}`;
   await fetch(`${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...chatwootHeaders() },
@@ -160,9 +167,12 @@ export async function POST(
   if (contentType.includes('multipart/form-data')) {
     // Attachment (image or audio) — proxy FormData directly to Chatwoot
     const incoming = await req.formData();
+    // `private=true` → nota interna: fica no histórico, mas o Chatwoot não
+    // entrega ao cliente no WhatsApp. Visível apenas para os atendentes.
+    const isPrivate = incoming.get('private') === 'true';
     const outgoing = new FormData();
     outgoing.append('message_type', 'outgoing');
-    outgoing.append('private', 'false');
+    outgoing.append('private', isPrivate ? 'true' : 'false');
     const content = incoming.get('content');
     if (content) outgoing.append('content', withAgentPrefix(content as string, prefixName));
     const file = incoming.get('file');
@@ -182,7 +192,9 @@ export async function POST(
     const content = json.asSystem
       ? withAgentPrefix(json.content.trim(), 'Rockfeller Franchising')
       : withAgentPrefix(json.content.trim(), prefixName);
-    body = JSON.stringify({ content, message_type: 'outgoing', private: false });
+    // Nota interna: o Chatwoot guarda no histórico mas não envia ao cliente.
+    const isPrivate = json.private === true;
+    body = JSON.stringify({ content, message_type: 'outgoing', private: isPrivate });
     headers = { 'Content-Type': 'application/json', ...(json.asSystem ? { api_access_token: TOKEN! } : authHeader) };
   }
 
@@ -234,7 +246,7 @@ export async function PUT(
 
   const { id } = await params;
   const body = await req.json();
-  const { teamId, agentId } = body;
+  const { teamId, agentId, note } = body;
 
   if (teamId === undefined && agentId === undefined) {
     return NextResponse.json({ error: 'teamId ou agentId obrigatório' }, { status: 400 });
@@ -267,9 +279,10 @@ export async function PUT(
     return NextResponse.json({ error: `Erro na atribuição: ${res.status}` }, { status: res.status });
   }
 
-  // Registra a transferência como nota interna no histórico da conversa
+  // Registra a transferência como nota interna no histórico da conversa,
+  // junto com a observação que o atendente escreveu para o próximo setor.
   if (isTransfer) {
-    await postTransferNote(id, originTeam, destTeam, agentName);
+    await postTransferNote(id, originTeam, destTeam, agentName, typeof note === 'string' ? note : null);
   }
 
   return NextResponse.json(await res.json());
