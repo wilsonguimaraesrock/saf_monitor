@@ -199,6 +199,89 @@ export async function getOpenConversations(
   }
 }
 
+export interface ChatwootConversationActivity {
+  id: number;
+  status: string;
+  contactName: string;
+  contactPhone: string;
+  unitName: string;
+  assigneeName: string | null;
+  lastMessage: string;
+  /** id da última mensagem — usado para detectar mensagem nova sem depender do texto */
+  lastMessageId: number | null;
+  /** 0 = recebida do contato, 1 = enviada pelo atendente, 2 = atividade, 3 = template */
+  lastMessageType: number | null;
+  /** epoch em segundos */
+  lastActivityAt: number;
+  chatwootUrl: string;
+}
+
+/**
+ * Página mais recente de conversas de um team, com dados da última mensagem.
+ * Usada pelo feed de novas mensagens — o Chatwoot devolve ordenado por
+ * atividade mais recente, então a primeira página basta para detectar novidades.
+ */
+export async function getConversationActivity(
+  teamId: number,
+  status: 'open' | 'pending',
+  options?: ChatwootRequestOptions
+): Promise<ChatwootConversationActivity[]> {
+  type RawMessage = {
+    id?: number;
+    content?: string | null;
+    message_type?: number;
+    created_at?: number;
+  };
+
+  type RawConversation = {
+    id: number;
+    status?: string;
+    last_activity_at?: number;
+    timestamp?: number;
+    waiting_since?: number;
+    meta?: {
+      sender?: { name?: string; phone_number?: string };
+      assignee?: { name?: string } | null;
+    };
+    custom_attributes?: Record<string, string>;
+    last_non_activity_message?: RawMessage | null;
+    messages?: RawMessage[];
+  };
+
+  try {
+    const data = await chatwootFetch<{ data: { payload: RawConversation[] } }>(
+      `/conversations?status=${status}&team_id=${teamId}&page=1`,
+      options
+    );
+
+    return (data?.data?.payload ?? []).map((c) => {
+      // Versões do Chatwoot variam: umas trazem last_non_activity_message,
+      // outras só o array messages com a última mensagem.
+      const fromArray = (c.messages ?? [])
+        .filter((m) => m.message_type !== 2)
+        .sort((a, b) => (a.created_at ?? 0) - (b.created_at ?? 0))
+        .pop();
+      const last = c.last_non_activity_message ?? fromArray ?? null;
+
+      return {
+        id: c.id,
+        status: c.status ?? status,
+        contactName: c.meta?.sender?.name ?? '—',
+        contactPhone: c.meta?.sender?.phone_number ?? '',
+        unitName: c.custom_attributes?.unitName ?? '',
+        assigneeName: c.meta?.assignee?.name ?? null,
+        lastMessage: last?.content?.trim() ?? '',
+        lastMessageId: last?.id ?? null,
+        lastMessageType: last?.message_type ?? null,
+        lastActivityAt: c.last_activity_at ?? last?.created_at ?? c.timestamp ?? 0,
+        chatwootUrl: `${BASE_URL}/app/accounts/${ACCOUNT_ID}/conversations/${c.id}`,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
 export interface ChatwootLandingStats {
   open: number;
   pending: number;

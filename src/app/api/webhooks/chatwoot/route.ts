@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { handleIncomingMessage } from '@/lib/bot';
 import { SECTORS } from '@/lib/sectors';
 import { createChildLogger } from '@/lib/logger';
+import { sendPushToAll } from '@/lib/push';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,13 @@ function normalizePhone(raw: string | undefined | null): string {
 function departmentFromTeamId(teamId: number): string {
   const sector = SECTORS.find((s) => s.chatwoot?.teamId === teamId);
   return sector?.slug ?? 'global';
+}
+
+/** Nome amigável do departamento para exibir na notificação */
+function sectorNameFromTeamId(teamId: number, fallback?: string): { slug: string | null; name: string } {
+  const sector = SECTORS.find((s) => s.chatwoot?.teamId === teamId);
+  if (sector) return { slug: sector.slug, name: sector.name };
+  return { slug: null, name: fallback?.trim() || 'Sem departamento' };
 }
 
 // Chatwoot v2/v3 payload shapes differ — handle both
@@ -114,6 +122,28 @@ async function processEvent(payload: ChatwootEvent) {
   log.info(
     `Webhook msg: conv=${conversationId} phone="${contactPhone}" team=${teamId} dept=${department} subject="${subjectName}" text="${messageText.slice(0, 60)}"`
   );
+
+  // Notificação Web Push — chega mesmo com o painel fechado. Independente do
+  // bot: uma falha aqui não pode impedir a resposta ao franqueado.
+  try {
+    const { slug, name } = sectorNameFromTeamId(teamId, payload.conversation?.meta?.team?.name);
+    const preview = messageText.replace(/\s+/g, ' ').slice(0, 160);
+    const result = await sendPushToAll({
+      title: `Nova mensagem — ${name}`,
+      body: `${contactName ?? 'Franqueado'}: ${preview}`,
+      tag: `saf-conv-${conversationId}`,
+      url: slug ? `/setor/${slug}` : '/',
+      sectorSlug: slug,
+      sectorName: name,
+      contactName: contactName ?? 'Franqueado',
+      message: preview,
+    });
+    if (result.sent || result.removed || result.failed) {
+      log.info(`Push: enviados=${result.sent} removidos=${result.removed} falhas=${result.failed}`);
+    }
+  } catch (err) {
+    log.error(`Falha ao enviar push: ${(err as Error).message}`);
+  }
 
   await handleIncomingMessage({ conversationId, contactPhone, messageText, department, teamId, contactName, subjectName });
 }

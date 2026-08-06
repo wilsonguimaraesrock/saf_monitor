@@ -10,6 +10,7 @@ import { StatCard } from '@/components/StatCard';
 import { RefreshButton } from '@/components/RefreshButton';
 import { ScraperTriggerButton } from '@/components/ScraperTriggerButton';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
+import { NotificationBell } from '@/components/NotificationBell';
 import { UserMenu } from '@/components/UserMenu';
 import { SECTORS } from '@/lib/sectors';
 import { getSectorDisplayDepartments } from '@/lib/sectors';
@@ -332,6 +333,7 @@ export default async function LandingPage({
           </div>
           <div className="flex items-center gap-2">
             <MonthPickerNav currentMonth={ym} isCurrentMonth={isCurrentMonth} />
+            <NotificationBell />
             <DarkModeToggle />
             <ScraperTriggerButton />
             <RefreshButton />

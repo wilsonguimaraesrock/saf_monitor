@@ -3,6 +3,7 @@
  * Uso: npm run db:migrate
  */
 
+import '../src/lib/env'; // carrega .env.local antes de tocar no pool
 import fs from 'fs';
 import path from 'path';
 import { getPool } from '../src/lib/db';

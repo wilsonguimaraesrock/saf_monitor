@@ -13,6 +13,7 @@ import { FilterCardWrapper } from '@/components/FilterCardWrapper';
 import { RefreshButton } from '@/components/RefreshButton';
 import { ScraperTriggerButton } from '@/components/ScraperTriggerButton';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
+import { NotificationBell } from '@/components/NotificationBell';
 import { UserMenu } from '@/components/UserMenu';
 import { TicketTable } from '@/components/TicketTable';
 import { ClusterList } from '@/components/ClusterList';
@@ -346,6 +347,7 @@ export default async function SectorPage(props: PageProps) {
           </div>
           <div className="flex items-center gap-2">
             <MonthPickerNav currentMonth={ym} isCurrentMonth={isCurrentMonth} />
+            <NotificationBell />
             <DarkModeToggle />
             <ScraperTriggerButton />
             <RefreshButton />
