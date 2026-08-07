@@ -319,9 +319,9 @@ export function GlobalNewMessageNotifier() {
 
   if (toasts.length === 0) return null;
 
-  // Topo da página, abaixo do header fixo (~60px) para não cobrir o título.
+  // Canto superior direito, abaixo do header fixo (~60px).
   return (
-    <div className="fixed top-[4.5rem] left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 w-[min(24rem,calc(100vw-1.5rem))]">
+    <div className="fixed top-[4.5rem] right-4 z-[100] flex flex-col gap-2 w-[min(24rem,calc(100vw-2rem))]">
       {toasts.map((toast) => (
         <ToastCard
           key={toast.key}
@@ -359,7 +359,7 @@ function ToastCard({
     <div
       role="status"
       aria-live="polite"
-      className="toast-in rounded-xl border border-orange-700/40 bg-gradient-to-r from-orange-600 to-amber-600
+      className="toast-in rounded-xl border border-blue-800/40 bg-gradient-to-r from-blue-600 to-blue-700
         text-white shadow-lg shadow-black/25 overflow-hidden"
     >
       <div className="flex items-start gap-2.5 p-3">
@@ -371,7 +371,7 @@ function ToastCard({
           {toast.kind === 'digest' ? (
             <>
               <p className="text-sm font-bold text-white">{toast.count} novas mensagens</p>
-              <p className="mt-0.5 text-xs font-bold text-orange-50">{toast.sectors.join(' · ')}</p>
+              <p className="mt-0.5 text-xs font-bold text-blue-50">{toast.sectors.join(' · ')}</p>
             </>
           ) : (
             <>
@@ -379,13 +379,13 @@ function ToastCard({
                 <span className="inline-block rounded-md bg-white/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                   {toast.sectorName}
                 </span>
-                <span className="text-[10px] font-bold uppercase text-orange-50/90">nova mensagem</span>
+                <span className="text-[10px] font-bold uppercase text-blue-50/90">nova mensagem</span>
               </div>
               <p className="mt-1 truncate text-sm font-bold text-white">
                 {toast.contactName}
-                {toast.unitName && <span className="font-bold text-orange-50/90"> · {toast.unitName}</span>}
+                {toast.unitName && <span className="font-bold text-blue-50/90"> · {toast.unitName}</span>}
               </p>
-              <p className="mt-0.5 line-clamp-2 text-xs font-bold text-orange-50">{toast.message}</p>
+              <p className="mt-0.5 line-clamp-2 text-xs font-bold text-blue-50">{toast.message}</p>
               <div className="mt-2 flex items-center gap-3">
                 {toast.sectorSlug && (
                   <button
@@ -400,7 +400,7 @@ function ToastCard({
                     href={toast.chatwootUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs font-bold text-orange-50/90 hover:text-white"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-blue-50/90 hover:text-white"
                   >
                     Chatwoot <ExternalLink size={11} />
                   </a>
@@ -413,7 +413,7 @@ function ToastCard({
         <button
           onClick={onDismiss}
           aria-label="Fechar aviso"
-          className="shrink-0 rounded-md p-1 text-orange-50/80 hover:bg-white/20 hover:text-white"
+          className="shrink-0 rounded-md p-1 text-blue-50/80 hover:bg-white/20 hover:text-white"
         >
           <X size={14} />
         </button>
