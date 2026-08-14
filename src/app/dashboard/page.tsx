@@ -118,23 +118,35 @@ function CsatCell({ avg, total }: { avg: number | null; total: number }) {
   );
 }
 
-function TmaCell({ sec, count }: { sec: number | null; count: number }) {
+function TmaCell({
+  sec, count, goodSec = 4 * 3600, warnSec = 24 * 3600,
+}: {
+  sec: number | null;
+  count?: number;
+  /** até aqui é verde */
+  goodSec?: number;
+  /** até aqui é âmbar; acima, vermelho */
+  warnSec?: number;
+}) {
   if (!sec) return <span className="text-gray-300 dark:text-slate-700">—</span>;
   return (
     <span className={clsx(
       'inline-flex items-center gap-1 font-bold tabular-nums text-base',
-      sec <= 4 * 3600  ? 'text-emerald-600 dark:text-emerald-400' :
-      sec <= 24 * 3600 ? 'text-amber-600 dark:text-amber-400' :
-                         'text-red-600 dark:text-red-400'
+      sec <= goodSec ? 'text-emerald-600 dark:text-emerald-400' :
+      sec <= warnSec ? 'text-amber-600 dark:text-amber-400' :
+                       'text-red-600 dark:text-red-400'
     )}>
       {fmtDuration(sec)}
-      {count > 0 && <span className="text-xs font-normal opacity-60">({count})</span>}
+      {!!count && count > 0 && <span className="text-xs font-normal opacity-60">({count})</span>}
     </span>
   );
 }
 
+// SAFs levam dias, não horas — limiares próprios
+const SAF_TMA = { goodSec: 48 * 3600, warnSec: 120 * 3600 };
+
 const TH = 'px-4 py-3 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 whitespace-nowrap';
-const TD_NUM = 'px-4 py-4 text-right tabular-nums text-base font-semibold';
+const TD_NUM = 'px-4 py-4 text-center tabular-nums text-base font-semibold';
 
 // Faixa do WhatsApp — destacada do bloco de SAFs
 const WA_ZONE  = 'bg-green-50/60 dark:bg-green-950/20';
@@ -182,9 +194,15 @@ async function DashboardContent({ month }: { month: string }) {
         aguardandoFranquia: acc.aguardandoFranquia + st.aguardandoFranquia,
         withDeadline:       acc.withDeadline + st.withDeadline,
         withinSla:          acc.withinSla + st.withinSla,
+        // ponderado pelo nº de SAFs resolvidos de cada setor
+        tmaSum:             acc.tmaSum + (st.avgResolutionSec ?? 0) * st.resolvidos,
+        tmaCount:           acc.tmaCount + (st.avgResolutionSec !== null ? st.resolvidos : 0),
       };
     },
-    { abertos: 0, resolvidos: 0, aguardandoNos: 0, aguardandoFranquia: 0, withDeadline: 0, withinSla: 0 }
+    {
+      abertos: 0, resolvidos: 0, aguardandoNos: 0, aguardandoFranquia: 0,
+      withDeadline: 0, withinSla: 0, tmaSum: 0, tmaCount: 0,
+    }
   );
 
   const resolutionRate = totals.abertos > 0
@@ -192,6 +210,9 @@ async function DashboardContent({ month }: { month: string }) {
     : null;
   const globalSla = totals.withDeadline > 0
     ? Math.round((100 * totals.withinSla) / totals.withDeadline)
+    : null;
+  const globalSafTma = totals.tmaCount > 0
+    ? Math.round(totals.tmaSum / totals.tmaCount)
     : null;
 
   // WhatsApp global — médias ponderadas pelo volume de cada setor
@@ -202,6 +223,8 @@ async function DashboardContent({ month }: { month: string }) {
   const tmaSum   = waResults.reduce((a, r) => a + (r.handling.avgResolutionSec ?? 0) * r.handling.resolutionsCount, 0);
   const tmaCount = waResults.reduce((a, r) => a + (r.handling.avgResolutionSec ? r.handling.resolutionsCount : 0), 0);
   const globalTma = tmaCount > 0 ? Math.round(tmaSum / tmaCount) : null;
+
+  const waConversations = waResults.reduce((a, r) => a + r.handling.conversationsCount, 0);
 
   return (
     <div className="space-y-8">
@@ -279,10 +302,10 @@ async function DashboardContent({ month }: { month: string }) {
             <thead>
               <tr className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-800">
                 <th rowSpan={2} className={clsx(TH, 'text-left align-bottom')}>Setor</th>
-                <th colSpan={6} className="px-4 pt-3 pb-1 text-center text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500 border-b border-gray-100 dark:border-slate-800">
+                <th colSpan={7} className="px-4 pt-3 pb-1 text-center text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500 border-b border-gray-100 dark:border-slate-800">
                   SAFs
                 </th>
-                <th colSpan={2} className={clsx(
+                <th colSpan={3} className={clsx(
                   'px-4 pt-3 pb-1 text-center text-xs font-bold uppercase tracking-widest',
                   'text-green-700 dark:text-green-400 border-b border-gray-100 dark:border-slate-800',
                   WA_ZONE, WA_EDGE
@@ -293,14 +316,16 @@ async function DashboardContent({ month }: { month: string }) {
                 </th>
               </tr>
               <tr className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-800">
-                <th className={clsx(TH, 'text-right')}>Abertos</th>
-                <th className={clsx(TH, 'text-right')}>Resolvidos</th>
-                <th className={clsx(TH, 'text-right')}>% Resolv.</th>
-                <th className={clsx(TH, 'text-right')}>Aguard. nós</th>
-                <th className={clsx(TH, 'text-right')}>Aguard. franquia</th>
-                <th className={clsx(TH, 'text-right')}>SLA</th>
-                <th className={clsx(TH, 'text-right', WA_ZONE, WA_EDGE)}>CSAT</th>
-                <th className={clsx(TH, 'text-right', WA_ZONE)}>Tempo médio atend.</th>
+                <th className={clsx(TH, 'text-center')}>Abertos</th>
+                <th className={clsx(TH, 'text-center')}>Resolvidos</th>
+                <th className={clsx(TH, 'text-center')}>% Resolv.</th>
+                <th className={clsx(TH, 'text-center')}>Aguard. nós</th>
+                <th className={clsx(TH, 'text-center')}>Aguard. franquia</th>
+                <th className={clsx(TH, 'text-center')}>SLA</th>
+                <th className={clsx(TH, 'text-center')}>Tempo médio atend.</th>
+                <th className={clsx(TH, 'text-center', WA_ZONE, WA_EDGE)}>Conversas</th>
+                <th className={clsx(TH, 'text-center', WA_ZONE)}>CSAT</th>
+                <th className={clsx(TH, 'text-center', WA_ZONE)}>Tempo médio atend.</th>
               </tr>
             </thead>
             <tbody>
@@ -345,13 +370,19 @@ async function DashboardContent({ month }: { month: string }) {
                     <td className={clsx(TD_NUM, (st?.aguardandoFranquia ?? 0) > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-300 dark:text-slate-700')}>
                       {st?.aguardandoFranquia ?? 0}
                     </td>
-                    <td className="px-4 py-4 text-right">
+                    <td className="px-4 py-4 text-center">
                       <SlaCell rate={st?.slaRate ?? null} />
                     </td>
-                    <td className={clsx('px-4 py-4 text-right', WA_ZONE, WA_EDGE)}>
+                    <td className="px-4 py-4 text-center">
+                      <TmaCell sec={st?.avgResolutionSec ?? null} {...SAF_TMA} />
+                    </td>
+                    <td className={clsx(TD_NUM, WA_ZONE, WA_EDGE, (wa?.handling.conversationsCount ?? 0) > 0 ? 'text-gray-900 dark:text-slate-100' : 'text-gray-300 dark:text-slate-700')}>
+                      {wa?.handling.conversationsCount ?? <span className="text-gray-300 dark:text-slate-700">—</span>}
+                    </td>
+                    <td className={clsx('px-4 py-4 text-center', WA_ZONE)}>
                       <CsatCell avg={wa?.csat.avg ?? null} total={wa?.csat.total ?? 0} />
                     </td>
-                    <td className={clsx('px-4 py-4 text-right', WA_ZONE)}>
+                    <td className={clsx('px-4 py-4 text-center', WA_ZONE)}>
                       <TmaCell sec={wa?.handling.avgResolutionSec ?? null} count={wa?.handling.resolutionsCount ?? 0} />
                     </td>
                   </tr>
@@ -368,13 +399,19 @@ async function DashboardContent({ month }: { month: string }) {
                 </td>
                 <td className={clsx(TD_NUM, 'text-lg text-amber-600 dark:text-amber-400')}>{totals.aguardandoNos}</td>
                 <td className={clsx(TD_NUM, 'text-lg text-orange-600 dark:text-orange-400')}>{totals.aguardandoFranquia}</td>
-                <td className="px-4 py-4 text-right">
+                <td className="px-4 py-4 text-center">
                   <SlaCell rate={globalSla} />
                 </td>
-                <td className={clsx('px-4 py-4 text-right', WA_ZONE, WA_EDGE)}>
+                <td className="px-4 py-4 text-center">
+                  <TmaCell sec={globalSafTma} {...SAF_TMA} />
+                </td>
+                <td className={clsx(TD_NUM, 'text-lg text-gray-900 dark:text-slate-100', WA_ZONE, WA_EDGE)}>
+                  {waConversations}
+                </td>
+                <td className={clsx('px-4 py-4 text-center', WA_ZONE)}>
                   <CsatCell avg={globalCsat} total={csatCount} />
                 </td>
-                <td className={clsx('px-4 py-4 text-right', WA_ZONE)}>
+                <td className={clsx('px-4 py-4 text-center', WA_ZONE)}>
                   <TmaCell sec={globalTma} count={tmaCount} />
                 </td>
               </tr>
@@ -384,7 +421,8 @@ async function DashboardContent({ month }: { month: string }) {
         <p className="mt-2 text-xs text-gray-400 dark:text-slate-500">
           Resolvidos = SAFs abertos <strong>e</strong> resolvidos dentro do mês. SAFs abertos em meses
           anteriores não entram na contagem, mesmo que resolvidos no mês filtrado.
-          Tempo médio de atendimento do WhatsApp vem do relatório do Chatwoot (abertura → resolução).
+          Tempo médio de atendimento dos SAFs = abertura → resolução em horário útil (fim de semana não conta).
+          Do lado do WhatsApp, conversas, CSAT e tempo médio vêm do relatório do Chatwoot (tempo corrido).
         </p>
       </div>
 
@@ -417,7 +455,7 @@ async function DashboardContent({ month }: { month: string }) {
               <tr className="border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/50">
                 <th className={clsx(TH, 'text-left')}>Mês</th>
                 {SECTORS.map((s) => (
-                  <th key={s.slug} className={clsx(TH, 'text-right')}>{s.name}</th>
+                  <th key={s.slug} className={clsx(TH, 'text-center')}>{s.name}</th>
                 ))}
               </tr>
             </thead>
@@ -447,7 +485,7 @@ async function DashboardContent({ month }: { month: string }) {
                       </Link>
                     </td>
                     {SECTORS.map((s) => (
-                      <td key={s.slug} className="px-4 py-3 text-right">
+                      <td key={s.slug} className="px-4 py-3 text-center">
                         <SlaCell rate={trendMap[s.slug]?.[m]?.slaRate ?? null} />
                       </td>
                     ))}
@@ -483,9 +521,9 @@ function HistoryTable({
             <tr className="border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/50">
               <th className={clsx(TH, 'text-left')}>Mês</th>
               {SECTORS.map((s) => (
-                <th key={s.slug} className={clsx(TH, 'text-right')}>{s.name}</th>
+                <th key={s.slug} className={clsx(TH, 'text-center')}>{s.name}</th>
               ))}
-              <th className={clsx(TH, 'text-right')}>Total</th>
+              <th className={clsx(TH, 'text-center')}>Total</th>
             </tr>
           </thead>
           <tbody>
@@ -521,12 +559,12 @@ function HistoryTable({
                     const st = trendMap[s.slug]?.[m];
                     const v  = st ? pick(st) : 0;
                     return (
-                      <td key={s.slug} className="px-4 py-3 text-right tabular-nums text-base text-gray-700 dark:text-slate-300">
+                      <td key={s.slug} className="px-4 py-3 text-center tabular-nums text-base text-gray-700 dark:text-slate-300">
                         {v > 0 ? v : <span className="text-gray-200 dark:text-slate-800">—</span>}
                       </td>
                     );
                   })}
-                  <td className="px-4 py-3 text-right tabular-nums text-base font-bold text-gray-900 dark:text-slate-100">
+                  <td className="px-4 py-3 text-center tabular-nums text-base font-bold text-gray-900 dark:text-slate-100">
                     {rowTotal > 0 ? rowTotal : <span className="text-gray-200 dark:text-slate-800">—</span>}
                   </td>
                 </tr>

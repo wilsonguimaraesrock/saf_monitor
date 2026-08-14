@@ -1,5 +1,6 @@
 import { query } from '../lib/db';
 import { SECTORS } from '../lib/sectors';
+import { businessElapsedSeconds } from '../lib/businessTime';
 
 // Um departamento pode pertencer a mais de um setor (ex: "Relacionamento" → Operações e MKT)
 const DEPT_TO_SECTORS = new Map<string, string[]>();
@@ -25,6 +26,8 @@ export interface MonthlyStats {
   /** Desses, quantos foram resolvidos dentro do prazo */
   withinSla: number;
   slaRate: number | null;
+  /** Tempo médio de atendimento (abertura → resolução) em segundos úteis */
+  avgResolutionSec: number | null;
 }
 
 /**
@@ -85,9 +88,32 @@ export async function getMonthlySectorStats(monthsBack = 12): Promise<MonthlySta
     [monthsBack, SLA_START]
   );
 
+  // Tempo de atendimento é calculado em horário útil (sem fim de semana),
+  // então vem cru do banco e é agregado aqui.
+  const resolvedRows = await query<{
+    month: string;
+    department: string;
+    opened_at: Date;
+    resolved_at: Date;
+  }>(
+    `SELECT
+       TO_CHAR(DATE_TRUNC('month', opened_at), 'YYYY-MM') AS month,
+       department,
+       opened_at,
+       resolved_at
+     FROM saf_tickets
+     WHERE opened_at >= DATE_TRUNC('month', NOW()) - ${interval}
+       AND department IS NOT NULL
+       AND status = 'resolvido'
+       AND resolved_at IS NOT NULL
+       AND resolved_at < DATE_TRUNC('month', opened_at) + INTERVAL '1 month'`,
+    [monthsBack]
+  );
+
   const map = new Map<string, {
     abertos: number; resolvidos: number; aguardandoNos: number;
     aguardandoFranquia: number; withDeadline: number; withinSla: number;
+    resolutionSecSum: number; resolutionSecCount: number;
   }>();
 
   const ensure = (month: string, slug: string) => {
@@ -96,6 +122,7 @@ export async function getMonthlySectorStats(monthsBack = 12): Promise<MonthlySta
       map.set(k, {
         abertos: 0, resolvidos: 0, aguardandoNos: 0,
         aguardandoFranquia: 0, withDeadline: 0, withinSla: 0,
+        resolutionSecSum: 0, resolutionSecCount: 0,
       });
     }
     return map.get(k)!;
@@ -113,6 +140,17 @@ export async function getMonthlySectorStats(monthsBack = 12): Promise<MonthlySta
     }
   }
 
+  for (const row of resolvedRows) {
+    const openedSec   = Math.floor(new Date(row.opened_at).getTime() / 1000);
+    const resolvedSec = Math.floor(new Date(row.resolved_at).getTime() / 1000);
+    const sec = businessElapsedSeconds(openedSec, resolvedSec);
+    for (const slug of DEPT_TO_SECTORS.get(row.department) ?? []) {
+      const e = ensure(row.month, slug);
+      e.resolutionSecSum   += sec;
+      e.resolutionSecCount += 1;
+    }
+  }
+
   const result: MonthlyStats[] = [];
   for (const [k, v] of map) {
     const [month, sectorSlug] = k.split('|');
@@ -127,6 +165,9 @@ export async function getMonthlySectorStats(monthsBack = 12): Promise<MonthlySta
       withinSla:          v.withinSla,
       slaRate:    v.withDeadline > 0
         ? Math.round(100 * v.withinSla / v.withDeadline)
+        : null,
+      avgResolutionSec: v.resolutionSecCount > 0
+        ? Math.round(v.resolutionSecSum / v.resolutionSecCount)
         : null,
     });
   }

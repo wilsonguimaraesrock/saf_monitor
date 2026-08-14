@@ -463,6 +463,8 @@ export interface ChatwootHandlingStats {
   avgFirstResponseSec: number | null;
   /** Conversas resolvidas no período */
   resolutionsCount: number;
+  /** Conversas abertas no período */
+  conversationsCount: number;
 }
 
 /**
@@ -478,12 +480,14 @@ export async function getWhatsappHandlingStats(
     avgResolutionSec: null,
     avgFirstResponseSec: null,
     resolutionsCount: 0,
+    conversationsCount: 0,
   };
   try {
     const data = await chatwootFetchV2<{
       avg_resolution_time?: number | string | null;
       avg_first_response_time?: number | string | null;
       resolutions_count?: number | null;
+      conversations_count?: number | null;
     }>(
       `/reports/summary?type=team&id=${teamId}&since=${since}&until=${until}`,
       { cache: 'no-store' }
@@ -498,6 +502,7 @@ export async function getWhatsappHandlingStats(
       avgResolutionSec:    num(data?.avg_resolution_time),
       avgFirstResponseSec: num(data?.avg_first_response_time),
       resolutionsCount:    Number(data?.resolutions_count ?? 0),
+      conversationsCount:  Number(data?.conversations_count ?? 0),
     };
   } catch {
     return empty;
