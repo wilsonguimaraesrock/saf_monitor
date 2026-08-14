@@ -92,7 +92,7 @@ function SlaCell({ rate }: { rate: number | null }) {
   if (rate === null) return <span className="text-gray-300 dark:text-slate-700">—</span>;
   return (
     <span className={clsx(
-      'font-bold tabular-nums text-base',
+      'font-bold tabular-nums text-lg',
       rate >= 80 ? 'text-emerald-600 dark:text-emerald-400' :
       rate >= 60 ? 'text-amber-600 dark:text-amber-400' :
                   'text-red-600 dark:text-red-400'
@@ -106,14 +106,14 @@ function CsatCell({ avg, total }: { avg: number | null; total: number }) {
   if (avg === null) return <span className="text-gray-300 dark:text-slate-700">—</span>;
   return (
     <span className={clsx(
-      'inline-flex items-center gap-1 font-bold tabular-nums text-base',
+      'inline-flex items-center gap-1 font-bold tabular-nums text-lg',
       avg >= 4 ? 'text-emerald-600 dark:text-emerald-400' :
       avg >= 3 ? 'text-amber-600 dark:text-amber-400' :
                  'text-red-600 dark:text-red-400'
     )}>
-      <Star size={13} className="fill-current" />
+      <Star size={15} className="fill-current" />
       {avg}
-      <span className="text-xs font-normal opacity-60">({total})</span>
+      <span className="text-sm font-normal opacity-60">({total})</span>
     </span>
   );
 }
@@ -131,13 +131,13 @@ function TmaCell({
   if (!sec) return <span className="text-gray-300 dark:text-slate-700">—</span>;
   return (
     <span className={clsx(
-      'inline-flex items-center gap-1 font-bold tabular-nums text-base',
+      'inline-flex items-center gap-1 font-bold tabular-nums text-lg',
       sec <= goodSec ? 'text-emerald-600 dark:text-emerald-400' :
       sec <= warnSec ? 'text-amber-600 dark:text-amber-400' :
                        'text-red-600 dark:text-red-400'
     )}>
       {fmtDuration(sec)}
-      {!!count && count > 0 && <span className="text-xs font-normal opacity-60">({count})</span>}
+      {!!count && count > 0 && <span className="text-sm font-normal opacity-60">({count})</span>}
     </span>
   );
 }
@@ -145,8 +145,8 @@ function TmaCell({
 // SAFs levam dias, não horas — limiares próprios
 const SAF_TMA = { goodSec: 48 * 3600, warnSec: 120 * 3600 };
 
-const TH = 'px-4 py-3 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 whitespace-nowrap';
-const TD_NUM = 'px-4 py-4 text-center tabular-nums text-base font-semibold';
+const TH = 'px-3 py-3 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 whitespace-nowrap';
+const TD_NUM = 'px-3 py-4 text-center tabular-nums text-lg font-semibold';
 
 // Faixa do WhatsApp — destacada do bloco de SAFs
 const WA_ZONE  = 'bg-green-50/60 dark:bg-green-950/20';
@@ -322,10 +322,10 @@ async function DashboardContent({ month }: { month: string }) {
                 <th className={clsx(TH, 'text-center')}>Aguard. nós</th>
                 <th className={clsx(TH, 'text-center')}>Aguard. franquia</th>
                 <th className={clsx(TH, 'text-center')}>SLA</th>
-                <th className={clsx(TH, 'text-center')}>Tempo médio atend.</th>
+                <th className={clsx(TH, 'text-center')}>Tempo médio</th>
                 <th className={clsx(TH, 'text-center', WA_ZONE, WA_EDGE)}>Conversas</th>
                 <th className={clsx(TH, 'text-center', WA_ZONE)}>CSAT</th>
-                <th className={clsx(TH, 'text-center', WA_ZONE)}>Tempo médio atend.</th>
+                <th className={clsx(TH, 'text-center', WA_ZONE)}>Tempo médio</th>
               </tr>
             </thead>
             <tbody>
@@ -370,19 +370,19 @@ async function DashboardContent({ month }: { month: string }) {
                     <td className={clsx(TD_NUM, (st?.aguardandoFranquia ?? 0) > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-300 dark:text-slate-700')}>
                       {st?.aguardandoFranquia ?? 0}
                     </td>
-                    <td className="px-4 py-4 text-center">
+                    <td className="px-3 py-4 text-center">
                       <SlaCell rate={st?.slaRate ?? null} />
                     </td>
-                    <td className="px-4 py-4 text-center">
+                    <td className="px-3 py-4 text-center">
                       <TmaCell sec={st?.avgResolutionSec ?? null} {...SAF_TMA} />
                     </td>
                     <td className={clsx(TD_NUM, WA_ZONE, WA_EDGE, (wa?.handling.conversationsCount ?? 0) > 0 ? 'text-gray-900 dark:text-slate-100' : 'text-gray-300 dark:text-slate-700')}>
                       {wa?.handling.conversationsCount ?? <span className="text-gray-300 dark:text-slate-700">—</span>}
                     </td>
-                    <td className={clsx('px-4 py-4 text-center', WA_ZONE)}>
+                    <td className={clsx('px-3 py-4 text-center', WA_ZONE)}>
                       <CsatCell avg={wa?.csat.avg ?? null} total={wa?.csat.total ?? 0} />
                     </td>
-                    <td className={clsx('px-4 py-4 text-center', WA_ZONE)}>
+                    <td className={clsx('px-3 py-4 text-center', WA_ZONE)}>
                       <TmaCell sec={wa?.handling.avgResolutionSec ?? null} count={wa?.handling.resolutionsCount ?? 0} />
                     </td>
                   </tr>
@@ -392,26 +392,26 @@ async function DashboardContent({ month }: { month: string }) {
             <tfoot>
               <tr className="border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">
                 <td className="px-4 py-4 text-sm font-bold uppercase tracking-wide text-gray-500 dark:text-slate-400">Total</td>
-                <td className={clsx(TD_NUM, 'text-lg text-gray-900 dark:text-slate-100')}>{totals.abertos}</td>
-                <td className={clsx(TD_NUM, 'text-lg text-emerald-600 dark:text-emerald-400')}>{totals.resolvidos}</td>
-                <td className={clsx(TD_NUM, 'text-lg text-gray-600 dark:text-slate-300')}>
+                <td className={clsx(TD_NUM, 'text-xl text-gray-900 dark:text-slate-100')}>{totals.abertos}</td>
+                <td className={clsx(TD_NUM, 'text-xl text-emerald-600 dark:text-emerald-400')}>{totals.resolvidos}</td>
+                <td className={clsx(TD_NUM, 'text-xl text-gray-600 dark:text-slate-300')}>
                   {resolutionRate !== null ? `${resolutionRate}%` : '—'}
                 </td>
-                <td className={clsx(TD_NUM, 'text-lg text-amber-600 dark:text-amber-400')}>{totals.aguardandoNos}</td>
-                <td className={clsx(TD_NUM, 'text-lg text-orange-600 dark:text-orange-400')}>{totals.aguardandoFranquia}</td>
-                <td className="px-4 py-4 text-center">
+                <td className={clsx(TD_NUM, 'text-xl text-amber-600 dark:text-amber-400')}>{totals.aguardandoNos}</td>
+                <td className={clsx(TD_NUM, 'text-xl text-orange-600 dark:text-orange-400')}>{totals.aguardandoFranquia}</td>
+                <td className="px-3 py-4 text-center">
                   <SlaCell rate={globalSla} />
                 </td>
-                <td className="px-4 py-4 text-center">
+                <td className="px-3 py-4 text-center">
                   <TmaCell sec={globalSafTma} {...SAF_TMA} />
                 </td>
-                <td className={clsx(TD_NUM, 'text-lg text-gray-900 dark:text-slate-100', WA_ZONE, WA_EDGE)}>
+                <td className={clsx(TD_NUM, 'text-xl text-gray-900 dark:text-slate-100', WA_ZONE, WA_EDGE)}>
                   {waConversations}
                 </td>
-                <td className={clsx('px-4 py-4 text-center', WA_ZONE)}>
+                <td className={clsx('px-3 py-4 text-center', WA_ZONE)}>
                   <CsatCell avg={globalCsat} total={csatCount} />
                 </td>
-                <td className={clsx('px-4 py-4 text-center', WA_ZONE)}>
+                <td className={clsx('px-3 py-4 text-center', WA_ZONE)}>
                   <TmaCell sec={globalTma} count={tmaCount} />
                 </td>
               </tr>
@@ -559,12 +559,12 @@ function HistoryTable({
                     const st = trendMap[s.slug]?.[m];
                     const v  = st ? pick(st) : 0;
                     return (
-                      <td key={s.slug} className="px-4 py-3 text-center tabular-nums text-base text-gray-700 dark:text-slate-300">
+                      <td key={s.slug} className="px-4 py-3 text-center tabular-nums text-lg text-gray-700 dark:text-slate-300">
                         {v > 0 ? v : <span className="text-gray-200 dark:text-slate-800">—</span>}
                       </td>
                     );
                   })}
-                  <td className="px-4 py-3 text-center tabular-nums text-base font-bold text-gray-900 dark:text-slate-100">
+                  <td className="px-4 py-3 text-center tabular-nums text-lg font-bold text-gray-900 dark:text-slate-100">
                     {rowTotal > 0 ? rowTotal : <span className="text-gray-200 dark:text-slate-800">—</span>}
                   </td>
                 </tr>
