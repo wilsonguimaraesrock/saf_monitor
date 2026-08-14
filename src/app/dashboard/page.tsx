@@ -70,19 +70,19 @@ function Kpi({
 }) {
   const t = KPI_TONES[tone];
   return (
-    <div className="relative rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden p-5">
+    <div className="relative rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden px-3.5 py-3">
       <div className={clsx('absolute top-0 left-0 right-0 h-1', t.bar)} />
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 leading-tight">
+      <div className="flex items-start justify-between gap-1.5">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 leading-tight">
           {label}
         </p>
-        <Icon size={20} strokeWidth={1.75} className={clsx('shrink-0', t.icon)} />
+        <Icon size={15} strokeWidth={1.75} className={clsx('shrink-0 mt-0.5', t.icon)} />
       </div>
-      <p className={clsx('mt-3 text-5xl font-bold tabular-nums leading-none', t.value)}>
+      <p className={clsx('mt-1.5 text-3xl font-bold tabular-nums leading-none', t.value)}>
         {value}
       </p>
       {sub && (
-        <p className="mt-2 text-sm text-gray-400 dark:text-slate-500 truncate">{sub}</p>
+        <p className="mt-1.5 text-[11px] text-gray-400 dark:text-slate-500 truncate">{sub}</p>
       )}
     </div>
   );
@@ -135,6 +135,10 @@ function TmaCell({ sec, count }: { sec: number | null; count: number }) {
 
 const TH = 'px-4 py-3 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 whitespace-nowrap';
 const TD_NUM = 'px-4 py-4 text-right tabular-nums text-base font-semibold';
+
+// Faixa do WhatsApp — destacada do bloco de SAFs
+const WA_ZONE  = 'bg-green-50/60 dark:bg-green-950/20';
+const WA_EDGE  = 'border-l-2 border-green-300 dark:border-green-800/70';
 
 async function DashboardContent({ month }: { month: string }) {
   const { since, until } = monthBounds(month);
@@ -231,33 +235,37 @@ async function DashboardContent({ month }: { month: string }) {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          <Kpi label="SAFs abertos"  value={totals.abertos}    icon={Inbox}         tone="slate"
-               sub="abertos no mês" />
-          <Kpi label="Resolvidos"    value={totals.resolvidos} icon={CircleCheckBig} tone="emerald"
-               sub="abertos e resolvidos no mês" />
-          <Kpi label="% resolvidos"  value={resolutionRate !== null ? `${resolutionRate}%` : '—'} icon={BarChart3} tone="blue"
-               sub="do que abriu no mês" />
-          <Kpi label="Aguard. nossa resp." value={totals.aguardandoNos} icon={Clock} tone="amber"
-               sub="pendente conosco" />
-          <Kpi label="Aguard. franquia"    value={totals.aguardandoFranquia} icon={Building2} tone="orange"
-               sub="pendente com a franquia" />
-          <Kpi label="SLA no prazo" value={globalSla !== null ? `${globalSla}%` : '—'} icon={ShieldCheck} tone="violet"
-               sub="resolvidos dentro do prazo" />
-        </div>
+        <div className="flex flex-wrap items-stretch gap-3">
+          {/* SAFs */}
+          <div className="flex-[6] min-w-[560px] grid grid-cols-3 xl:grid-cols-6 gap-3">
+            <Kpi label="SAFs abertos"  value={totals.abertos}    icon={Inbox}         tone="slate"
+                 sub="abertos no mês" />
+            <Kpi label="Resolvidos"    value={totals.resolvidos} icon={CircleCheckBig} tone="emerald"
+                 sub="resolvidos no mês" />
+            <Kpi label="% resolvidos"  value={resolutionRate !== null ? `${resolutionRate}%` : '—'} icon={BarChart3} tone="blue"
+                 sub="do que abriu no mês" />
+            <Kpi label="Aguard. nós"   value={totals.aguardandoNos} icon={Clock} tone="amber"
+                 sub="pendente conosco" />
+            <Kpi label="Aguard. franquia" value={totals.aguardandoFranquia} icon={Building2} tone="orange"
+                 sub="pendente com a franquia" />
+            <Kpi label="SLA no prazo" value={globalSla !== null ? `${globalSla}%` : '—'} icon={ShieldCheck} tone="violet"
+                 sub="resolvidos no prazo" />
+          </div>
 
-        {/* WhatsApp global */}
-        <div className="flex items-center gap-2 mt-6 mb-3">
-          <MessageSquare size={14} className="text-green-600 dark:text-green-500" />
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
-            WhatsApp — {formatMonth(month)}
-          </h3>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          <Kpi label="CSAT WhatsApp" value={globalCsat !== null ? globalCsat : '—'} icon={Star} tone="emerald"
-               sub={csatCount > 0 ? `${csatCount} avaliações` : 'sem avaliações'} />
-          <Kpi label="TMA WhatsApp" value={fmtDuration(globalTma)} icon={Timer} tone="blue"
-               sub={tmaCount > 0 ? `${tmaCount} conversas resolvidas` : 'sem resoluções'} />
+          {/* Divisor SAFs | WhatsApp */}
+          <div className="hidden xl:flex flex-col items-center justify-center gap-2 px-1">
+            <div className="w-px flex-1 bg-gray-200 dark:bg-slate-800" />
+            <MessageSquare size={13} className="text-green-600 dark:text-green-500 shrink-0" />
+            <div className="w-px flex-1 bg-gray-200 dark:bg-slate-800" />
+          </div>
+
+          {/* WhatsApp */}
+          <div className="flex-[2] min-w-[220px] grid grid-cols-2 gap-3">
+            <Kpi label="CSAT WhatsApp" value={globalCsat !== null ? globalCsat : '—'} icon={Star} tone="emerald"
+                 sub={csatCount > 0 ? `${csatCount} avaliações` : 'sem avaliações'} />
+            <Kpi label="TMA WhatsApp" value={fmtDuration(globalTma)} icon={Timer} tone="blue"
+                 sub={tmaCount > 0 ? `${tmaCount} resolvidas` : 'sem resoluções'} />
+          </div>
         </div>
       </div>
 
@@ -274,7 +282,11 @@ async function DashboardContent({ month }: { month: string }) {
                 <th colSpan={6} className="px-4 pt-3 pb-1 text-center text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500 border-b border-gray-100 dark:border-slate-800">
                   SAFs
                 </th>
-                <th colSpan={2} className="px-4 pt-3 pb-1 text-center text-xs font-bold uppercase tracking-widest text-green-600/70 dark:text-green-500/70 border-b border-l border-gray-100 dark:border-slate-800">
+                <th colSpan={2} className={clsx(
+                  'px-4 pt-3 pb-1 text-center text-xs font-bold uppercase tracking-widest',
+                  'text-green-700 dark:text-green-400 border-b border-gray-100 dark:border-slate-800',
+                  WA_ZONE, WA_EDGE
+                )}>
                   <span className="inline-flex items-center gap-1.5">
                     <MessageSquare size={12} /> WhatsApp
                   </span>
@@ -287,8 +299,8 @@ async function DashboardContent({ month }: { month: string }) {
                 <th className={clsx(TH, 'text-right')}>Aguard. nós</th>
                 <th className={clsx(TH, 'text-right')}>Aguard. franquia</th>
                 <th className={clsx(TH, 'text-right')}>SLA</th>
-                <th className={clsx(TH, 'text-right border-l border-gray-100 dark:border-slate-800')}>CSAT</th>
-                <th className={clsx(TH, 'text-right')}>Tempo médio atend.</th>
+                <th className={clsx(TH, 'text-right', WA_ZONE, WA_EDGE)}>CSAT</th>
+                <th className={clsx(TH, 'text-right', WA_ZONE)}>Tempo médio atend.</th>
               </tr>
             </thead>
             <tbody>
@@ -336,10 +348,10 @@ async function DashboardContent({ month }: { month: string }) {
                     <td className="px-4 py-4 text-right">
                       <SlaCell rate={st?.slaRate ?? null} />
                     </td>
-                    <td className="px-4 py-4 text-right border-l border-gray-100 dark:border-slate-800">
+                    <td className={clsx('px-4 py-4 text-right', WA_ZONE, WA_EDGE)}>
                       <CsatCell avg={wa?.csat.avg ?? null} total={wa?.csat.total ?? 0} />
                     </td>
-                    <td className="px-4 py-4 text-right">
+                    <td className={clsx('px-4 py-4 text-right', WA_ZONE)}>
                       <TmaCell sec={wa?.handling.avgResolutionSec ?? null} count={wa?.handling.resolutionsCount ?? 0} />
                     </td>
                   </tr>
@@ -359,10 +371,10 @@ async function DashboardContent({ month }: { month: string }) {
                 <td className="px-4 py-4 text-right">
                   <SlaCell rate={globalSla} />
                 </td>
-                <td className="px-4 py-4 text-right border-l border-gray-100 dark:border-slate-800">
+                <td className={clsx('px-4 py-4 text-right', WA_ZONE, WA_EDGE)}>
                   <CsatCell avg={globalCsat} total={csatCount} />
                 </td>
-                <td className="px-4 py-4 text-right">
+                <td className={clsx('px-4 py-4 text-right', WA_ZONE)}>
                   <TmaCell sec={globalTma} count={tmaCount} />
                 </td>
               </tr>
