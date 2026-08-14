@@ -3,6 +3,7 @@
 import { UserCheck, Clock, TriangleAlert, Timer } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
 import type { ChatwootPanelData } from '@/integrations/chatwoot';
+import { businessElapsedSeconds } from '@/lib/businessTime';
 
 interface Props {
   conversations: ChatwootConversation[];
@@ -24,9 +25,10 @@ export function ChatwootSlaPanel({
 }: Props) {
   const nowSec = Math.floor(Date.now() / 1000);
 
+  // Tempo útil: sexta 18h → segunda 8h não entra na conta
   const waitingTimes = conversations
     .filter((c) => c.waitingSinceSec > 0)
-    .map((c) => nowSec - c.waitingSinceSec);
+    .map((c) => businessElapsedSeconds(c.waitingSinceSec, nowSec));
 
   const avgWaitSec   = waitingTimes.length > 0
     ? Math.floor(waitingTimes.reduce((a, b) => a + b, 0) / waitingTimes.length)
@@ -113,7 +115,7 @@ export function ChatwootSlaPanel({
           <span className="text-2xl font-bold tabular-nums text-blue-600 dark:text-blue-400">
             {avgWaitSec > 0 ? formatDuration(avgWaitSec) : '—'}
           </span>
-          <span className="text-xs text-gray-400 dark:text-slate-500">conversas abertas agora</span>
+          <span className="text-xs text-gray-400 dark:text-slate-500">tempo útil (sem fim de semana)</span>
         </div>
 
       </div>

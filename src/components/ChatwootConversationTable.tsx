@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { MessageSquare, UserX, History, ChevronDown, Loader2 } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
 import { ChatwootConversationModal } from './ChatwootConversationModal';
+import { businessElapsedSeconds } from '@/lib/businessTime';
 
 const LABEL_COLORS = [
   'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300',
@@ -36,9 +37,14 @@ interface Agent {
   available: boolean;
 }
 
+/** Espera em tempo útil — sexta 18h → segunda 8h não conta */
+function waitingSeconds(waitingSinceSec: number): number {
+  return businessElapsedSeconds(waitingSinceSec, Math.floor(Date.now() / 1000));
+}
+
 function waitingLabel(waitingSinceSec: number): string {
   if (!waitingSinceSec) return '—';
-  const diffSec = Math.floor(Date.now() / 1000) - waitingSinceSec;
+  const diffSec = waitingSeconds(waitingSinceSec);
   if (diffSec < 60)    return `${diffSec}s`;
   if (diffSec < 3600)  return `${Math.floor(diffSec / 60)}min`;
   if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h`;
@@ -57,7 +63,7 @@ function waitingTimestamp(waitingSinceSec: number): string {
 
 function waitingColor(waitingSinceSec: number): string {
   if (!waitingSinceSec) return 'text-gray-400 dark:text-slate-600';
-  const diffSec = Math.floor(Date.now() / 1000) - waitingSinceSec;
+  const diffSec = waitingSeconds(waitingSinceSec);
   if (diffSec > 86400) return 'text-red-600 dark:text-red-400 font-semibold';
   if (diffSec > 3600)  return 'text-amber-600 dark:text-amber-400 font-semibold';
   return 'text-gray-600 dark:text-slate-300';

@@ -1,3 +1,5 @@
+import { businessElapsedSeconds } from '../lib/businessTime';
+
 const BASE_URL = process.env.CHATWOOT_BASE_URL?.replace(/\/$/, '');
 const ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID ?? '1';
 const TOKEN = process.env.CHATWOOT_API_TOKEN;
@@ -17,6 +19,30 @@ async function chatwootFetch<T>(
 
   const { cache, revalidate = 60 } = options;
   const url = `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}${path}`;
+
+  const res = await fetch(url, {
+    headers: { api_access_token: TOKEN },
+    ...(cache ? { cache } : {}),
+    ...(!cache && typeof revalidate === 'number' ? { next: { revalidate } } : {}),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Chatwoot ${path} → ${res.status} ${res.statusText}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+/** Endpoints de relatório vivem sob /api/v2. */
+async function chatwootFetchV2<T>(
+  path: string,
+  options: ChatwootRequestOptions = {}
+): Promise<T> {
+  if (!BASE_URL || !TOKEN) {
+    throw new Error('CHATWOOT_BASE_URL e CHATWOOT_API_TOKEN são obrigatórios');
+  }
+
+  const { cache, revalidate = 60 } = options;
+  const url = `${BASE_URL}/api/v2/accounts/${ACCOUNT_ID}${path}`;
 
   const res = await fetch(url, {
     headers: { api_access_token: TOKEN },
@@ -388,9 +414,10 @@ export async function getChatwootLandingStats(
     const pending = pendingMeta.all_count;
     const payload = convRes?.data?.payload ?? [];
 
+    // Espera em tempo útil — fim de semana (sex 18h → seg 8h) não conta
     const waits = payload
       .filter((c) => c.waiting_since && c.waiting_since > 0)
-      .map((c) => now - c.waiting_since!);
+      .map((c) => businessElapsedSeconds(c.waiting_since!, now));
 
     const avgWaitMin = waits.length > 0
       ? Math.round(waits.reduce((a, b) => a + b, 0) / waits.length / 60)
@@ -426,6 +453,54 @@ export async function getCsatForPeriod(
     return { total: data.length, avg: Math.round((sum / data.length) * 10) / 10 };
   } catch {
     return { avg: null, total: 0 };
+  }
+}
+
+export interface ChatwootHandlingStats {
+  /** Tempo médio de atendimento (abertura → resolução), em segundos */
+  avgResolutionSec: number | null;
+  /** Tempo médio da primeira resposta, em segundos */
+  avgFirstResponseSec: number | null;
+  /** Conversas resolvidas no período */
+  resolutionsCount: number;
+}
+
+/**
+ * Tempo médio de atendimento do WhatsApp no período, via relatório do Chatwoot.
+ * Os tempos vêm do próprio Chatwoot (relógio corrido, sem desconto de fim de semana).
+ */
+export async function getWhatsappHandlingStats(
+  teamId: number,
+  since: number,
+  until: number
+): Promise<ChatwootHandlingStats> {
+  const empty: ChatwootHandlingStats = {
+    avgResolutionSec: null,
+    avgFirstResponseSec: null,
+    resolutionsCount: 0,
+  };
+  try {
+    const data = await chatwootFetchV2<{
+      avg_resolution_time?: number | string | null;
+      avg_first_response_time?: number | string | null;
+      resolutions_count?: number | null;
+    }>(
+      `/reports/summary?type=team&id=${teamId}&since=${since}&until=${until}`,
+      { cache: 'no-store' }
+    );
+
+    const num = (v: number | string | null | undefined): number | null => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+    };
+
+    return {
+      avgResolutionSec:    num(data?.avg_resolution_time),
+      avgFirstResponseSec: num(data?.avg_first_response_time),
+      resolutionsCount:    Number(data?.resolutions_count ?? 0),
+    };
+  } catch {
+    return empty;
   }
 }
 
