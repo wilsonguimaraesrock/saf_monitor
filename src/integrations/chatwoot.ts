@@ -95,27 +95,120 @@ export interface ChatwootPanelData {
   csatTotal: number;
 }
 
+/**
+ * IMPORTANTE — filtro de data do CSAT no Chatwoot:
+ * `/csat_survey_responses` só aplica o recorte de período quando `since` E `until`
+ * são enviados juntos. Com apenas `since`, a API ignora o filtro e devolve o
+ * histórico inteiro paginado da mais antiga para a mais nova — as avaliações do
+ * mês corrente ficam nas últimas páginas e nunca aparecem.
+ * Sempre mande os dois parâmetros.
+ */
+export interface CsatResponse {
+  conversationId: number;
+  rating: number;
+  feedback: string | null;
+  createdAt: number;
+}
+
+interface CsatQuery {
+  inboxId: number;
+  teamId?: number;
+  /** epoch em segundos (início do período, inclusivo) */
+  since: number;
+  /** epoch em segundos (fim do período, exclusivo) */
+  until: number;
+}
+
+/** Todas as respostas de CSAT do período, paginando até o fim. */
+export async function fetchCsatResponses(
+  { inboxId, teamId, since, until }: CsatQuery,
+  options: ChatwootRequestOptions = { cache: 'no-store' },
+  maxPages = 40
+): Promise<CsatResponse[]> {
+  type RawCsat = {
+    rating: number;
+    feedback_message?: string | null;
+    conversation_id?: number;
+    conversation?: { id?: number };
+    created_at?: number;
+  };
+
+  const teamParam = teamId != null ? `&team_id=${teamId}` : '';
+  const all: CsatResponse[] = [];
+
+  for (let page = 1; page <= maxPages; page++) {
+    let data: RawCsat[];
+    try {
+      data = await chatwootFetch<RawCsat[]>(
+        `/csat_survey_responses?inbox_id=${inboxId}${teamParam}&since=${since}&until=${until}&page=${page}`,
+        options
+      );
+    } catch { break; }
+
+    if (!Array.isArray(data) || data.length === 0) break;
+
+    for (const r of data) {
+      // conversation_id direto ou aninhado — varia conforme a versão do Chatwoot
+      const convId = r.conversation_id ?? r.conversation?.id;
+      if (!convId) continue;
+      all.push({
+        conversationId: convId,
+        rating: Number(r.rating),
+        feedback: r.feedback_message?.trim() || null,
+        createdAt: r.created_at ?? 0,
+      });
+    }
+
+    if (data.length < 25) break; // última página
+  }
+
+  return all;
+}
+
+/** Média e total de CSAT do período, via endpoint de métricas (uma chamada só). */
+export async function getCsatMetrics(
+  { inboxId, teamId, since, until }: CsatQuery,
+  options: ChatwootRequestOptions = { cache: 'no-store' }
+): Promise<{ avg: number | null; total: number }> {
+  try {
+    const teamParam = teamId != null ? `&team_id=${teamId}` : '';
+    const data = await chatwootFetch<{
+      total_count?: number;
+      ratings_count?: Record<string, number>;
+    }>(
+      `/csat_survey_responses/metrics?inbox_id=${inboxId}${teamParam}&since=${since}&until=${until}`,
+      options
+    );
+
+    const counts = data?.ratings_count ?? {};
+    let total = 0;
+    let sum = 0;
+    for (const [rating, count] of Object.entries(counts)) {
+      total += Number(count);
+      sum += Number(rating) * Number(count);
+    }
+    if (total === 0) return { avg: null, total: Number(data?.total_count ?? 0) };
+
+    return { total, avg: Math.round((sum / total) * 10) / 10 };
+  } catch {
+    return { avg: null, total: 0 };
+  }
+}
+
+function monthBounds(ref = new Date()): { since: number; until: number } {
+  return {
+    since: Math.floor(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), 1) / 1000),
+    until: Math.floor(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth() + 1, 1) / 1000),
+  };
+}
+
 async function getCsatStats(
   inboxId: number,
   teamId: number,
   options?: ChatwootRequestOptions
 ): Promise<{ avg: number | null; total: number }> {
-  try {
-    const now = new Date();
-    const since = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) / 1000);
-    const data = await chatwootFetch<Array<{ rating: number }>>(
-      `/csat_survey_responses?inbox_id=${inboxId}&team_id=${teamId}&since=${since}&page=1`,
-      options
-    );
-    if (!Array.isArray(data) || data.length === 0) return { avg: null, total: 0 };
-    const sum = data.reduce((acc, item) => acc + Number(item.rating), 0);
-    return {
-      total: data.length,
-      avg: Math.round((sum / data.length) * 10) / 10,
-    };
-  } catch {
-    return { avg: null, total: 0 };
-  }
+  const { since, until } = monthBounds();
+  return getCsatMetrics({ inboxId, teamId, since, until }, options);
 }
 
 async function getConversationMeta(
@@ -380,18 +473,23 @@ export async function getChatwootLandingStats(
   try {
     const now = Math.floor(Date.now() / 1000);
 
-    // Past month — return only historical count, no live metrics
+    // Past month — no live metrics, mas o CSAT do período é histórico e conta
+    // pela data da avaliação, então continua valendo.
     if (monthStart && monthEnd && monthEnd.getTime() <= Date.now()) {
       const sinceMonth = Math.floor(monthStart.getTime() / 1000);
       const untilMonth = Math.floor(monthEnd.getTime() / 1000);
-      const monthlyTotal = await getHistoricalMonthlyCount(teamId, sinceMonth, untilMonth);
-      return { open: 0, pending: 0, monthlyTotal, avgWaitMin: null, csatAvg: null };
+      const [monthlyTotal, csat] = await Promise.all([
+        getHistoricalMonthlyCount(teamId, sinceMonth, untilMonth),
+        getCsatMetrics({ inboxId, teamId, since: sinceMonth, until: untilMonth }),
+      ]);
+      return { open: 0, pending: 0, monthlyTotal, avgWaitMin: null, csatAvg: csat.avg };
     }
 
     const curMonthStart = monthStart ?? new Date();
     const sinceMonth = Math.floor(Date.UTC(curMonthStart.getUTCFullYear(), curMonthStart.getUTCMonth(), 1) / 1000);
+    const untilMonth = Math.floor(Date.UTC(curMonthStart.getUTCFullYear(), curMonthStart.getUTCMonth() + 1, 1) / 1000);
 
-    const [convRes, pendingMeta, snoozedMeta, csatRes, monthlyResolved] = await Promise.all([
+    const [convRes, pendingMeta, snoozedMeta, csat, monthlyResolved] = await Promise.all([
       chatwootFetch<{
         data: {
           meta: { all_count: number };
@@ -402,10 +500,7 @@ export async function getChatwootLandingStats(
       getConversationMeta(teamId, 'pending', { cache: 'no-store' }),
       getConversationMeta(teamId, 'snoozed', { cache: 'no-store' }),
 
-      chatwootFetch<Array<{ rating: number }>>(
-        `/csat_survey_responses?inbox_id=${inboxId}&team_id=${teamId}&since=${sinceMonth}&page=1`,
-        { cache: 'no-store' }
-      ).catch(() => [] as Array<{ rating: number }>),
+      getCsatMetrics({ inboxId, teamId, since: sinceMonth, until: untilMonth }),
 
       getMonthlyResolvedCount(teamId, sinceMonth),
     ]);
@@ -423,10 +518,7 @@ export async function getChatwootLandingStats(
       ? Math.round(waits.reduce((a, b) => a + b, 0) / waits.length / 60)
       : null;
 
-    const csatArr = Array.isArray(csatRes) ? csatRes : [];
-    const csatAvg = csatArr.length > 0
-      ? Math.round(csatArr.reduce((s, r) => s + Number(r.rating), 0) / csatArr.length * 10) / 10
-      : null;
+    const csatAvg = csat.avg;
 
     const monthlyTotal = open + pending + monthlyResolved + snoozedMeta.all_count;
 
@@ -442,18 +534,7 @@ export async function getCsatForPeriod(
   until: number,
   teamId?: number
 ): Promise<{ avg: number | null; total: number }> {
-  try {
-    const teamParam = teamId != null ? `&team_id=${teamId}` : '';
-    const data = await chatwootFetch<Array<{ rating: number }>>(
-      `/csat_survey_responses?inbox_id=${inboxId}${teamParam}&since=${since}&until=${until}&page=1`,
-      { cache: 'no-store' }
-    );
-    if (!Array.isArray(data) || data.length === 0) return { avg: null, total: 0 };
-    const sum = data.reduce((acc, item) => acc + Number(item.rating), 0);
-    return { total: data.length, avg: Math.round((sum / data.length) * 10) / 10 };
-  } catch {
-    return { avg: null, total: 0 };
-  }
+  return getCsatMetrics({ inboxId, teamId, since, until });
 }
 
 export interface ChatwootHandlingStats {

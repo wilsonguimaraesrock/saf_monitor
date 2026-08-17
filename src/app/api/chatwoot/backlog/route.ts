@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchCsatResponses, getCsatMetrics } from '@/integrations/chatwoot';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,13 +93,6 @@ type RawConv = {
   labels: string[];
 };
 
-type RawCsatResponse = {
-  rating: number;
-  feedback_message: string | null;
-  conversation_id?: number;
-  conversation?: { id?: number };
-};
-
 async function fetchConversationsForStatus(
   inboxId: number,
   teamId: number,
@@ -165,28 +159,12 @@ export async function GET(req: NextRequest) {
     const convMap = new Map<number, RawConv>();
     for (const c of allConversations) convMap.set(c.id, c);
 
-    // Fetch CSAT responses for the month — paginate (multiple pages) and match
-    // by conversation_id (direct field) or nested conversation.id (varies by Chatwoot version).
+    // CSAT do mês. `since` + `until` juntos são obrigatórios: só com `since` o
+    // Chatwoot ignora o filtro e devolve o histórico inteiro da mais antiga
+    // para a mais nova — as avaliações do mês ficavam nas últimas páginas.
     const csatMap = new Map<number, { rating: number; feedback: string | null }>();
-    try {
-      for (let page = 1; page <= 6; page++) {
-        const csatData = await cwFetch<RawCsatResponse[]>(
-          `/csat_survey_responses?inbox_id=${inboxId}&team_id=${teamId}&since=${since}&page=${page}`
-        );
-        if (!Array.isArray(csatData) || csatData.length === 0) break;
-        for (const r of csatData) {
-          const convId = r.conversation_id ?? r.conversation?.id;
-          if (convId) {
-            csatMap.set(convId, {
-              rating: Number(r.rating),
-              feedback: r.feedback_message ?? null,
-            });
-          }
-        }
-        if (csatData.length < 25) break; // last page
-      }
-    } catch {
-      // CSAT is optional
+    for (const r of await fetchCsatResponses({ inboxId, teamId, since, until })) {
+      csatMap.set(r.conversationId, { rating: r.rating, feedback: r.feedback });
     }
 
     // Build sorted conversation list
@@ -221,7 +199,15 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ conversations, month: `${year}-${String(month + 1).padStart(2, '0')}` });
+    // CSAT do mês pela data da avaliação — inclui conversas abertas em meses
+    // anteriores e avaliadas neste, que não aparecem na listagem acima.
+    const csatMonth = await getCsatMetrics({ inboxId, teamId, since, until });
+
+    return NextResponse.json({
+      conversations,
+      csatMonth,
+      month: `${year}-${String(month + 1).padStart(2, '0')}`,
+    });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 502 });
   }

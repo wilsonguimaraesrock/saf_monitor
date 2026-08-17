@@ -7,6 +7,8 @@ import type { BacklogConversation } from '@/app/api/chatwoot/backlog/route';
 import { ChatwootConversationModal } from './ChatwootConversationModal';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
 
+interface CsatStat { avg: number | null; total: number }
+
 interface Props {
   inboxId: number | null;
   teamId: number;
@@ -102,6 +104,7 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
   const [month, setMonth] = useState(now.getMonth()); // 0-indexed
 
   const [conversations, setConversations] = useState<BacklogConversation[]>([]);
+  const [csatMonth, setCsatMonth] = useState<CsatStat | null>(null);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
   const [selected, setSelected] = useState<ChatwootConversation | null>(null);
@@ -125,6 +128,7 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
       }
       const data = await res.json();
       setConversations(data.conversations ?? []);
+      setCsatMonth(data.csatMonth ?? null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -176,10 +180,18 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
   // Stats
   const total    = filtered.length;
   const resolved = filtered.filter((c) => c.status === 'resolved').length;
-  const withCsat = filtered.filter((c) => c.csatRating !== null);
-  const csatAvg  = withCsat.length
-    ? Math.round((withCsat.reduce((s, c) => s + (c.csatRating ?? 0), 0) / withCsat.length) * 10) / 10
-    : null;
+
+  // CSAT do mês conta pela data da AVALIAÇÃO, não pela data de abertura da
+  // conversa. Com filtro de texto ativo, volta a ser a média das linhas visíveis.
+  const rowsWithCsat = filtered.filter((c) => c.csatRating !== null);
+  const csat: CsatStat = hasFilter || !csatMonth
+    ? {
+        total: rowsWithCsat.length,
+        avg: rowsWithCsat.length
+          ? Math.round((rowsWithCsat.reduce((s, c) => s + (c.csatRating ?? 0), 0) / rowsWithCsat.length) * 10) / 10
+          : null,
+      }
+    : csatMonth;
 
   return (
     <>
@@ -245,11 +257,19 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
               <span className="text-gray-500 dark:text-slate-400">
                 <span className="font-semibold text-blue-600 dark:text-blue-400">{total - resolved}</span> em aberto
               </span>
-              {csatAvg !== null && (
-                <span className="flex items-center gap-1.5 text-gray-500 dark:text-slate-400">
+              {csat.avg !== null && (
+                <span
+                  className="flex items-center gap-1.5 text-gray-500 dark:text-slate-400"
+                  title={hasFilter
+                    ? 'Média das conversas listadas que receberam avaliação'
+                    : 'Média de todas as avaliações respondidas no mês, inclusive de conversas abertas em meses anteriores'}
+                >
                   CSAT médio:
-                  <StarRating rating={csatAvg} />
-                  <span className="text-xs text-gray-400">({withCsat.length} avaliações)</span>
+                  <StarRating rating={csat.avg} />
+                  <span className="text-xs text-gray-400">
+                    ({csat.total} {csat.total === 1 ? 'avaliação' : 'avaliações'}
+                    {!hasFilter && ' no mês'})
+                  </span>
                 </span>
               )}
             </div>

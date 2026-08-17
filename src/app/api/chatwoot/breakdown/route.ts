@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchCsatResponses } from '@/integrations/chatwoot';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,9 +103,9 @@ export async function GET(req: NextRequest) {
       fetchConvsByTeam(teamId, 'open',     since, 3),
       fetchConvsByTeam(teamId, 'pending',  since, 2),
       fetchConvsByTeam(teamId, 'snoozed',  since, 2),
-      cwFetch<Array<{ rating: number; conversation_id: number }>>(
-        `/csat_survey_responses?inbox_id=${inboxId}&team_id=${teamId}&since=${since}&page=1`
-      ).catch(() => [] as Array<{ rating: number; conversation_id: number }>),
+      // `since` + `until` juntos e todas as páginas — sem os dois o Chatwoot
+      // ignora o filtro e devolve o histórico inteiro em ordem cronológica.
+      fetchCsatResponses({ inboxId, teamId, since, until }),
     ]);
 
     // Deduplicate + filter to month window (cap at 150 to keep bot-fetch fast)
@@ -116,11 +117,7 @@ export async function GET(req: NextRequest) {
 
     // CSAT map: convId → rating
     const csatMap = new Map<number, number>();
-    if (Array.isArray(csatRaw)) {
-      for (const r of csatRaw) {
-        if (r.conversation_id) csatMap.set(r.conversation_id, Number(r.rating));
-      }
-    }
+    for (const r of csatRaw) csatMap.set(r.conversationId, r.rating);
 
     // Fetch bot fields (subdepartamento + assunto) concurrently
     const botFields = await runConcurrently(

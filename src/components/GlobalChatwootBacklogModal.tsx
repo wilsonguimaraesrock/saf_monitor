@@ -51,6 +51,13 @@ function monthLabel(year: number, month: number) {
   return new Date(year, month, 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 }
 
+interface CsatStat { avg: number | null; total: number }
+
+interface CsatMonth {
+  geral: CsatStat;
+  porSetor: Record<string, CsatStat>;
+}
+
 interface Props {
   onClose: () => void;
 }
@@ -61,6 +68,7 @@ export function GlobalChatwootBacklogModal({ onClose }: Props) {
   const [month, setMonth] = useState(now.getMonth());
 
   const [conversations, setConversations] = useState<GlobalBacklogConversation[]>([]);
+  const [csatMonth, setCsatMonth] = useState<CsatMonth | null>(null);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
 
@@ -81,6 +89,7 @@ export function GlobalChatwootBacklogModal({ onClose }: Props) {
       }
       const data = await res.json();
       setConversations(data.conversations ?? []);
+      setCsatMonth(data.csatMonth ?? null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -123,10 +132,23 @@ export function GlobalChatwootBacklogModal({ onClose }: Props) {
 
   const hasFilter = filterSetor || filterEscola || filterDepto || filterAssunto;
   const resolved  = filtered.filter((c) => c.status === 'resolved').length;
-  const withCsat  = filtered.filter((c) => c.csatRating !== null);
-  const csatAvg   = withCsat.length
-    ? Math.round(withCsat.reduce((s, c) => s + (c.csatRating ?? 0), 0) / withCsat.length * 10) / 10
-    : null;
+
+  // CSAT do mês conta pela data da AVALIAÇÃO, não pela data de abertura da
+  // conversa — inclui conversas abertas em meses anteriores e avaliadas neste.
+  // Os filtros de texto (escola/departamento/assunto) vivem só nas conversas
+  // listadas, então nesses casos o cálculo volta a ser sobre as linhas visíveis.
+  const textFilter = Boolean(filterEscola || filterDepto || filterAssunto);
+  const rowsWithCsat = filtered.filter((c) => c.csatRating !== null);
+  const monthCsat = filterSetor ? csatMonth?.porSetor?.[filterSetor] : csatMonth?.geral;
+
+  const csat: CsatStat = textFilter || !monthCsat
+    ? {
+        total: rowsWithCsat.length,
+        avg: rowsWithCsat.length
+          ? Math.round(rowsWithCsat.reduce((s, c) => s + (c.csatRating ?? 0), 0) / rowsWithCsat.length * 10) / 10
+          : null,
+      }
+    : monthCsat;
 
   function clearFilters() {
     setFilterSetor(''); setFilterEscola(''); setFilterDepto(''); setFilterAssunto('');
@@ -194,10 +216,18 @@ export function GlobalChatwootBacklogModal({ onClose }: Props) {
               <span className="text-gray-500 dark:text-slate-400">
                 <span className="font-semibold text-blue-600 dark:text-blue-400">{filtered.length - resolved}</span> em aberto
               </span>
-              {csatAvg !== null && (
-                <span className="flex items-center gap-1.5 text-gray-500 dark:text-slate-400">
-                  CSAT médio: <StarRating rating={csatAvg} />
-                  <span className="text-xs text-gray-400">({withCsat.length})</span>
+              {csat.avg !== null && (
+                <span
+                  className="flex items-center gap-1.5 text-gray-500 dark:text-slate-400"
+                  title={textFilter
+                    ? 'Média das conversas listadas que receberam avaliação'
+                    : 'Média de todas as avaliações respondidas no mês, inclusive de conversas abertas em meses anteriores'}
+                >
+                  CSAT médio: <StarRating rating={csat.avg} />
+                  <span className="text-xs text-gray-400">
+                    ({csat.total} {csat.total === 1 ? 'avaliação' : 'avaliações'}
+                    {!textFilter && ' no mês'})
+                  </span>
                 </span>
               )}
             </div>

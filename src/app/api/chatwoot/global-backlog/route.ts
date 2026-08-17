@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchCsatResponses, getCsatMetrics } from '@/integrations/chatwoot';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,12 +53,6 @@ type RawMessage = {
   content: string | null;
   created_at: number;
   message_type: number;
-};
-
-type RawCsatResponse = {
-  rating: number;
-  conversation_id?: number;
-  conversation?: { id?: number };
 };
 
 async function cwFetch<T>(path: string): Promise<T> {
@@ -176,24 +171,26 @@ export async function GET(req: NextRequest) {
     const convArray = Array.from(convMap.values())
       .sort((a, b) => b.created_at - a.created_at);
 
-    // Fetch CSAT for the shared inbox (one call covers all sectors) — paginate
-    // and match by conversation_id (direct field) or nested conversation.id
-    // (varies by Chatwoot version).
+    // Fetch CSAT for the shared inbox (one call covers all sectors).
+    // `since` + `until` juntos são obrigatórios: só com `since` o Chatwoot
+    // ignora o filtro e devolve o histórico inteiro da mais antiga para a mais
+    // nova — as avaliações do mês ficavam nas últimas páginas e se perdiam.
     const csatMap = new Map<number, number>();
-    try {
-      const inboxId = CW_SECTORS[0].inboxId;
-      for (let page = 1; page <= 6; page++) {
-        const csatData = await cwFetch<RawCsatResponse[]>(
-          `/csat_survey_responses?inbox_id=${inboxId}&since=${since}&page=${page}`
-        );
-        if (!Array.isArray(csatData) || csatData.length === 0) break;
-        for (const r of csatData) {
-          const convId = r.conversation_id ?? r.conversation?.id;
-          if (convId) csatMap.set(convId, Number(r.rating));
-        }
-        if (csatData.length < 25) break; // last page
-      }
-    } catch { /* CSAT is optional */ }
+    for (const r of await fetchCsatResponses({ inboxId: CW_SECTORS[0].inboxId, since, until })) {
+      csatMap.set(r.conversationId, r.rating);
+    }
+
+    // CSAT do mês pela data da avaliação (não pela data de abertura da conversa):
+    // conta toda avaliação respondida dentro do mês, inclusive de conversas
+    // abertas em meses anteriores. Métricas por time somam exatamente o global.
+    const sectorCsat = await runConcurrently(
+      CW_SECTORS.map((s) => () => getCsatMetrics({ inboxId: s.inboxId, teamId: s.teamId, since, until })),
+      9
+    );
+    const csatMonth = {
+      geral: await getCsatMetrics({ inboxId: CW_SECTORS[0].inboxId, since, until }),
+      porSetor: Object.fromEntries(CW_SECTORS.map((s, i) => [s.slug, sectorCsat[i]])),
+    };
 
     // Fetch bot data concurrently (cap at 200 conversations to keep it fast)
     const capped = convArray.slice(0, 200);
@@ -222,6 +219,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       conversations,
+      csatMonth,
       month: `${year}-${String(month + 1).padStart(2, '0')}`,
       total: convArray.length,
     });
