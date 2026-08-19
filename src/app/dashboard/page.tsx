@@ -7,37 +7,13 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { SECTORS } from '@/lib/sectors';
-import { getMonthlySectorStats, type MonthlyStats } from '@/repository/analytics';
-import { getCsatForPeriod, getWhatsappHandlingStats } from '@/integrations/chatwoot';
+import { type MonthlyStats } from '@/repository/analytics';
+import { getDashboardData, formatMonth, getLast12Months } from '@/lib/dashboardData';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { NotificationBell } from '@/components/NotificationBell';
 import { UserMenu } from '@/components/UserMenu';
 
 export const dynamic = 'force-dynamic';
-
-const MONTH_NAMES_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-function getLast12Months(): string[] {
-  const months: string[] = [];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-  }
-  return months;
-}
-
-function formatMonth(m: string): string {
-  const [year, month] = m.split('-');
-  return `${MONTH_NAMES_PT[Number(month) - 1]} ${year}`;
-}
-
-function monthBounds(month: string): { since: number; until: number } {
-  const [year, m] = month.split('-').map(Number);
-  const start = new Date(Date.UTC(year, m - 1, 1));
-  const end   = new Date(Date.UTC(year, m, 1));
-  return { since: Math.floor(start.getTime() / 1000), until: Math.floor(end.getTime() / 1000) - 1 };
-}
 
 function fmtDuration(sec: number | null): string {
   if (!sec || sec <= 0) return '—';
@@ -153,78 +129,13 @@ const WA_ZONE  = 'bg-green-50/60 dark:bg-green-950/20';
 const WA_EDGE  = 'border-l-2 border-green-300 dark:border-green-800/70';
 
 async function DashboardContent({ month }: { month: string }) {
-  const { since, until } = monthBounds(month);
-  const months = getLast12Months();
-
-  const [allStats, waResults] = await Promise.all([
-    getMonthlySectorStats(12),
-    Promise.all(
-      SECTORS
-        .filter((s) => s.chatwoot)
-        .map(async (s) => {
-          const [csat, handling] = await Promise.all([
-            getCsatForPeriod(s.chatwoot!.inboxId, since, until, s.chatwoot!.teamId),
-            getWhatsappHandlingStats(s.chatwoot!.teamId, since, until),
-          ]);
-          return { slug: s.slug, csat, handling };
-        })
-    ),
-  ]);
-
-  const waBySector = Object.fromEntries(waResults.map((r) => [r.slug, r]));
-
-  const statsBySector: Record<string, MonthlyStats> =
-    Object.fromEntries(allStats.filter((s) => s.month === month).map((s) => [s.sectorSlug, s]));
-
-  // trend map: sectorSlug → month → stats
-  const trendMap: Record<string, Record<string, MonthlyStats>> = {};
-  for (const s of allStats) {
-    if (!trendMap[s.sectorSlug]) trendMap[s.sectorSlug] = {};
-    trendMap[s.sectorSlug][s.month] = s;
-  }
-
-  const totals = SECTORS.reduce(
-    (acc, s) => {
-      const st = statsBySector[s.slug];
-      if (!st) return acc;
-      return {
-        abertos:            acc.abertos + st.abertos,
-        resolvidos:         acc.resolvidos + st.resolvidos,
-        aguardandoNos:      acc.aguardandoNos + st.aguardandoNos,
-        aguardandoFranquia: acc.aguardandoFranquia + st.aguardandoFranquia,
-        withDeadline:       acc.withDeadline + st.withDeadline,
-        withinSla:          acc.withinSla + st.withinSla,
-        // ponderado pelo nº de SAFs resolvidos de cada setor
-        tmaSum:             acc.tmaSum + (st.avgResolutionSec ?? 0) * st.resolvidos,
-        tmaCount:           acc.tmaCount + (st.avgResolutionSec !== null ? st.resolvidos : 0),
-      };
-    },
-    {
-      abertos: 0, resolvidos: 0, aguardandoNos: 0, aguardandoFranquia: 0,
-      withDeadline: 0, withinSla: 0, tmaSum: 0, tmaCount: 0,
-    }
-  );
-
-  const resolutionRate = totals.abertos > 0
-    ? Math.round((100 * totals.resolvidos) / totals.abertos)
-    : null;
-  const globalSla = totals.withDeadline > 0
-    ? Math.round((100 * totals.withinSla) / totals.withDeadline)
-    : null;
-  const globalSafTma = totals.tmaCount > 0
-    ? Math.round(totals.tmaSum / totals.tmaCount)
-    : null;
-
-  // WhatsApp global — médias ponderadas pelo volume de cada setor
-  const csatSum   = waResults.reduce((a, r) => a + (r.csat.avg ?? 0) * r.csat.total, 0);
-  const csatCount = waResults.reduce((a, r) => a + r.csat.total, 0);
-  const globalCsat = csatCount > 0 ? Math.round((csatSum / csatCount) * 10) / 10 : null;
-
-  const tmaSum   = waResults.reduce((a, r) => a + (r.handling.avgResolutionSec ?? 0) * r.handling.resolutionsCount, 0);
-  const tmaCount = waResults.reduce((a, r) => a + (r.handling.avgResolutionSec ? r.handling.resolutionsCount : 0), 0);
-  const globalTma = tmaCount > 0 ? Math.round(tmaSum / tmaCount) : null;
-
-  const waConversations = waResults.reduce((a, r) => a + r.handling.conversationsCount, 0);
+  // Toda a agregação vive em src/lib/dashboardData.ts — a API pública e a
+  // página /publico/dashboard leem daqui também, então os números não divergem.
+  const {
+    months, statsBySector, waBySector, trendMap, totals,
+    resolutionRate, globalSla, globalSafTma,
+    globalCsat, csatCount, globalTma, tmaCount, waConversations,
+  } = await getDashboardData(month);
 
   return (
     <div className="space-y-8">

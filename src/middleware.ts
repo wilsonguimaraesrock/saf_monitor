@@ -29,6 +29,9 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/api/cron') ||
     pathname.startsWith('/api/health') ||
     pathname.startsWith('/api/v1') ||
+    // Dashboard compartilhável: a autorização é o token na URL, validado pela
+    // própria página/rota — não pela sessão de atendente.
+    pathname.startsWith('/publico') ||
     pathname.startsWith('/api/webhooks') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon')
