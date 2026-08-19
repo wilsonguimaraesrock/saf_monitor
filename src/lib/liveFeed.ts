@@ -21,7 +21,10 @@ export interface LiveFeedSnapshot {
   conversations: LiveFeedConversation[];
 }
 
-const CACHE_TTL_MS = 8_000;
+// Um pouco abaixo do intervalo de push (30s) para não servir snapshot vencido,
+// e alto o bastante para várias abas/atendentes na mesma instância dividirem
+// uma única ida ao Chatwoot.
+const CACHE_TTL_MS = 25_000;
 const FETCH_CONCURRENCY = 6;
 const STATUSES: Array<'open' | 'pending'> = ['open', 'pending'];
 

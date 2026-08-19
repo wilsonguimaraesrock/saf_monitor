@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { queryOne } from '@/lib/db';
+import { upstreamFetch, describeOutcome } from '@/lib/upstreamFetch';
 
 const BASE_URL = process.env.CHATWOOT_BASE_URL?.replace(/\/$/, '');
 const ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID ?? '1';
@@ -119,6 +120,7 @@ export async function GET(
   const all: Array<{ id: number }> = [];
   let before: number | undefined;
   let meta: unknown;
+  let partial = false;
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const url = new URL(
@@ -126,7 +128,24 @@ export async function GET(
     );
     if (before !== undefined) url.searchParams.set('before', String(before));
 
-    const res = await fetch(url, { headers: chatwootHeaders(), cache: 'no-store' });
+    const outcome = await upstreamFetch(url.toString(), {
+      headers: chatwootHeaders(),
+      cache: 'no-store',
+      idempotent: true,
+    });
+
+    if (outcome.kind !== 'response') {
+      // Leitura do histórico: se já temos páginas, devolve o que deu para buscar
+      // em vez de derrubar a tela inteira do atendente. `partial` avisa o
+      // cliente para mesclar em vez de substituir a lista.
+      if (all.length > 0) { partial = true; break; }
+      return NextResponse.json(
+        { error: describeOutcome(outcome), code: outcome.kind },
+        { status: 503 }
+      );
+    }
+
+    const res = outcome.response;
 
     if (!res.ok) {
       return NextResponse.json({ error: `Chatwoot error: ${res.status}` }, { status: res.status });
@@ -145,7 +164,7 @@ export async function GET(
     before = oldestId;
   }
 
-  return NextResponse.json({ meta, payload: all });
+  return NextResponse.json({ meta, payload: all, partial });
 }
 
 export async function POST(
@@ -198,10 +217,28 @@ export async function POST(
     headers = { 'Content-Type': 'application/json', ...(json.asSystem ? { api_access_token: TOKEN! } : authHeader) };
   }
 
-  const res = await fetch(
+  // `idempotent: false` de propósito: só repetimos quando o erro prova que a
+  // requisição não chegou ao Chatwoot. Reenviar após uma queda pós-conexão
+  // duplicaria a mensagem no WhatsApp do cliente.
+  const outcome = await upstreamFetch(
     `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}/messages`,
-    { method: 'POST', headers, body }
+    { method: 'POST', headers, body, timeoutMs: 20_000, attempts: 3 }
   );
+
+  if (outcome.kind !== 'response') {
+    return NextResponse.json(
+      {
+        error: describeOutcome(outcome),
+        code: outcome.kind,
+        // O cliente usa isto para decidir se pode reenviar sozinho sem duplicar.
+        safeToRetry: outcome.kind === 'unreachable',
+        attempts: outcome.attempts,
+      },
+      { status: 503 }
+    );
+  }
+
+  const res = outcome.response;
 
   if (!res.ok) {
     return NextResponse.json({ error: `Chatwoot error: ${res.status}` }, { status: res.status });

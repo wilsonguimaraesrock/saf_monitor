@@ -8,7 +8,7 @@ import { readNotificationsEnabled, subscribeNotificationsEnabled } from '@/lib/n
 import { playNotificationTone } from '@/lib/notificationSound';
 import { hasPushSubscription } from '@/lib/webPush';
 
-const POLL_FALLBACK_MS = 20_000;
+const POLL_FALLBACK_MS = 30_000; // alinhado ao PUSH_INTERVAL_MS do SSE
 const MAX_TOASTS = 4;
 const TOAST_TTL_MS = 15_000;
 /** Ignora atividade antiga (ex.: conversa que voltou para a janela do feed). */

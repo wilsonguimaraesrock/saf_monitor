@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { loadDraft, saveDraft, clearDraft } from '@/lib/replyDraft';
 import { X, ExternalLink, Clock, Calendar, AlertTriangle, Tag, Building2, MessageSquare, Send, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { clsx } from 'clsx';
 import { TicketRow } from './TicketTable';
@@ -203,12 +204,19 @@ export function TicketModal({ ticket, onClose }: TicketModalProps) {
   useEffect(() => {
     if (!ticket) return;
     setUpdates([]);
-    setReply('');
+    // Restaura o rascunho — resposta digitada não se perde ao fechar/reabrir.
+    setReply(loadDraft('saf', ticket.id));
     setSendError('');
     setSendOk(false);
     setLoading(true);
     fetchUpdates(ticket.id).finally(() => setLoading(false));
   }, [ticket?.id, fetchUpdates]);
+
+  // Persiste o rascunho a cada alteração.
+  useEffect(() => {
+    if (!ticket) return;
+    saveDraft('saf', ticket.id, reply);
+  }, [ticket?.id, reply]);
 
   // Scroll automático para o fim do chat
   useEffect(() => {
@@ -233,16 +241,18 @@ export function TicketModal({ ticket, onClose }: TicketModalProps) {
         }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setSendError(err.error ?? 'Falha ao enviar. Tente novamente.');
+        const err = await res.json().catch(() => ({} as { error?: string }));
+        setSendError(err.error ?? `Falha ao enviar (${res.status}). O texto foi mantido — tente novamente.`);
         return;
       }
+      // Envio confirmado: só agora o rascunho pode ser descartado.
+      clearDraft('saf', ticket.id);
       setReply('');
       setSendOk(true);
       setTimeout(() => setSendOk(false), 3000);
       await fetchUpdates(ticket.id);
     } catch {
-      setSendError('Erro de conexão.');
+      setSendError('Sem conexão com o servidor. O texto foi mantido — tente novamente.');
     } finally {
       setSending(false);
       textareaRef.current?.focus();

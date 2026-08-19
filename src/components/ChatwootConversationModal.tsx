@@ -7,6 +7,7 @@ import {
   Paperclip, FileText, StickyNote, Lock,
 } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
+import { loadDraft, saveDraft, clearDraft } from '@/lib/replyDraft';
 
 interface Attachment {
   id: number;
@@ -177,15 +178,25 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Conversa exibida no momento. Uma busca lenta que retorna depois da troca de
+  // conversa precisa ser descartada — senão mesclaria mensagens de outro cliente.
+  const activeConvRef = useRef<number | null>(null);
+
   const fetchMessages = useCallback(async (id: number) => {
     const res = await fetch(`/api/chatwoot/conversation/${id}`);
     if (!res.ok) return;
+    if (activeConvRef.current !== id) return; // trocou de conversa no meio
     const data = await res.json();
     const payload: Message[] = data?.payload ?? [];
-    const visible = payload
-      .filter((m) => m.message_type === 0 || m.message_type === 1)
-      .sort((a, b) => a.created_at - b.created_at);
-    setMessages(visible);
+    const incoming = payload.filter((m) => m.message_type === 0 || m.message_type === 1);
+    // Mescla por id em vez de substituir: se o Chatwoot devolveu o histórico
+    // incompleto (sobrecarga), nenhuma mensagem já exibida desaparece da tela.
+    setMessages((prev) => {
+      const byId = new Map<number, Message>();
+      for (const m of prev) byId.set(m.id, m);
+      for (const m of incoming) byId.set(m.id, m);
+      return Array.from(byId.values()).sort((a, b) => a.created_at - b.created_at);
+    });
   }, []);
 
   // Carrega teams (uma vez por sessão de modal)
@@ -218,8 +229,11 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
   // Carrega mensagens quando a conversa muda
   useEffect(() => {
     if (!conversation) return;
+    activeConvRef.current = conversation.id;
     setMessages([]);
-    setReply('');
+    // Restaura o rascunho: uma resposta digitada não pode desaparecer só porque
+    // o modal foi fechado/reaberto ou a página recarregou.
+    setReply(loadDraft('cw', conversation.id));
     setSendError('');
     setConfirmResolve(false);
     setShowTransfer(false);
@@ -234,6 +248,13 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     setLoading(true);
     fetchMessages(conversation.id).finally(() => setLoading(false));
   }, [conversation?.id, fetchMessages]);
+
+  // Persiste o rascunho a cada alteração — sobrevive a fechar o modal,
+  // recarregar a página ou perder a aba com o envio ainda pendente.
+  useEffect(() => {
+    if (!conversation) return;
+    saveDraft('cw', conversation.id, reply);
+  }, [conversation?.id, reply]);
 
   // Auto-refresh a cada 10s
   useEffect(() => {
@@ -296,12 +317,17 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
         method: 'POST',
         body: fd,
       });
-      if (!res.ok) { setSendError('Falha ao enviar. Tente novamente.'); return; }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({} as { error?: string }));
+        setSendError(data.error ?? `Falha ao enviar (${res.status}). O anexo e o texto foram mantidos — tente novamente.`);
+        return;
+      }
+      clearDraft('cw', conversation.id);
       setReply('');
       clearAttachment();
       await fetchMessages(conversation.id);
     } catch {
-      setSendError('Erro de conexão.');
+      setSendError('Sem conexão com o servidor. O anexo e o texto foram mantidos — tente novamente.');
     } finally {
       setSending(false);
     }
@@ -324,11 +350,19 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: reply.trim(), private: isNote }),
       });
-      if (!res.ok) { setSendError('Falha ao enviar. Tente novamente.'); return; }
+      if (!res.ok) {
+        // Mostra o motivo real (ex.: Chatwoot sobrecarregado) — o texto fica
+        // preservado no campo e no rascunho salvo.
+        const data = await res.json().catch(() => ({} as { error?: string }));
+        setSendError(data.error ?? `Falha ao enviar (${res.status}). O texto foi mantido — tente novamente.`);
+        return;
+      }
+      // Envio confirmado pelo servidor: só agora o rascunho pode ser descartado.
+      clearDraft('cw', conversation.id);
       setReply('');
       await fetchMessages(conversation.id);
     } catch {
-      setSendError('Erro de conexão.');
+      setSendError('Sem conexão com o servidor. O texto foi mantido — tente novamente.');
     } finally {
       setSending(false);
       textareaRef.current?.focus();

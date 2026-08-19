@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchCsatResponses } from '@/integrations/chatwoot';
+import { memoize } from '@/lib/memoCache';
 
 export const dynamic = 'force-dynamic';
+
+/** Agregado do mês inteiro: custa até ~165 chamadas ao Chatwoot (uma por
+ *  conversa, para ler os campos do bot). Não precisa ser recalculado a cada
+ *  montagem do card. */
+const BREAKDOWN_TTL_MS = 5 * 60_000;
 
 const BASE_URL   = process.env.CHATWOOT_BASE_URL?.replace(/\/$/, '');
 const ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID ?? '1';
@@ -98,82 +104,86 @@ export async function GET(req: NextRequest) {
   const period = now.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
   try {
-    const [resolved, open, pending, snoozed, csatRaw] = await Promise.all([
-      fetchConvsByTeam(teamId, 'resolved', since),
-      fetchConvsByTeam(teamId, 'open',     since, 3),
-      fetchConvsByTeam(teamId, 'pending',  since, 2),
-      fetchConvsByTeam(teamId, 'snoozed',  since, 2),
-      // `since` + `until` juntos e todas as páginas — sem os dois o Chatwoot
-      // ignora o filtro e devolve o histórico inteiro em ordem cronológica.
-      fetchCsatResponses({ inboxId, teamId, since, until }),
-    ]);
+    const payload = await memoize(`breakdown:${teamId}:${inboxId}:${since}`, BREAKDOWN_TTL_MS, async () => {
+      const [resolved, open, pending, snoozed, csatRaw] = await Promise.all([
+        fetchConvsByTeam(teamId, 'resolved', since),
+        fetchConvsByTeam(teamId, 'open',     since, 3),
+        fetchConvsByTeam(teamId, 'pending',  since, 2),
+        fetchConvsByTeam(teamId, 'snoozed',  since, 2),
+        // `since` + `until` juntos e todas as páginas — sem os dois o Chatwoot
+        // ignora o filtro e devolve o histórico inteiro em ordem cronológica.
+        fetchCsatResponses({ inboxId, teamId, since, until }),
+      ]);
 
-    // Deduplicate + filter to month window (cap at 150 to keep bot-fetch fast)
-    const convMap = new Map<number, RawConv>();
-    for (const c of [...resolved, ...open, ...pending, ...snoozed]) convMap.set(c.id, c);
-    const convs = Array.from(convMap.values())
-      .filter((c) => c.created_at >= since && c.created_at < until)
-      .slice(0, 150);
+      // Deduplicate + filter to month window (cap at 150 to keep bot-fetch fast)
+      const convMap = new Map<number, RawConv>();
+      for (const c of [...resolved, ...open, ...pending, ...snoozed]) convMap.set(c.id, c);
+      const convs = Array.from(convMap.values())
+        .filter((c) => c.created_at >= since && c.created_at < until)
+        .slice(0, 150);
 
-    // CSAT map: convId → rating
-    const csatMap = new Map<number, number>();
-    for (const r of csatRaw) csatMap.set(r.conversationId, r.rating);
+      // CSAT map: convId → rating
+      const csatMap = new Map<number, number>();
+      for (const r of csatRaw) csatMap.set(r.conversationId, r.rating);
 
-    // Fetch bot fields (subdepartamento + assunto) concurrently
-    const botFields = await runConcurrently(
-      convs.map((c) => () => fetchBotFields(c.id)),
-      10
-    );
+      // Fetch bot fields (subdepartamento + assunto) concurrently
+      const botFields = await runConcurrently(
+        convs.map((c) => () => fetchBotFields(c.id)),
+        10
+      );
 
-    // Aggregate
-    const subdepMap  = new Map<string, { count: number; resolved: number }>();
-    const assuntoMap = new Map<string, number>();
-    const agentMap   = new Map<string, { count: number; csatSum: number; csatCount: number }>();
+      // Aggregate
+      const subdepMap  = new Map<string, { count: number; resolved: number }>();
+      const assuntoMap = new Map<string, number>();
+      const agentMap   = new Map<string, { count: number; csatSum: number; csatCount: number }>();
 
-    for (let i = 0; i < convs.length; i++) {
-      const conv = convs[i];
-      const bot  = botFields[i];
-      const csat = csatMap.get(conv.id) ?? null;
+      for (let i = 0; i < convs.length; i++) {
+        const conv = convs[i];
+        const bot  = botFields[i];
+        const csat = csatMap.get(conv.id) ?? null;
 
-      // by subdepartamento
-      const subdep = bot.subdepartamento || '(não informado)';
-      const sd = subdepMap.get(subdep) ?? { count: 0, resolved: 0 };
-      sd.count++;
-      if (conv.status === 'resolved') sd.resolved++;
-      subdepMap.set(subdep, sd);
+        // by subdepartamento
+        const subdep = bot.subdepartamento || '(não informado)';
+        const sd = subdepMap.get(subdep) ?? { count: 0, resolved: 0 };
+        sd.count++;
+        if (conv.status === 'resolved') sd.resolved++;
+        subdepMap.set(subdep, sd);
 
-      // by assunto
-      const assunto = bot.assunto || '(não informado)';
-      assuntoMap.set(assunto, (assuntoMap.get(assunto) ?? 0) + 1);
+        // by assunto
+        const assunto = bot.assunto || '(não informado)';
+        assuntoMap.set(assunto, (assuntoMap.get(assunto) ?? 0) + 1);
 
-      // by agent
-      const agent = conv.meta?.assignee?.name ?? '(não atribuído)';
-      const ag = agentMap.get(agent) ?? { count: 0, csatSum: 0, csatCount: 0 };
-      ag.count++;
-      if (csat !== null) { ag.csatSum += csat; ag.csatCount++; }
-      agentMap.set(agent, ag);
-    }
+        // by agent
+        const agent = conv.meta?.assignee?.name ?? '(não atribuído)';
+        const ag = agentMap.get(agent) ?? { count: 0, csatSum: 0, csatCount: 0 };
+        ag.count++;
+        if (csat !== null) { ag.csatSum += csat; ag.csatCount++; }
+        agentMap.set(agent, ag);
+      }
 
-    const result: WhatsAppBreakdownData = {
-      period,
-      total: convs.length,
-      bySubdepartamento: Array.from(subdepMap.entries())
-        .map(([name, v]) => ({ name, ...v }))
-        .sort((a, b) => b.count - a.count),
-      byAssunto: Array.from(assuntoMap.entries())
-        .map(([name, count]) => ({ name, count }))
-        .sort((a, b) => b.count - a.count),
-      byAgent: Array.from(agentMap.entries())
-        .map(([name, v]) => ({
-          name,
-          count: v.count,
-          avgCsat: v.csatCount > 0 ? Math.round((v.csatSum / v.csatCount) * 10) / 10 : null,
-          csatCount: v.csatCount,
-        }))
-        .sort((a, b) => b.count - a.count),
-    };
+      const result: WhatsAppBreakdownData = {
+        period,
+        total: convs.length,
+        bySubdepartamento: Array.from(subdepMap.entries())
+          .map(([name, v]) => ({ name, ...v }))
+          .sort((a, b) => b.count - a.count),
+        byAssunto: Array.from(assuntoMap.entries())
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count),
+        byAgent: Array.from(agentMap.entries())
+          .map(([name, v]) => ({
+            name,
+            count: v.count,
+            avgCsat: v.csatCount > 0 ? Math.round((v.csatSum / v.csatCount) * 10) / 10 : null,
+            csatCount: v.csatCount,
+          }))
+          .sort((a, b) => b.count - a.count),
+      };
 
-    return NextResponse.json(result);
+      return result;
+    });
+
+    return NextResponse.json(payload);
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

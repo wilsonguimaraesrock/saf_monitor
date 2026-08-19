@@ -5,7 +5,11 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const maxDuration = 300;
 
-const PUSH_INTERVAL_MS = 15_000;
+// 30s em vez de 15s: cada snapshot custa 18 chamadas ao Chatwoot (9 setores x
+// 2 status) e roda por atendente conectado. A 15s isso dava ~72 req/min por
+// atendente e saturava o Chatwoot auto-hospedado, derrubando o envio de
+// respostas com connect timeout. A notificação chega em até 30s.
+const PUSH_INTERVAL_MS = 30_000;
 /** Encerra antes do limite da função; o EventSource reconecta sozinho. */
 const STREAM_TTL_MS = 270_000;
 
