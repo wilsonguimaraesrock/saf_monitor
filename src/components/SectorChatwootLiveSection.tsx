@@ -108,10 +108,18 @@ export function SectorChatwootLiveSection({
         if (cancelled) return;
 
         startTransition(() => {
-          setPanelData(data.panelData);
+          // `getChatwootPanelData` devolve null quando qualquer uma das cinco
+          // chamadas ao Chatwoot falha (o CSAT é a mais instável). Sobrescrever
+          // com null apagava o painel inteiro por causa de uma falha passageira;
+          // preservar o último dado bom e sinalizar o erro é mais honesto.
+          if (data.panelData) {
+            setPanelData(data.panelData);
+            setHasPollingError(false);
+          } else {
+            setHasPollingError(true);
+          }
           setOpenConversations(data.openConversations);
           setRefreshedAt(data.refreshedAt);
-          setHasPollingError(false);
         });
       } catch (err) {
         if (cancelled || (err as Error).name === 'AbortError') return;
@@ -155,7 +163,11 @@ export function SectorChatwootLiveSection({
     <div className="space-y-6">
       {backlogOpen && (
         <ChatwootBacklogModal
-          inboxId={panelData?.inboxId ?? null}
+          // O inbox vem da configuração do setor, não do painel vivo. Ligado ao
+          // `panelData`, um único poll que falhasse (o painel virava null)
+          // deixava o backlog com inboxId null — e ele mostrava "nenhuma
+          // conversa" em vez de buscar, sem erro nenhum na tela.
+          inboxId={inboxId}
           teamId={teamId}
           inboxName={inboxName}
           onClose={() => setBacklogOpen(false)}

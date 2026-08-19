@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   X, ExternalLink, Send, UserX, Phone, Building2, Tag,
   RefreshCw, CheckCircle, Image as ImageIcon, Mic, MicOff, ArrowLeftRight, ArrowDown,
-  Paperclip, FileText, StickyNote, Lock,
+  Paperclip, FileText, StickyNote, Lock, AlertTriangle,
 } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
 import { loadDraft, saveDraft, clearDraft } from '@/lib/replyDraft';
@@ -145,6 +145,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
   const [sendError, setSendError] = useState('');
   const [resolving, setResolving] = useState(false);
   const [confirmResolve, setConfirmResolve] = useState(false);
+  const [resolveError, setResolveError] = useState('');
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
 
   // Nota interna: mensagem que fica no histórico da conversa mas o Chatwoot
@@ -442,14 +443,49 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
   async function handleResolve() {
     if (!conversation || resolving) return;
     if (!confirmResolve) {
+      setResolveError('');
       setConfirmResolve(true);
-      setTimeout(() => setConfirmResolve(false), 4000);
+      setTimeout(() => setConfirmResolve(false), 8000);
       return;
     }
     setResolving(true);
+    setResolveError('');
     try {
-      const res = await fetch(`/api/chatwoot/conversation/${conversation.id}`, { method: 'PATCH' });
-      if (res.ok) onClose();
+      // Trava de tempo no cliente: se a rota não responder (Chatwoot pendurado,
+      // função encerrada pela plataforma), o botão volta a funcionar com um
+      // aviso em vez de girar indefinidamente.
+      const res = await fetch(`/api/chatwoot/conversation/${conversation.id}`, {
+        method: 'PATCH',
+        signal: AbortSignal.timeout(30_000),
+      });
+      // Sessão expirada é o caso traiçoeiro: o middleware redireciona para
+      // /login, o fetch segue o redirect e devolve HTML com status 200. Sem
+      // checar isto, o modal fechava "com sucesso" e a conversa continuava
+      // aberta — indistinguível de "nada acontece".
+      const isHtml = (res.headers.get('content-type') ?? '').includes('text/html');
+      if (res.redirected || isHtml) {
+        setResolveError('Sua sessão expirou. Recarregue a página e faça login novamente para resolver.');
+        return;
+      }
+
+      if (res.ok) {
+        onClose();
+        return;
+      }
+      // Falha silenciosa era o bug: sem isto, um 401/404/503 parecia "nada
+      // acontece" e o atendente ficava clicando sem saber o motivo.
+      const data = await res.json().catch(() => null);
+      setResolveError(
+        data?.error
+          ? `${data.error}${data.detail ? ` — ${data.detail}` : ''}`
+          : `Não foi possível resolver (HTTP ${res.status}).`
+      );
+    } catch (err) {
+      setResolveError(
+        (err as Error)?.name === 'TimeoutError'
+          ? 'O Chatwoot não respondeu em 30s. A conversa pode não ter sido resolvida — confira e tente de novo.'
+          : 'Erro de conexão ao resolver. Tente novamente.'
+      );
     } finally {
       setResolving(false);
       setConfirmResolve(false);
@@ -570,6 +606,16 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
               </button>
             </div>
           </div>
+
+          {/* Falha ao resolver — fica no topo, colado no botão que o atendente clicou */}
+          {resolveError && (
+            <div className="px-6 py-3 border-b border-red-100 dark:border-red-900/40 bg-red-50 dark:bg-red-950/30 shrink-0">
+              <p className="flex items-start gap-2 text-xs text-red-700 dark:text-red-300">
+                <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                <span>{resolveError}</span>
+              </p>
+            </div>
+          )}
 
           {/* Transfer panel */}
           {showTransfer && (

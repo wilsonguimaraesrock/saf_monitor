@@ -257,17 +257,45 @@ export async function PATCH(
 
   const { id } = await params;
 
-  const res = await fetch(
+  // `idempotent: true`: o corpo manda o estado final (`resolved`), não um toggle
+  // cego — repetir a chamada leva a conversa ao mesmo lugar. Sem isto, quando o
+  // Chatwoot para de aceitar conexões o fetch cru ficava pendurado sem timeout e
+  // o botão Resolver girava para sempre.
+  const outcome = await upstreamFetch(
     `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}/toggle_status`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...chatwootHeaders() },
       body: JSON.stringify({ status: 'resolved' }),
+      timeoutMs: 15_000,
+      attempts: 3,
+      idempotent: true,
     }
   );
 
+  if (outcome.kind !== 'response') {
+    // Texto próprio: `describeOutcome` fala de mensagem duplicada, que não se
+    // aplica aqui — resolver duas vezes é inofensivo.
+    const error = outcome.kind === 'unreachable'
+      ? 'O servidor do Chatwoot não aceitou a conexão (sobrecarga). A conversa NÃO foi resolvida — '
+        + 'tente novamente em alguns segundos.'
+      : 'A conexão com o Chatwoot caiu durante a resolução. Confira o status da conversa antes de repetir.';
+    return NextResponse.json(
+      { error, code: outcome.kind, attempts: outcome.attempts },
+      { status: 503 }
+    );
+  }
+
+  const res = outcome.response;
+
   if (!res.ok) {
-    return NextResponse.json({ error: `Chatwoot error: ${res.status}` }, { status: res.status });
+    // O texto do Chatwoot importa aqui: 401/403 (token sem permissão no time) e
+    // 404 (conversa fora da conta) são indistinguíveis só pelo status na tela.
+    const detail = await res.text().catch(() => '');
+    return NextResponse.json(
+      { error: `Chatwoot recusou a resolução (HTTP ${res.status})`, detail: detail.slice(0, 500) },
+      { status: res.status }
+    );
   }
 
   return NextResponse.json(await res.json());

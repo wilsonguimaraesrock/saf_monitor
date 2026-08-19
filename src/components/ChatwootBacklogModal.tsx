@@ -114,7 +114,13 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Pr
   const [filterAssunto, setFilterAssunto] = useState('');
 
   const fetchBacklog = useCallback(async () => {
-    if (!inboxId) return;
+    // Sem inbox não há o que buscar — mas dizer isso é essencial: antes esta
+    // saída silenciosa caía na tela de "nenhuma conversa encontrada", sem
+    // requisição, sem erro e sem spinner, indistinguível de um mês vazio.
+    if (!inboxId) {
+      setError('Inbox do Chatwoot não identificada para este setor — recarregue a página.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
