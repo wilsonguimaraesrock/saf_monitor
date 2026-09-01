@@ -1,80 +1,97 @@
 'use client';
 
-import { MessageCircle, UserX, Clock, CheckCircle2, BellOff, Star } from 'lucide-react';
+import { MessageCircle, UserX, Clock, CheckCircle2, BellOff, Star, History } from 'lucide-react';
 import type { ChatwootPanelData } from '@/integrations/chatwoot';
 
 interface Props {
   data: ChatwootPanelData;
 }
 
+type Tone = 'blue' | 'red' | 'amber' | 'slate';
+
+const TONES: Record<Tone, { bg: string; text: string; icon: string }> = {
+  blue:  { bg: 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800',       text: 'text-blue-700 dark:text-blue-300',   icon: 'text-blue-500' },
+  red:   { bg: 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800',           text: 'text-red-600 dark:text-red-400',     icon: 'text-red-500' },
+  amber: { bg: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800',   text: 'text-amber-600 dark:text-amber-400', icon: 'text-amber-500' },
+  slate: { bg: 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600',     text: 'text-slate-600 dark:text-slate-300', icon: 'text-slate-500' },
+};
+
+const NEUTRAL = {
+  bg:   'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700',
+  text: 'text-gray-400 dark:text-slate-500',
+  icon: 'text-gray-400 dark:text-slate-500',
+};
+
+/**
+ * Cartão de estado vivo (abertas, não atribuídas, pendentes, adiadas).
+ * Em mês encerrado o valor chega `null` e o cartão mostra "—": o Chatwoot não
+ * guarda histórico de status, então não existe "abertas em agosto" — mostrar o
+ * número de agora sob o rótulo de um mês passado seria informação falsa.
+ */
+function LiveTile({
+  label, hint, value, tone, icon: Icon,
+}: {
+  label: string;
+  hint: string;
+  value: number | null;
+  tone: Tone;
+  icon: typeof MessageCircle;
+}) {
+  const active = value !== null && value > 0;
+  const style = active ? TONES[tone] : NEUTRAL;
+
+  return (
+    <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${style.bg}`}>
+      <div className="flex items-center gap-1.5">
+        <Icon size={15} className={style.icon} />
+        <span className="text-sm text-gray-500 dark:text-slate-400">{label}</span>
+      </div>
+      <span className={`text-4xl font-bold tabular-nums ${style.text}`}>
+        {value === null ? '—' : value}
+      </span>
+      <span className="text-sm text-gray-400 dark:text-slate-500">
+        {value === null ? 'só no mês atual' : hint}
+      </span>
+    </div>
+  );
+}
+
 export function ChatwootPanel({ data }: Props) {
+  const avg = data.csatAvg;
+
+  const csatStyle =
+    avg === null ? NEUTRAL :
+    avg >= 4.0   ? { bg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800', text: 'text-emerald-600 dark:text-emerald-400', icon: 'text-emerald-500' } :
+    avg >= 3.0   ? TONES.amber :
+                   TONES.red;
+
   return (
     <div className="card">
-      <div className="flex items-center gap-2 mb-3">
-        <MessageCircle size={16} className="text-green-500" />
-        <p className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
-          Atendimentos WhatsApp — {data.inboxName}
-        </p>
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <MessageCircle size={16} className="text-green-500" />
+          <p className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+            Atendimentos WhatsApp — {data.inboxName}
+          </p>
+        </div>
+        {data.historical && (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg
+            bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400">
+            <History size={12} />
+            mês encerrado
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
 
-        {/* Abertas */}
-        <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${
-          data.open > 0
-            ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800'
-            : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'
-        }`}>
-          <div className="flex items-center gap-1.5">
-            <MessageCircle size={15} className={data.open > 0 ? 'text-blue-500' : 'text-gray-400 dark:text-slate-500'} />
-            <span className="text-sm text-gray-500 dark:text-slate-400">Abertas</span>
-          </div>
-          <span className={`text-4xl font-bold tabular-nums ${
-            data.open > 0 ? 'text-blue-700 dark:text-blue-300' : 'text-gray-400 dark:text-slate-500'
-          }`}>
-            {data.open}
-          </span>
-          <span className="text-sm text-gray-400 dark:text-slate-500">em atendimento</span>
-        </div>
+        <LiveTile label="Abertas"        hint="em atendimento"  value={data.open}       tone="blue"  icon={MessageCircle} />
+        <LiveTile label="Não atribuídas" hint="sem agente"      value={data.unassigned} tone="red"   icon={UserX} />
+        <LiveTile label="Pendentes"      hint="aguardando ação" value={data.pending}    tone="amber" icon={Clock} />
 
-        {/* Não atribuídas */}
-        <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${
-          data.unassigned > 0
-            ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800'
-            : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'
-        }`}>
-          <div className="flex items-center gap-1.5">
-            <UserX size={15} className={data.unassigned > 0 ? 'text-red-500' : 'text-gray-400 dark:text-slate-500'} />
-            <span className="text-sm text-gray-500 dark:text-slate-400">Não atribuídas</span>
-          </div>
-          <span className={`text-4xl font-bold tabular-nums ${
-            data.unassigned > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'
-          }`}>
-            {data.unassigned}
-          </span>
-          <span className="text-sm text-gray-400 dark:text-slate-500">sem agente</span>
-        </div>
-
-        {/* Pendentes */}
-        <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${
-          data.pending > 0
-            ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800'
-            : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'
-        }`}>
-          <div className="flex items-center gap-1.5">
-            <Clock size={15} className={data.pending > 0 ? 'text-amber-500' : 'text-gray-400 dark:text-slate-500'} />
-            <span className="text-sm text-gray-500 dark:text-slate-400">Pendentes</span>
-          </div>
-          <span className={`text-4xl font-bold tabular-nums ${
-            data.pending > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-slate-500'
-          }`}>
-            {data.pending}
-          </span>
-          <span className="text-sm text-gray-400 dark:text-slate-500">aguardando ação</span>
-        </div>
-
-        {/* Resolvidas */}
-        <div className="rounded-xl border p-4 flex flex-col gap-1 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800">
+        {/* Resolvidas no período selecionado — antes era o total do canal */}
+        <div className="h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1
+          bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800">
           <div className="flex items-center gap-1.5">
             <CheckCircle2 size={15} className="text-emerald-500" />
             <span className="text-sm text-gray-500 dark:text-slate-400">Resolvidas</span>
@@ -82,60 +99,26 @@ export function ChatwootPanel({ data }: Props) {
           <span className="text-4xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
             {data.resolved}
           </span>
-          <span className="text-sm text-gray-400 dark:text-slate-500">total no canal</span>
+          <span className="text-sm text-gray-400 dark:text-slate-500">abertas e resolvidas no mês</span>
         </div>
 
-        {/* Adiadas */}
-        <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${
-          data.snoozed > 0
-            ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600'
-            : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700'
-        }`}>
+        <LiveTile label="Adiadas" hint="snoozed" value={data.snoozed} tone="slate" icon={BellOff} />
+
+        {/* Avaliação média CSAT do mês selecionado */}
+        <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${csatStyle.bg}`}>
           <div className="flex items-center gap-1.5">
-            <BellOff size={15} className={data.snoozed > 0 ? 'text-slate-500' : 'text-gray-400 dark:text-slate-500'} />
-            <span className="text-sm text-gray-500 dark:text-slate-400">Adiadas</span>
+            <Star size={15} className={csatStyle.icon} />
+            <span className="text-sm text-gray-500 dark:text-slate-400">Avaliação média</span>
           </div>
-          <span className={`text-4xl font-bold tabular-nums ${
-            data.snoozed > 0 ? 'text-slate-600 dark:text-slate-300' : 'text-gray-400 dark:text-slate-500'
-          }`}>
-            {data.snoozed}
+          <span className={`text-4xl font-bold tabular-nums ${csatStyle.text}`}>
+            {avg !== null ? avg.toFixed(1) : '—'}
           </span>
-          <span className="text-sm text-gray-400 dark:text-slate-500">snoozed</span>
+          <span className="text-sm text-gray-400 dark:text-slate-500">
+            {data.csatTotal > 0
+              ? `${data.csatTotal} avaliação${data.csatTotal > 1 ? 'ões' : ''} no mês`
+              : 'sem avaliações no mês'}
+          </span>
         </div>
-
-        {/* Avaliação média CSAT */}
-        {(() => {
-          const avg = data.csatAvg;
-          const colorClass =
-            avg === null          ? 'text-gray-400 dark:text-slate-500' :
-            avg >= 4.0            ? 'text-emerald-600 dark:text-emerald-400' :
-            avg >= 3.0            ? 'text-amber-600 dark:text-amber-400' :
-                                    'text-red-600 dark:text-red-400';
-          const bgClass =
-            avg === null          ? 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700' :
-            avg >= 4.0            ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800' :
-            avg >= 3.0            ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800' :
-                                    'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800';
-          const iconClass =
-            avg === null          ? 'text-gray-400 dark:text-slate-500' :
-            avg >= 4.0            ? 'text-emerald-500' :
-            avg >= 3.0            ? 'text-amber-500' :
-                                    'text-red-500';
-          return (
-            <div className={`h-full rounded-xl border shadow-md dark:shadow-sm p-4 flex flex-col gap-1 ${bgClass}`}>
-              <div className="flex items-center gap-1.5">
-                <Star size={15} className={iconClass} />
-                <span className="text-sm text-gray-500 dark:text-slate-400">Avaliação média</span>
-              </div>
-              <span className={`text-4xl font-bold tabular-nums ${colorClass}`}>
-                {avg !== null ? avg.toFixed(1) : '—'}
-              </span>
-              <span className="text-sm text-gray-400 dark:text-slate-500">
-                {data.csatTotal > 0 ? `${data.csatTotal} avaliação${data.csatTotal > 1 ? 'ões' : ''}` : 'sem dados'}
-              </span>
-            </div>
-          );
-        })()}
 
       </div>
     </div>

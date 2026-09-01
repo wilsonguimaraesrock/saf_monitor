@@ -8,3 +8,7 @@ logs/
 playwright-report/
 test-results/
 .vercel
+
+# Dados pessoais (CSV de unidades/contatos) — nunca commitar
+dados-privados/
+.ts-scripts-out/

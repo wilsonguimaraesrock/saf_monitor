@@ -13,6 +13,8 @@ interface Props {
   inboxId: number | null;
   teamId: number;
   inboxName?: string;
+  /** Mês selecionado na página, "YYYY-MM" — o modal abre já nesse mês */
+  initialMonth?: string;
   onClose: () => void;
 }
 
@@ -98,10 +100,14 @@ function toModalConversation(c: BacklogConversation): ChatwootConversation {
   };
 }
 
-export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose }: Props) {
+export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose, initialMonth }: Props) {
   const now = new Date();
-  const [year, setYear]   = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth()); // 0-indexed
+  // Abre no mês selecionado na página; sem prop, no mês atual.
+  const parsed = /^\d{4}-\d{2}$/.test(initialMonth ?? '')
+    ? initialMonth!.split('-').map(Number)
+    : null;
+  const [year, setYear]   = useState(parsed ? parsed[0] : now.getFullYear());
+  const [month, setMonth] = useState(parsed ? parsed[1] - 1 : now.getMonth()); // 0-indexed
 
   const [conversations, setConversations] = useState<BacklogConversation[]>([]);
   const [csatMonth, setCsatMonth] = useState<CsatStat | null>(null);

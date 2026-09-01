@@ -24,6 +24,9 @@ interface Props {
   initialPanelData: ChatwootPanelData | null;
   initialOpenConversations: ChatwootConversation[];
   initialRefreshedAt: string;
+  /** Mês selecionado na página, "YYYY-MM" */
+  month: string;
+  isCurrentMonth: boolean;
 }
 
 export function SectorChatwootLiveSection({
@@ -34,6 +37,8 @@ export function SectorChatwootLiveSection({
   initialPanelData,
   initialOpenConversations,
   initialRefreshedAt,
+  month,
+  isCurrentMonth,
 }: Props) {
   const [panelData, setPanelData] = useState(initialPanelData);
   const [openConversations, setOpenConversations] = useState(initialOpenConversations);
@@ -86,7 +91,9 @@ export function SectorChatwootLiveSection({
       setIsPolling(true);
 
       try {
-        const res = await fetch(`/api/chatwoot/live?sector=${encodeURIComponent(sectorSlug)}`, {
+        const res = await fetch(
+          `/api/chatwoot/live?sector=${encodeURIComponent(sectorSlug)}&month=${encodeURIComponent(month)}`,
+          {
           cache: 'no-store',
           credentials: 'include',
           signal: controller.signal,
@@ -128,11 +135,13 @@ export function SectorChatwootLiveSection({
       } finally {
         if (cancelled) return;
         setIsPolling(false);
-        scheduleRefresh();
+        // Mês encerrado não muda mais: uma busca basta, sem polling de 30s.
+        if (isCurrentMonth) scheduleRefresh();
       }
     };
 
     const handleWindowFocus = () => {
+      if (!isCurrentMonth) return;
       if (document.visibilityState === 'visible') {
         clearScheduledRefresh();
         void refreshChatwootData();
@@ -157,7 +166,7 @@ export function SectorChatwootLiveSection({
       window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('visibilitychange', handleWindowFocus);
     };
-  }, [sectorSlug, initialOpenConversations, initialPanelData, initialRefreshedAt]);
+  }, [sectorSlug, month, isCurrentMonth, initialOpenConversations, initialPanelData, initialRefreshedAt]);
 
   return (
     <div className="space-y-6">
@@ -170,6 +179,7 @@ export function SectorChatwootLiveSection({
           inboxId={inboxId}
           teamId={teamId}
           inboxName={inboxName}
+          initialMonth={month}
           onClose={() => setBacklogOpen(false)}
         />
       )}
@@ -178,14 +188,18 @@ export function SectorChatwootLiveSection({
         <span className="inline-flex items-center gap-2">
           <span
             className={`h-2 w-2 rounded-full ${
-              hasPollingError
-                ? 'bg-amber-500'
-                : isPolling
-                  ? 'bg-emerald-500 animate-pulse'
-                  : 'bg-emerald-500'
+              !isCurrentMonth
+                ? 'bg-slate-400'
+                : hasPollingError
+                  ? 'bg-amber-500'
+                  : isPolling
+                    ? 'bg-emerald-500 animate-pulse'
+                    : 'bg-emerald-500'
             }`}
           />
-          {hasPollingError ? 'Chatwoot ao vivo em reconexao' : 'Chatwoot ao vivo'}
+          {!isCurrentMonth
+            ? `Chatwoot — histórico de ${month}`
+            : hasPollingError ? 'Chatwoot ao vivo em reconexao' : 'Chatwoot ao vivo'}
         </span>
         <div className="flex items-center gap-3">
           <button
@@ -197,19 +211,25 @@ export function SectorChatwootLiveSection({
             <History size={13} />
             Backlog do mês
           </button>
-          <span>Atualizado as {refreshedLabel} · intervalo de 30s</span>
+          <span>
+            {isCurrentMonth
+              ? `Atualizado as ${refreshedLabel} · intervalo de 30s`
+              : 'Dados do mês fechado — abra o backlog para ver as conversas'}
+          </span>
         </div>
       </div>
 
       {panelData && <ChatwootPanel data={panelData} />}
 
-      <ChatwootConversationTable
-        conversations={openConversations}
-        title={`Conversas Abertas — WhatsApp ${inboxName}`}
-        onBacklog={() => setBacklogOpen(true)}
-      />
+      {isCurrentMonth && (
+        <ChatwootConversationTable
+          conversations={openConversations}
+          title={`Conversas Abertas — WhatsApp ${inboxName}`}
+          onBacklog={() => setBacklogOpen(true)}
+        />
+      )}
 
-      <ChatwootBreakdownCard teamId={teamId} inboxId={inboxId} />
+      <ChatwootBreakdownCard teamId={teamId} inboxId={inboxId} month={month} />
     </div>
   );
 }

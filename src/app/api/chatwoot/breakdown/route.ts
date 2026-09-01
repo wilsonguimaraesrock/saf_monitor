@@ -41,6 +41,7 @@ type RawConv = {
   status: string;
   created_at: number;
   meta: { assignee: { name: string } | null };
+  custom_attributes?: Record<string, string>;
 };
 
 type RawMessage = { content: string | null; created_at: number; message_type: number };
@@ -51,6 +52,17 @@ function parseBotFields(content: string): { subdepartamento: string; assunto: st
     return m?.[1]?.trim() ?? '';
   };
   return { subdepartamento: field('Subdepartamento'), assunto: field('Assunto') };
+}
+
+/** Classificação vinda do menu, já presente no payload da conversa.
+ *  O bloco de texto na primeira mensagem é o formato antigo — ver fetchBotFields. */
+function botFieldsFromAttributes(
+  attrs?: Record<string, string>
+): { subdepartamento: string; assunto: string } | null {
+  const subdepartamento = attrs?.subdepartmentName?.trim() ?? '';
+  const assunto         = attrs?.subjectName?.trim() ?? '';
+  if (!subdepartamento && !assunto) return null;
+  return { subdepartamento, assunto };
 }
 
 async function fetchBotFields(convId: number): Promise<{ subdepartamento: string; assunto: string }> {
@@ -98,10 +110,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'teamId e inboxId obrigatórios' }, { status: 400 });
   }
 
-  const now = new Date();
-  const since = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) / 1000);
-  const until = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1) / 1000);
-  const period = now.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+  // Respeita o mês selecionado na página; sem parâmetro, mês corrente.
+  const monthParam = searchParams.get('month')?.trim();
+  const ref = /^\d{4}-\d{2}$/.test(monthParam ?? '')
+    ? new Date(Date.UTC(Number(monthParam!.slice(0, 4)), Number(monthParam!.slice(5, 7)) - 1, 1))
+    : new Date();
+  const since = Math.floor(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), 1) / 1000);
+  const until = Math.floor(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth() + 1, 1) / 1000);
+  const period = ref.toLocaleString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
   try {
     const payload = await memoize(`breakdown:${teamId}:${inboxId}:${since}`, BREAKDOWN_TTL_MS, async () => {
@@ -117,7 +133,11 @@ export async function GET(req: NextRequest) {
 
       // Deduplicate + filter to month window (cap at 150 to keep bot-fetch fast)
       const convMap = new Map<number, RawConv>();
-      for (const c of [...resolved, ...open, ...pending, ...snoozed]) convMap.set(c.id, c);
+      for (const c of [...resolved, ...open, ...pending, ...snoozed]) {
+        // `fetchConvsByTeam` corta pelo início do período; o fim importa
+        // quando o mês selecionado não é o corrente.
+        if (c.created_at >= since && c.created_at < until) convMap.set(c.id, c);
+      }
       const convs = Array.from(convMap.values())
         .filter((c) => c.created_at >= since && c.created_at < until)
         .slice(0, 150);
@@ -127,8 +147,12 @@ export async function GET(req: NextRequest) {
       for (const r of csatRaw) csatMap.set(r.conversationId, r.rating);
 
       // Fetch bot fields (subdepartamento + assunto) concurrently
+      // custom_attributes primeiro (sem custo); a busca da primeira mensagem
+      // fica só para as conversas antigas que ainda usam o bloco de texto.
       const botFields = await runConcurrently(
-        convs.map((c) => () => fetchBotFields(c.id)),
+        convs.map((c) => async () =>
+          botFieldsFromAttributes(c.custom_attributes) ?? (await fetchBotFields(c.id))
+        ),
         10
       );
 

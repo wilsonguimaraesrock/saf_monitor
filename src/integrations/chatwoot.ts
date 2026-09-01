@@ -86,13 +86,26 @@ interface ConversationMeta {
 export interface ChatwootPanelData {
   inboxId: number;
   inboxName: string;
-  open: number;
-  unassigned: number;
-  pending: number;
+  /** Estados vivos (agora). `null` em mês histórico: o Chatwoot não guarda
+   *  histórico de status, então "abertas em agosto" não existe como dado. */
+  open: number | null;
+  unassigned: number | null;
+  pending: number | null;
+  snoozed: number | null;
+  /** Resolvidas criadas no período selecionado (não o total do canal) */
   resolved: number;
-  snoozed: number;
   csatAvg: number | null;
   csatTotal: number;
+  /** true quando o mês selecionado já terminou */
+  historical: boolean;
+}
+
+/** Período selecionado no seletor de mês da página. */
+export interface ChatwootPeriod {
+  /** epoch em segundos, início inclusivo */
+  since: number;
+  /** epoch em segundos, fim exclusivo */
+  until: number;
 }
 
 /**
@@ -202,15 +215,6 @@ function monthBounds(ref = new Date()): { since: number; until: number } {
   };
 }
 
-async function getCsatStats(
-  inboxId: number,
-  teamId: number,
-  options?: ChatwootRequestOptions
-): Promise<{ avg: number | null; total: number }> {
-  const { since, until } = monthBounds();
-  return getCsatMetrics({ inboxId, teamId, since, until }, options);
-}
-
 async function getConversationMeta(
   teamId: number,
   status: string,
@@ -225,19 +229,47 @@ async function getConversationMeta(
   return data?.data?.meta ?? { all_count: 0, assigned_count: 0, unassigned_count: 0, mine_count: 0 };
 }
 
+/**
+ * Painel do WhatsApp de um setor, respeitando o mês selecionado.
+ *
+ * Sem `period` o comportamento é o do mês corrente. Com um mês já encerrado,
+ * os contadores de estado vivo (abertas, não atribuídas, pendentes, adiadas)
+ * voltam `null` em vez de mostrar o número de agora: o Chatwoot não versiona
+ * status, então exibir o estado atual sob o rótulo de um mês passado seria
+ * mentira. Resolvidas e CSAT são recortadas pelo período.
+ */
 export async function getChatwootPanelData(
   teamId: number,
   inboxId: number,
   inboxName: string,
-  options?: ChatwootRequestOptions
+  options?: ChatwootRequestOptions,
+  period?: ChatwootPeriod
 ): Promise<ChatwootPanelData | null> {
+  const { since, until } = period ?? monthBounds();
+  const historical = until * 1000 <= Date.now();
+
   try {
-    const [openMeta, pendingMeta, resolvedMeta, snoozedMeta, csat] = await Promise.all([
+    if (historical) {
+      const [resolved, csat] = await Promise.all([
+        getMonthlyResolvedCount(teamId, since, until),
+        getCsatMetrics({ inboxId, teamId, since, until }, options),
+      ]);
+      return {
+        inboxId, inboxName,
+        open: null, unassigned: null, pending: null, snoozed: null,
+        resolved,
+        csatAvg: csat.avg,
+        csatTotal: csat.total,
+        historical: true,
+      };
+    }
+
+    const [openMeta, pendingMeta, snoozedMeta, resolved, csat] = await Promise.all([
       getConversationMeta(teamId, 'open', options),
       getConversationMeta(teamId, 'pending', options),
-      getConversationMeta(teamId, 'resolved', options),
       getConversationMeta(teamId, 'snoozed', options),
-      getCsatStats(inboxId, teamId, options),
+      getMonthlyResolvedCount(teamId, since, until),
+      getCsatMetrics({ inboxId, teamId, since, until }, options),
     ]);
     return {
       inboxId,
@@ -245,10 +277,11 @@ export async function getChatwootPanelData(
       open:       openMeta.all_count,
       unassigned: openMeta.unassigned_count,
       pending:    pendingMeta.all_count,
-      resolved:   resolvedMeta.all_count,
       snoozed:    snoozedMeta.all_count,
+      resolved,
       csatAvg:    csat.avg,
       csatTotal:  csat.total,
+      historical: false,
     };
   } catch {
     return null;

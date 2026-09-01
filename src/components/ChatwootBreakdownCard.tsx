@@ -7,6 +7,8 @@ import type { WhatsAppBreakdownData } from '@/app/api/chatwoot/breakdown/route';
 interface Props {
   teamId: number;
   inboxId: number;
+  /** Mês selecionado na página, "YYYY-MM" */
+  month?: string;
 }
 
 type Tab = 'subdep' | 'assunto' | 'agente';
@@ -38,19 +40,19 @@ function Bar({ count, max }: { count: number; max: number }) {
   );
 }
 
-export function ChatwootBreakdownCard({ teamId, inboxId }: Props) {
+export function ChatwootBreakdownCard({ teamId, inboxId, month }: Props) {
   const [data, setData]     = useState<WhatsAppBreakdownData | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab]       = useState<Tab>('subdep');
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/chatwoot/breakdown?teamId=${teamId}&inboxId=${inboxId}`)
+    fetch(`/api/chatwoot/breakdown?teamId=${teamId}&inboxId=${inboxId}${month ? `&month=${encodeURIComponent(month)}` : ''}`)
       .then((r) => r.json())
       .then((d) => setData(d))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [teamId, inboxId]);
+  }, [teamId, inboxId, month]);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'subdep',  label: 'Subdepartamento', icon: <Layers size={13} /> },

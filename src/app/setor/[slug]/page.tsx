@@ -78,6 +78,12 @@ async function SectorContent({ params, searchParams }: PageProps) {
 
   // Always use month range for stats (matches landing page behaviour).
   const { ym: statsYm } = parseMonthParam(sp.month);
+  // Painel do WhatsApp segue o mesmo mês do resto da página
+  const { start: cwStart, end: cwEnd, ym: cwYm, isCurrentMonth: cwIsCurrent } = parseMonthParam(sp.month);
+  const chatwootPeriod = {
+    since: Math.floor(cwStart.getTime() / 1000),
+    until: Math.floor(cwEnd.getTime() / 1000),
+  };
   const { dateFrom: statsDateFrom, dateTo: statsDateTo } = ymToDateRange(statsYm);
 
   // For ticket table: only filter by month when explicitly selected via URL param.
@@ -132,7 +138,7 @@ async function SectorContent({ params, searchParams }: PageProps) {
       getSectorTicketsFiltered(depts, filters),
       getSectorSlaStats(depts),
       chatwoot
-        ? getChatwootPanelData(chatwoot.teamId, chatwoot.inboxId, chatwoot.inboxName)
+        ? getChatwootPanelData(chatwoot.teamId, chatwoot.inboxId, chatwoot.inboxName, undefined, chatwootPeriod)
         : Promise.resolve(null),
       chatwoot
         ? getOpenConversations(chatwoot.teamId)
@@ -253,6 +259,8 @@ async function SectorContent({ params, searchParams }: PageProps) {
           initialPanelData={chatwootData}
           initialOpenConversations={openConversations}
           initialRefreshedAt={new Date().toISOString()}
+          month={cwYm}
+          isCurrentMonth={cwIsCurrent}
         />
       )}
 
