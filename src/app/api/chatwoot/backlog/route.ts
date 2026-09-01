@@ -46,6 +46,26 @@ function parseBotMessage(content: string): BotData {
   };
 }
 
+/**
+ * Classificação do menu do WhatsApp direto da conversa.
+ *
+ * O bot do menu grava unidade/departamento/subdepartamento/assunto em
+ * `custom_attributes` de cada conversa — é o formato atual e vem de graça no
+ * payload da listagem. Antes ele também repetia esses campos num bloco de texto
+ * na primeira mensagem (`*Assunto:* ...`), e é isso que `fetchBotData` lê, uma
+ * chamada extra por conversa. Hoje só as conversas antigas têm esse bloco, então
+ * ler daqui primeiro conserta a classificação das recentes e elimina a maior
+ * parte das chamadas ao Chatwoot.
+ */
+function botDataFromAttributes(attrs?: Record<string, string>): BotData | null {
+  const unidade         = attrs?.unitName?.trim() ?? '';
+  const departamento    = attrs?.departmentName?.trim() ?? '';
+  const subdepartamento = attrs?.subdepartmentName?.trim() ?? '';
+  const assunto         = attrs?.subjectName?.trim() ?? '';
+  if (!unidade && !departamento && !subdepartamento && !assunto) return null;
+  return { unidade, departamento, subdepartamento, assunto };
+}
+
 async function fetchBotData(convId: number): Promise<BotData> {
   const empty: BotData = { unidade: '', departamento: '', subdepartamento: '', assunto: '' };
   try {
@@ -91,6 +111,7 @@ type RawConv = {
     assignee: { name: string } | null;
   };
   labels: string[];
+  custom_attributes?: Record<string, string>;
 };
 
 async function fetchConversationsForStatus(
@@ -172,9 +193,13 @@ export async function GET(req: NextRequest) {
       .filter((c) => c.created_at >= since && c.created_at < until)
       .sort((a, b) => b.created_at - a.created_at);
 
-    // Fetch first message for each conversation to extract bot-parsed fields
+    // Classificação do menu: preferir custom_attributes (formato atual, já no
+    // payload) e só buscar a primeira mensagem das conversas antigas que não
+    // têm os atributos. Antes era uma chamada por conversa, sempre.
     const botDataList = await runConcurrently(
-      convArray.map((c) => () => fetchBotData(c.id)),
+      convArray.map((c) => async () =>
+        botDataFromAttributes(c.custom_attributes) ?? (await fetchBotData(c.id))
+      ),
       10
     );
 

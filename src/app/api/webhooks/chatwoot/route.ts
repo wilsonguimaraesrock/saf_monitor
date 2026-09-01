@@ -21,6 +21,19 @@ function normalizePhone(raw: string | undefined | null): string {
   return digits ? `+${digits}` : '';
 }
 
+/**
+ * Conversa iniciada pela franqueadora pelo painel (não pelo menu do WhatsApp).
+ * O menu grava custom_attributes.source = 'whatsapp-bot'; o painel grava
+ * 'saf-monitor' e aplica a label 'ativa'. A Roxy responde só ao fluxo
+ * receptivo: numa conversa ativa já existe um atendente humano conduzindo, e
+ * uma resposta automática por cima atrapalharia o atendimento.
+ */
+function isConversaAtiva(payload: ChatwootEvent): boolean {
+  const source = payload.conversation?.custom_attributes?.source?.trim().toLowerCase();
+  if (source && source !== 'whatsapp-bot') return true;
+  return (payload.conversation?.labels ?? []).includes('ativa');
+}
+
 /** Map Chatwoot teamId → sector slug */
 function departmentFromTeamId(teamId: number): string {
   const sector = SECTORS.find((s) => s.chatwoot?.teamId === teamId);
@@ -44,9 +57,11 @@ interface ChatwootEvent {
     id?: number;
     inbox_id?: number;
     custom_attributes?: Record<string, string>;
+    labels?: string[];
     meta?: {
       team?: { id?: number; name?: string };
       sender?: { phone_number?: string; name?: string };
+      assignee?: { id?: number } | null;
     };
   };
   // some versions put sender at top level
@@ -143,6 +158,12 @@ async function processEvent(payload: ChatwootEvent) {
     }
   } catch (err) {
     log.error(`Falha ao enviar push: ${(err as Error).message}`);
+  }
+
+  if (isConversaAtiva(payload)) {
+    // A notificação (push acima) continua valendo — quem não roda é o bot.
+    log.info(`Conversa ativa (iniciada pelo painel): conv=${conversationId} — Roxy não responde`);
+    return;
   }
 
   await handleIncomingMessage({ conversationId, contactPhone, messageText, department, teamId, contactName, subjectName });

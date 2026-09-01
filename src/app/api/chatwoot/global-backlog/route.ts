@@ -46,6 +46,7 @@ type RawConv = {
     assignee: { name: string } | null;
   };
   labels: string[];
+  custom_attributes?: Record<string, string>;
 };
 
 type RawMessage = {
@@ -89,6 +90,17 @@ function parseBotMessage(content: string): { unidade: string; departamento: stri
     subdepartamento: field('Subdepartamento'),
     assunto:         field('Assunto'),
   };
+}
+
+/** Classificação do menu direto do payload da conversa (formato atual).
+ *  O parse da primeira mensagem cobre só as conversas antigas. */
+function botDataFromAttributes(attrs?: Record<string, string>) {
+  const unidade         = attrs?.unitName?.trim() ?? '';
+  const departamento    = attrs?.departmentName?.trim() ?? '';
+  const subdepartamento = attrs?.subdepartmentName?.trim() ?? '';
+  const assunto         = attrs?.subjectName?.trim() ?? '';
+  if (!unidade && !departamento && !subdepartamento && !assunto) return null;
+  return { unidade, departamento, subdepartamento, assunto };
 }
 
 async function fetchBotData(convId: number) {
@@ -195,7 +207,9 @@ export async function GET(req: NextRequest) {
     // Fetch bot data concurrently (cap at 200 conversations to keep it fast)
     const capped = convArray.slice(0, 200);
     const botDataList = await runConcurrently(
-      capped.map((c) => () => fetchBotData(c.id)),
+      capped.map((c) => async () =>
+        botDataFromAttributes(c.custom_attributes) ?? (await fetchBotData(c.id))
+      ),
       10
     );
 
