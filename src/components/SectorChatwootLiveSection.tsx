@@ -1,12 +1,14 @@
 'use client';
 
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
-import { History } from 'lucide-react';
+import { History, MessageSquarePlus } from 'lucide-react';
 import type { ChatwootConversation, ChatwootPanelData } from '@/integrations/chatwoot';
 import { ChatwootPanel } from '@/components/ChatwootPanel';
 import { ChatwootConversationTable } from '@/components/ChatwootConversationTable';
 import { ChatwootBacklogModal } from '@/components/ChatwootBacklogModal';
 import { ChatwootBreakdownCard } from '@/components/ChatwootBreakdownCard';
+import { IniciarConversaModal } from '@/components/IniciarConversaModal';
+import { ChatwootConversationModal } from '@/components/ChatwootConversationModal';
 
 const LIVE_REFRESH_MS = 30 * 1000;
 
@@ -27,6 +29,10 @@ interface Props {
   /** Mês selecionado na página, "YYYY-MM" */
   month: string;
   isCurrentMonth: boolean;
+  /** Nome do setor, para o cabeçalho e o pré-preenchimento do departamento */
+  sectorName: string;
+  /** Nome do departamento no cadastro do chatbot, quando difere do nome do setor */
+  chatbotDepartment?: string;
 }
 
 export function SectorChatwootLiveSection({
@@ -39,6 +45,8 @@ export function SectorChatwootLiveSection({
   initialRefreshedAt,
   month,
   isCurrentMonth,
+  sectorName,
+  chatbotDepartment,
 }: Props) {
   const [panelData, setPanelData] = useState(initialPanelData);
   const [openConversations, setOpenConversations] = useState(initialOpenConversations);
@@ -46,6 +54,9 @@ export function SectorChatwootLiveSection({
   const [isPolling, setIsPolling] = useState(false);
   const [hasPollingError, setHasPollingError] = useState(false);
   const [backlogOpen, setBacklogOpen] = useState(false);
+  const [iniciarOpen, setIniciarOpen] = useState(false);
+  // Conversa recém-iniciada: abre direto, sem esperar o próximo poll
+  const [conversaIniciada, setConversaIniciada] = useState<ChatwootConversation | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -184,6 +195,40 @@ export function SectorChatwootLiveSection({
         />
       )}
 
+      {iniciarOpen && (
+        <IniciarConversaModal
+          sectorSlug={sectorSlug}
+          sectorName={sectorName}
+          chatbotDepartment={chatbotDepartment}
+          onClose={() => setIniciarOpen(false)}
+          onStarted={({ conversationId, conversation }) => {
+            setIniciarOpen(false);
+            setConversaIniciada(
+              (conversation as ChatwootConversation | undefined) ?? {
+                // 409: só temos o id, o resto o próprio modal busca pela conversa
+                id: conversationId,
+                contactName: 'Atendimento em andamento',
+                contactPhone: '',
+                unitName: '',
+                labels: [],
+                assigneeId: null,
+                assigneeName: null,
+                lastMessage: '',
+                waitingSinceSec: 0,
+                chatwootUrl: '',
+              }
+            );
+          }}
+        />
+      )}
+
+      {conversaIniciada && (
+        <ChatwootConversationModal
+          conversation={conversaIniciada}
+          onClose={() => setConversaIniciada(null)}
+        />
+      )}
+
       <div className="flex items-center justify-between gap-3 text-xs text-gray-400 dark:text-slate-500">
         <span className="inline-flex items-center gap-2">
           <span
@@ -202,6 +247,17 @@ export function SectorChatwootLiveSection({
             : hasPollingError ? 'Chatwoot ao vivo em reconexao' : 'Chatwoot ao vivo'}
         </span>
         <div className="flex items-center gap-3">
+          {/* Conversa ativa só faz sentido no presente: em mês fechado o botão sai */}
+          {isCurrentMonth && (
+            <button
+              onClick={() => setIniciarOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+                bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm"
+            >
+              <MessageSquarePlus size={13} />
+              Iniciar conversa
+            </button>
+          )}
           <button
             onClick={() => setBacklogOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium

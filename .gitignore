@@ -12,3 +12,4 @@ test-results/
 # Dados pessoais (CSV de unidades/contatos) — nunca commitar
 dados-privados/
 .ts-scripts-out/
+.env.local.bak-*

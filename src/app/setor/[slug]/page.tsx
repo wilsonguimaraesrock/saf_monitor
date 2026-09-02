@@ -261,6 +261,8 @@ async function SectorContent({ params, searchParams }: PageProps) {
           initialRefreshedAt={new Date().toISOString()}
           month={cwYm}
           isCurrentMonth={cwIsCurrent}
+          sectorName={sector.name}
+          chatbotDepartment={chatwoot.chatbotDepartment}
         />
       )}
 

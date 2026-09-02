@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   X, ExternalLink, Send, UserX, Phone, Building2, Tag,
   RefreshCw, CheckCircle, Image as ImageIcon, Mic, MicOff, ArrowLeftRight, ArrowDown,
-  Paperclip, FileText, StickyNote, Lock, AlertTriangle,
+  Paperclip, FileText, StickyNote, Lock, AlertTriangle, Clock,
 } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
 import { loadDraft, saveDraft, clearDraft } from '@/lib/replyDraft';
@@ -504,7 +504,35 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     });
   }
 
-  const canSend = !sending && !recording && (!!reply.trim() || !!attachFile);
+  /**
+   * Janela de 24h do WhatsApp.
+   *
+   * Conversa iniciada pela franqueadora começa com um template; até a escola
+   * responder, o WhatsApp NÃO entrega texto livre — e não entrega nem daqui nem
+   * do Chatwoot, porque a restrição é da plataforma, não do nosso caminho de
+   * envio. O Chatwoot aceita a mensagem e marca como enviada; ela simplesmente
+   * não chega. Travar aqui é a única forma de o atendente saber disso.
+   *
+   * Nota interna continua liberada: ela não vai para o WhatsApp.
+   *
+   * A regra não precisa saber a origem da conversa: conversa receptiva sempre
+   * tem mensagem recebida (a escola escreveu primeiro), então "nenhuma mensagem
+   * recebida" identifica exatamente o atendimento ativo à espera da resposta.
+   */
+  const recebidas = messages.filter((m) => m.message_type === 0);
+  const semRespostaDaEscola = !loading && messages.length > 0 && recebidas.length === 0;
+  const envioBloqueado = semRespostaDaEscola && !isNote;
+
+  // Passadas 24h da última mensagem da escola, texto livre também para de ser
+  // entregue. Aqui não travamos — só avisamos, porque a conversa pode estar
+  // legitimamente em andamento e a política depende do provedor.
+  const ultimaRecebida = recebidas.length > 0
+    ? Math.max(...recebidas.map((m) => m.created_at ?? 0))
+    : 0;
+  const janelaExpirada =
+    !loading && ultimaRecebida > 0 && Date.now() / 1000 - ultimaRecebida > 24 * 3600;
+
+  const canSend = !sending && !recording && !envioBloqueado && (!!reply.trim() || !!attachFile);
 
   if (!conversation) return null;
 
@@ -849,6 +877,32 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                 : 'border-gray-100 dark:border-slate-800'
             }`}
           >
+            {/* Conversa ativa esperando a escola: o WhatsApp não entrega texto
+                livre antes da resposta, e o Chatwoot não avisa quando descarta. */}
+            {semRespostaDaEscola && (
+              <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800
+                bg-amber-50 dark:bg-amber-950/40 px-3 py-2.5">
+                <Clock size={14} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+                  <b>Aguardando a resposta da escola.</b> Esta conversa foi iniciada por nós, com uma
+                  mensagem modelo. Até a escola responder, o WhatsApp não entrega mensagem escrita —
+                  ela apareceria aqui como enviada e não chegaria no celular. Enquanto isso, dá para
+                  registrar uma <b>nota interna</b>.
+                </p>
+              </div>
+            )}
+
+            {janelaExpirada && (
+              <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800
+                bg-amber-50/70 dark:bg-amber-950/30 px-3 py-2.5">
+                <Clock size={14} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+                  A escola não escreve há mais de 24 horas. Dependendo da política do WhatsApp,
+                  mensagem escrita pode não ser entregue — confirme por outro canal se for urgente.
+                </p>
+              </div>
+            )}
+
             {/* Modo de envio: resposta ao cliente x nota interna entre atendentes */}
             <div className="flex items-center gap-1 mb-3">
               <button
@@ -986,9 +1040,11 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
                 onKeyDown={handleKeyDown}
-                disabled={recording}
+                disabled={recording || envioBloqueado}
                 placeholder={
-                  recording
+                  envioBloqueado
+                    ? 'Aguardando a escola responder — só nota interna por enquanto'
+                    : recording
                     ? 'Gravando áudio…'
                     : attachFile
                     ? 'Legenda opcional… (Enter para enviar)'

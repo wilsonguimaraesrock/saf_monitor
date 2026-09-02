@@ -35,6 +35,12 @@ export interface SectorChatwootConfig {
   /** ID da inbox WhatsApp única — usada para CSAT */
   inboxId: number;
   inboxName: string;
+  /**
+   * Nome do departamento no cadastro do ChatBot Whats Franquias, quando difere
+   * do nome do setor aqui. Usado só para pré-selecionar o departamento no
+   * "Iniciar conversa" — sem correspondência, o atendente escolhe na lista.
+   */
+  chatbotDepartment?: string;
 }
 
 export interface Sector {
@@ -72,7 +78,7 @@ export const SECTORS: Sector[] = [
     displayDepartments: ['DSA JOY', 'MyRock', 'Plataformas de Aulas', 'Suporte E-mails'],
     icon:   FlaskConical,
     color:  'purple',
-    chatwoot: { teamId: 3, inboxId: 11, inboxName: 'WhatsApp – Rockfeller' },
+    chatwoot: { teamId: 3, inboxId: 11, inboxName: 'WhatsApp – Rockfeller', chatbotDepartment: 'Tecnologia' },
     showCategoryBreakdown: true,
   },
   {
@@ -131,7 +137,7 @@ export const SECTORS: Sector[] = [
     displayDepartments: ['Marketing'],
     icon:   Megaphone,
     color:  'warning',
-    chatwoot: { teamId: 4, inboxId: 11, inboxName: 'WhatsApp – Rockfeller' },
+    chatwoot: { teamId: 4, inboxId: 11, inboxName: 'WhatsApp – Rockfeller', chatbotDepartment: 'Marketing' },
   },
   {
     slug:   'treinamentos',
@@ -140,7 +146,7 @@ export const SECTORS: Sector[] = [
     displayDepartments: ['Rock Academy'],
     icon:   Award,
     color:  'critical',
-    chatwoot: { teamId: 8, inboxId: 11, inboxName: 'WhatsApp – Rockfeller' },
+    chatwoot: { teamId: 8, inboxId: 11, inboxName: 'WhatsApp – Rockfeller', chatbotDepartment: 'Rock Academy' },
   },
   {
     slug:   'financeiro',

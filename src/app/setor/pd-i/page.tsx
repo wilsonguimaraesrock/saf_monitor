@@ -216,6 +216,8 @@ async function PdiContent({ searchParams }: PageProps) {
         initialRefreshedAt={new Date().toISOString()}
         month={cwYm}
         isCurrentMonth={cwIsCurrent}
+        sectorName={sector.name}
+        chatbotDepartment={chatwoot.chatbotDepartment}
       />
 
       <div className="card">
