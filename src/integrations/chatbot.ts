@@ -43,6 +43,8 @@ export interface ChatbotWhatsappNumber {
   id: string;
   phoneNumber: string;
   active: boolean;
+  department?: string | null;
+  contactName?: string | null;
 }
 
 export interface ChatbotUnit {
