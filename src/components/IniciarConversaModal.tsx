@@ -15,7 +15,13 @@ import {
  * conversa iniciada pela empresa.
  */
 
-interface WhatsappNumber { id: string; phoneNumber: string; active: boolean }
+interface WhatsappNumber {
+  id: string;
+  phoneNumber: string;
+  active: boolean;
+  department?: string | null;
+  contactName?: string | null;
+}
 interface Unit { id: string; name: string; state?: string | null; whatsappNumbers: WhatsappNumber[] }
 interface Named { id: string; name: string }
 
@@ -37,6 +43,14 @@ function formatPhone(raw: string): string {
   if (local.length === 11) return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
   if (local.length === 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
   return raw;
+}
+
+function formatWhatsappNumber(number: WhatsappNumber): string {
+  return [
+    formatPhone(number.phoneNumber),
+    number.contactName?.trim(),
+    number.department?.trim(),
+  ].filter(Boolean).join(' | ');
 }
 
 /** Mesma aparência dos selects de filtro do painel (ver Filters.tsx). */
@@ -63,7 +77,6 @@ export function IniciarConversaModal({
   const [subdepId, setSubdepId]     = useState('');
   const [subjectId, setSubjectId]   = useState('');
 
-  const [busca, setBusca]       = useState('');
   const [carregando, setCarregando] = useState(true);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro]         = useState<Erro>(null);
@@ -136,13 +149,10 @@ export function IniciarConversaModal({
     setNumberId(numeros.length === 1 ? numeros[0].id : '');
   }, [numeros]);
 
-  const unidadesFiltradas = useMemo(() => {
-    const q = norm(busca);
-    const lista = q
-      ? units.filter((u) => norm(`${u.name} ${u.state ?? ''}`).includes(q))
-      : units;
-    return [...lista].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-  }, [units, busca]);
+  const unidadesOrdenadas = useMemo(
+    () => [...units].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+    [units]
+  );
 
   const completo = unitId && numberId && departmentId && subdepId && subjectId;
 
@@ -229,12 +239,6 @@ export function IniciarConversaModal({
               <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 inline-flex items-center gap-1.5">
                 <School size={13} /> Escola
               </span>
-              <input
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar por nome ou UF…"
-                className={INPUT_CLS}
-              />
               <select
                 value={unitId}
                 onChange={(e) => setUnitId(e.target.value)}
@@ -242,7 +246,7 @@ export function IniciarConversaModal({
                 size={1}
               >
                 <option value="">Selecione a escola…</option>
-                {unidadesFiltradas.map((u) => (
+                {unidadesOrdenadas.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name}{u.state ? ` — ${u.state}` : ''}
                   </option>
@@ -269,7 +273,7 @@ export function IniciarConversaModal({
                   >
                     {numeros.length > 1 && <option value="">Selecione o número…</option>}
                     {numeros.map((n) => (
-                      <option key={n.id} value={n.id}>{formatPhone(n.phoneNumber)}</option>
+                      <option key={n.id} value={n.id}>{formatWhatsappNumber(n)}</option>
                     ))}
                   </select>
                 )}
