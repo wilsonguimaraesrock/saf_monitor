@@ -139,6 +139,9 @@ function renderWhatsApp(text: string): React.ReactNode {
 
 export function ChatwootConversationModal({ conversation, onClose }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [conversationSource, setConversationSource] = useState<string | null>(
+    conversation?.source?.trim().toLowerCase() ?? null
+  );
   const [loading, setLoading] = useState(false);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
@@ -188,6 +191,12 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     if (!res.ok) return;
     if (activeConvRef.current !== id) return; // trocou de conversa no meio
     const data = await res.json();
+    const source = typeof data?.source === 'string'
+      ? data.source.trim().toLowerCase()
+      : null;
+    // O objeto recebido pela lista normalmente já tem a origem. A consulta
+    // direta é a garantia para entradas antigas ou abertas por outros fluxos.
+    if (source) setConversationSource(source);
     const payload: Message[] = data?.payload ?? [];
     const incoming = payload.filter((m) => m.message_type === 0 || m.message_type === 1);
     // Mescla por id em vez de substituir: se o Chatwoot devolveu o histórico
@@ -232,6 +241,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     if (!conversation) return;
     activeConvRef.current = conversation.id;
     setMessages([]);
+    setConversationSource(conversation.source?.trim().toLowerCase() ?? null);
     // Restaura o rascunho: uma resposta digitada não pode desaparecer só porque
     // o modal foi fechado/reaberto ou a página recarregou.
     setReply(loadDraft('cw', conversation.id));
@@ -248,7 +258,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     clearAttachment();
     setLoading(true);
     fetchMessages(conversation.id).finally(() => setLoading(false));
-  }, [conversation?.id, fetchMessages]);
+  }, [conversation?.id, conversation?.source, fetchMessages]);
 
   // Persiste o rascunho a cada alteração — sobrevive a fechar o modal,
   // recarregar a página ou perder a aba com o envio ainda pendente.
@@ -515,12 +525,13 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
    *
    * Nota interna continua liberada: ela não vai para o WhatsApp.
    *
-   * A regra não precisa saber a origem da conversa: conversa receptiva sempre
-   * tem mensagem recebida (a escola escreveu primeiro), então "nenhuma mensagem
-   * recebida" identifica exatamente o atendimento ativo à espera da resposta.
+   * O histórico não identifica a origem: o menu receptivo acontece antes do
+   * handoff e também pode criar uma conversa sem mensagens no Chatwoot. Por isso
+   * somente `custom_attributes.source = saf-monitor` ativa este bloqueio.
    */
   const recebidas = messages.filter((m) => m.message_type === 0);
-  const semRespostaDaEscola = !loading && messages.length > 0 && recebidas.length === 0;
+  const semRespostaDaEscola =
+    conversationSource === 'saf-monitor' && recebidas.length === 0;
   const envioBloqueado = semRespostaDaEscola && !isNote;
 
   // Passadas 24h da última mensagem da escola, texto livre também para de ser

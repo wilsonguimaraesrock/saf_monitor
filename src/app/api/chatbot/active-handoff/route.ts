@@ -179,6 +179,7 @@ export async function POST(req: NextRequest) {
       conversationId: chatwootConversationId,
       conversation: {
         id: chatwootConversationId,
+        source: 'saf-monitor',
         contactName: body.unitName ?? 'Escola',
         contactPhone: body.whatsappNumber ?? '',
         unitName: body.unitName ?? '',

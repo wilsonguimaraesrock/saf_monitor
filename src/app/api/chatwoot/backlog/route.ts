@@ -13,6 +13,7 @@ const TOKEN      = process.env.CHATWOOT_API_TOKEN;
 
 export interface BacklogConversation {
   id: number;
+  source: string | null;
   contactName: string;
   contactPhone: string;
   assigneeName: string | null;
@@ -214,6 +215,7 @@ export async function GET(req: NextRequest) {
       const bot  = botDataList[i];
       return {
         id:              c.id,
+        source:          c.custom_attributes?.source?.trim().toLowerCase() ?? null,
         contactName:     c.meta?.sender?.name ?? '—',
         contactPhone:    c.meta?.sender?.phone_number ?? '',
         assigneeName:    c.meta?.assignee?.name ?? null,
