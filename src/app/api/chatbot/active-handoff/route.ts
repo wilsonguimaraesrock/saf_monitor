@@ -12,6 +12,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { execute } from '@/lib/db';
 import { createActiveHandoff, isChatbotConfigured } from '@/integrations/chatbot';
+import {
+  assignConversationToAgent,
+  findChatwootAgentForUser,
+  type ChatwootAgent,
+} from '@/integrations/chatwoot';
 import { createChildLogger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -79,6 +84,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let chatwootAgent: ChatwootAgent | null;
+  try {
+    chatwootAgent = await findChatwootAgentForUser(user.email, user.name);
+  } catch (err) {
+    log.error(`falha ao localizar agente Chatwoot para ${user.name}: ${(err as Error).message}`);
+    return NextResponse.json(
+      { error: 'Não foi possível identificar seu agente no Chatwoot. Tente novamente.' },
+      { status: 502 }
+    );
+  }
+  if (!chatwootAgent) {
+    return NextResponse.json(
+      {
+        error: 'Seu usuário do SAF Monitor não está vinculado a um agente do Chatwoot. '
+          + 'Peça ao administrador para conferir seu e-mail antes de iniciar o atendimento.',
+      },
+      { status: 422 }
+    );
+  }
+
   const result = await createActiveHandoff({
     ...ids,
     agent: { id: String(user.id), name: user.name, email: user.email },
@@ -106,6 +131,19 @@ export async function POST(req: NextRequest) {
     `handoff ${handoffId} → conversa ${chatwootConversationId} `
     + `(${body.unitName ?? ids.unitId} · ${body.subjectName ?? ids.subjectId}) por ${user.name}`
   );
+
+  let assigned = false;
+  try {
+    await assignConversationToAgent(chatwootConversationId, chatwootAgent.id);
+    assigned = true;
+  } catch (err) {
+    // O template já foi enviado: nunca transformar isto em erro de handoff,
+    // pois o atendente poderia repetir e mandar uma segunda mensagem à escola.
+    log.error(
+      `handoff ${handoffId} criado, mas a atribuição ao agente ${chatwootAgent.id} falhou: `
+      + (err as Error).message
+    );
+  }
 
   // Auditoria local. Uma falha ao gravar não pode virar erro na tela: a
   // mensagem já foi para a escola, e dizer "falhou" faria o atendente repetir.
@@ -145,8 +183,8 @@ export async function POST(req: NextRequest) {
         contactPhone: body.whatsappNumber ?? '',
         unitName: body.unitName ?? '',
         labels: [] as string[],
-        assigneeId: null,
-        assigneeName: null,
+        assigneeId: assigned ? chatwootAgent.id : null,
+        assigneeName: assigned ? chatwootAgent.name : null,
         lastMessage: '',
         waitingSinceSec: 0,
         chatwootUrl: chatwootBase

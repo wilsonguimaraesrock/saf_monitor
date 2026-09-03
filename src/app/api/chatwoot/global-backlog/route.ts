@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchCsatResponses, getCsatMetrics } from '@/integrations/chatwoot';
+import {
+  getActiveConversationIds,
+  type ConversationOrigin,
+} from '@/repository/activeConversations';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +39,7 @@ export interface GlobalBacklogConversation {
   assunto: string;
   sectorSlug: string;
   sectorName: string;
+  origem: ConversationOrigin;
 }
 
 type RawConv = {
@@ -212,6 +217,7 @@ export async function GET(req: NextRequest) {
       ),
       10
     );
+    const activeConversationIds = await getActiveConversationIds(capped.map((c) => c.id));
 
     const conversations: GlobalBacklogConversation[] = capped.map((c, i) => ({
       id:              c.id,
@@ -229,6 +235,7 @@ export async function GET(req: NextRequest) {
       assunto:         botDataList[i].assunto,
       sectorSlug:      c.sectorSlug,
       sectorName:      c.sectorName,
+      origem:          activeConversationIds.has(c.id) ? 'ativo' : 'receptivo',
     }));
 
     return NextResponse.json({

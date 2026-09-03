@@ -1,4 +1,5 @@
 import { businessElapsedSeconds } from '../lib/businessTime';
+import { describeOutcome, upstreamFetch } from '../lib/upstreamFetch';
 
 const BASE_URL = process.env.CHATWOOT_BASE_URL?.replace(/\/$/, '');
 const ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID ?? '1';
@@ -7,6 +8,61 @@ const TOKEN = process.env.CHATWOOT_API_TOKEN;
 export interface ChatwootRequestOptions {
   cache?: RequestCache;
   revalidate?: number | false;
+}
+
+export interface ChatwootAgent {
+  id: number;
+  name: string;
+  email?: string | null;
+}
+
+const normalizeIdentity = (value: string) =>
+  value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+
+/** Resolve o agente do Chatwoot que corresponde ao usuário autenticado no SAF. */
+export async function findChatwootAgentForUser(
+  email: string,
+  name: string
+): Promise<ChatwootAgent | null> {
+  const agents = await chatwootFetch<ChatwootAgent[]>('/agents', { cache: 'no-store' });
+  const normalizedEmail = normalizeIdentity(email);
+  const byEmail = agents.find((agent) =>
+    agent.email && normalizeIdentity(agent.email) === normalizedEmail
+  );
+  if (byEmail) return byEmail;
+
+  const normalizedName = normalizeIdentity(name);
+  return agents.find((agent) => normalizeIdentity(agent.name) === normalizedName) ?? null;
+}
+
+/** Atribuição é idempotente: repetir leva a conversa ao mesmo agente. */
+export async function assignConversationToAgent(
+  conversationId: number,
+  agentId: number
+): Promise<void> {
+  if (!BASE_URL || !TOKEN) {
+    throw new Error('CHATWOOT_BASE_URL e CHATWOOT_API_TOKEN são obrigatórios');
+  }
+
+  const outcome = await upstreamFetch(
+    `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${conversationId}/assignments`,
+    {
+      method: 'POST',
+      headers: {
+        api_access_token: TOKEN,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ assignee_id: agentId }),
+      timeoutMs: 15_000,
+      attempts: 3,
+      idempotent: true,
+    }
+  );
+
+  if (outcome.kind !== 'response') throw new Error(describeOutcome(outcome));
+  if (!outcome.response.ok) {
+    throw new Error(`Chatwoot recusou a atribuição (HTTP ${outcome.response.status})`);
+  }
 }
 
 async function chatwootFetch<T>(
