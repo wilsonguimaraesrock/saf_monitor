@@ -89,6 +89,7 @@ function monthLabel(year: number, month: number) {
 function toModalConversation(c: BacklogConversation): ChatwootConversation {
   return {
     id: c.id,
+    source:         c.source,
     contactName:    c.contactName,
     contactPhone:   c.contactPhone,
     unitName:       c.unidade,

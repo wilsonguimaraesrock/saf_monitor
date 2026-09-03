@@ -346,6 +346,7 @@ export async function getChatwootPanelData(
 
 export interface ChatwootConversation {
   id: number;
+  source: string | null;
   contactName: string;
   contactPhone: string;
   unitName: string;
@@ -392,6 +393,7 @@ export async function getOpenConversations(
 
     return all.slice(0, limit).map((c) => ({
       id: c.id,
+      source:          c.custom_attributes?.source?.trim().toLowerCase() ?? null,
       contactName:    c.meta?.sender?.name ?? '—',
       contactPhone:   c.meta?.sender?.phone_number ?? '',
       unitName:       c.custom_attributes?.unitName ?? '',

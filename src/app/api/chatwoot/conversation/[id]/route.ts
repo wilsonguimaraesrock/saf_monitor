@@ -13,6 +13,29 @@ function chatwootHeaders() {
   return { api_access_token: TOKEN! };
 }
 
+/**
+ * A origem é a fonte de verdade para decidir se o atendente pode responder.
+ * Tanto conversas receptivas quanto ativas podem nascer sem mensagens no
+ * Chatwoot, pois o menu do bot acontece antes do handoff.
+ */
+async function getConversationSource(id: string): Promise<string | null> {
+  const outcome = await upstreamFetch(
+    `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}`,
+    { headers: chatwootHeaders(), cache: 'no-store', idempotent: true }
+  );
+  if (outcome.kind !== 'response' || !outcome.response.ok) return null;
+
+  try {
+    const data = (await outcome.response.json()) as {
+      custom_attributes?: { source?: unknown };
+    };
+    const source = data.custom_attributes?.source;
+    return typeof source === 'string' ? source.trim().toLowerCase() || null : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Nome do atendente logado (via JWT) — usado nas notas de transferência */
 async function getAgentName(req: NextRequest): Promise<string | null> {
   const jwt = req.cookies.get(COOKIE_NAME)?.value;
@@ -109,6 +132,9 @@ export async function GET(
   }
 
   const { id } = await params;
+  // Dispara junto com a paginação do histórico para não aumentar o tempo
+  // total de abertura do modal.
+  const sourcePromise = getConversationSource(id);
 
   // O endpoint de mensagens do Chatwoot é paginado por cursor: retorna as ~20
   // mensagens mais recentes e exige `?before=<id da mais antiga>` para buscar a
@@ -164,7 +190,7 @@ export async function GET(
     before = oldestId;
   }
 
-  return NextResponse.json({ meta, payload: all, partial });
+  return NextResponse.json({ meta, payload: all, partial, source: await sourcePromise });
 }
 
 export async function POST(
