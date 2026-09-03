@@ -5,6 +5,7 @@ import {
   X, ChevronLeft, ChevronRight, Search, Loader2, MessageSquare, Star, ExternalLink,
 } from 'lucide-react';
 import type { GlobalBacklogConversation } from '@/app/api/chatwoot/global-backlog/route';
+import { ConversationOriginBadge } from './ConversationOriginBadge';
 
 const CW_SECTOR_NAMES = [
   { slug: 'pd-i',           name: 'PD&I' },
@@ -331,6 +332,7 @@ export function GlobalChatwootBacklogModal({ onClose }: Props) {
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Setor</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Departamento</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Assunto</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Origem</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Agente</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Data</th>
@@ -385,6 +387,10 @@ export function GlobalChatwootBacklogModal({ onClose }: Props) {
                             ? <span className="text-xs text-gray-600 dark:text-slate-300">{c.assunto}</span>
                             : <span className="text-gray-300 dark:text-slate-700">—</span>
                           }
+                        </td>
+
+                        <td className="px-3 py-3">
+                          <ConversationOriginBadge origin={c.origem} />
                         </td>
 
                         <td className="px-3 py-3">

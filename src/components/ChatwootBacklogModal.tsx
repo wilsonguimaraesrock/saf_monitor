@@ -6,6 +6,7 @@ import { clsx } from 'clsx';
 import type { BacklogConversation } from '@/app/api/chatwoot/backlog/route';
 import { ChatwootConversationModal } from './ChatwootConversationModal';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
+import { ConversationOriginBadge } from './ConversationOriginBadge';
 
 interface CsatStat { avg: number | null; total: number }
 
@@ -372,6 +373,7 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose, init
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Escola</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Departamento</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Assunto</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Origem</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Agente</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Data</th>
@@ -422,6 +424,10 @@ export function ChatwootBacklogModal({ inboxId, teamId, inboxName, onClose, init
                             ? <span className="text-xs text-gray-600 dark:text-slate-300 line-clamp-2">{c.assunto}</span>
                             : <span className="text-gray-300 dark:text-slate-700">—</span>
                           }
+                        </td>
+
+                        <td className="px-3 py-3">
+                          <ConversationOriginBadge origin={c.origem} />
                         </td>
 
                         <td className="px-3 py-3">

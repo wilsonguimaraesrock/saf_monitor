@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchCsatResponses, getCsatMetrics } from '@/integrations/chatwoot';
+import {
+  getActiveConversationIds,
+  type ConversationOrigin,
+} from '@/repository/activeConversations';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +26,7 @@ export interface BacklogConversation {
   departamento: string;
   subdepartamento: string;
   assunto: string;
+  origem: ConversationOrigin;
 }
 
 type BotData = Pick<BacklogConversation, 'unidade' | 'departamento' | 'subdepartamento' | 'assunto'>;
@@ -202,6 +207,7 @@ export async function GET(req: NextRequest) {
       ),
       10
     );
+    const activeConversationIds = await getActiveConversationIds(convArray.map((c) => c.id));
 
     const conversations: BacklogConversation[] = convArray.map((c, i) => {
       const csat = csatMap.get(c.id);
@@ -221,6 +227,7 @@ export async function GET(req: NextRequest) {
         departamento:    bot.departamento,
         subdepartamento: bot.subdepartamento,
         assunto:         bot.assunto,
+        origem:          activeConversationIds.has(c.id) ? 'ativo' : 'receptivo',
       };
     });
 
