@@ -6,6 +6,8 @@ import { upstreamFetch, describeOutcome } from '@/lib/upstreamFetch';
 const BASE_URL = process.env.CHATWOOT_BASE_URL?.replace(/\/$/, '');
 const ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID ?? '1';
 const TOKEN = process.env.CHATWOOT_API_TOKEN;
+const WHATSAPP_WINDOW_SECONDS = 24 * 60 * 60;
+const MAX_MESSAGE_PAGES = 50;
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +36,67 @@ async function getConversationSource(id: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+type WindowLookup =
+  | { ok: true; lastPublicIncomingAt: number | null }
+  | { ok: false; status: number; error: string };
+
+/**
+ * Busca a mensagem pública recebida mais recente. O Chatwoot pagina o histórico
+ * em blocos pequenos; por isso percorremos para trás até encontrar uma incoming
+ * pública, em vez de assumir que ela está na primeira página.
+ */
+async function getLastPublicIncomingAt(id: string): Promise<WindowLookup> {
+  let before: number | undefined;
+
+  for (let page = 0; page < MAX_MESSAGE_PAGES; page++) {
+    const url = new URL(
+      `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}/messages`
+    );
+    if (before !== undefined) url.searchParams.set('before', String(before));
+
+    const outcome = await upstreamFetch(url.toString(), {
+      headers: chatwootHeaders(),
+      cache: 'no-store',
+      idempotent: true,
+    });
+    if (outcome.kind !== 'response') {
+      return { ok: false, status: 503, error: describeOutcome(outcome) };
+    }
+    if (!outcome.response.ok) {
+      return {
+        ok: false,
+        status: outcome.response.status,
+        error: `Não foi possível conferir a janela no Chatwoot (${outcome.response.status}).`,
+      };
+    }
+
+    const data = await outcome.response.json() as {
+      payload?: Array<{
+        id: number;
+        message_type?: number;
+        private?: boolean;
+        created_at?: number;
+      }>;
+    };
+    const payload = data.payload ?? [];
+    if (payload.length === 0) return { ok: true, lastPublicIncomingAt: null };
+
+    const timestamps = payload
+      .filter((m) => m.message_type === 0 && m.private !== true)
+      .map((m) => Number(m.created_at))
+      .filter((timestamp) => Number.isFinite(timestamp) && timestamp > 0);
+    if (timestamps.length > 0) {
+      return { ok: true, lastPublicIncomingAt: Math.max(...timestamps) };
+    }
+
+    const oldestId = payload.reduce((min, m) => (m.id < min ? m.id : min), payload[0].id);
+    if (before !== undefined && oldestId >= before) break;
+    before = oldestId;
+  }
+
+  return { ok: true, lastPublicIncomingAt: null };
 }
 
 /** Nome do atendente logado (via JWT) — usado nas notas de transferência */
@@ -142,13 +205,12 @@ export async function GET(
   // que piora após uma transferência (a nota interna e as mensagens de sistema
   // empurram o histórico real para páginas anteriores). Percorremos as páginas
   // para trás até esgotar o histórico e devolvemos tudo em um único payload.
-  const MAX_PAGES = 50; // trava de segurança (~1000 mensagens)
   const all: Array<{ id: number }> = [];
   let before: number | undefined;
   let meta: unknown;
   let partial = false;
 
-  for (let page = 0; page < MAX_PAGES; page++) {
+  for (let page = 0; page < MAX_MESSAGE_PAGES; page++) {
     const url = new URL(
       `${BASE_URL}/api/v1/accounts/${ACCOUNT_ID}/conversations/${id}/messages`
     );
@@ -208,13 +270,14 @@ export async function POST(
 
   let body: BodyInit;
   let headers: Record<string, string> = authHeader;
+  let isPrivate: boolean;
 
   if (contentType.includes('multipart/form-data')) {
     // Attachment (image or audio) — proxy FormData directly to Chatwoot
     const incoming = await req.formData();
     // `private=true` → nota interna: fica no histórico, mas o Chatwoot não
     // entrega ao cliente no WhatsApp. Visível apenas para os atendentes.
-    const isPrivate = incoming.get('private') === 'true';
+    isPrivate = incoming.get('private') === 'true';
     const outgoing = new FormData();
     outgoing.append('message_type', 'outgoing');
     outgoing.append('private', isPrivate ? 'true' : 'false');
@@ -238,9 +301,43 @@ export async function POST(
       ? withAgentPrefix(json.content.trim(), 'Rockfeller Franchising')
       : withAgentPrefix(json.content.trim(), prefixName);
     // Nota interna: o Chatwoot guarda no histórico mas não envia ao cliente.
-    const isPrivate = json.private === true;
+    isPrivate = json.private === true;
     body = JSON.stringify({ content, message_type: 'outgoing', private: isPrivate });
     headers = { 'Content-Type': 'application/json', ...(json.asSystem ? { api_access_token: TOKEN! } : authHeader) };
+  }
+
+  // A trava visual não é uma barreira de segurança: Enter, uma chamada manual
+  // ou uma corrida com o polling ainda poderiam alcançar esta rota. Antes de
+  // qualquer mensagem pública, o servidor consulta o histórico e falha fechado
+  // se não conseguir confirmar a janela. Notas privadas não vão ao WhatsApp e
+  // permanecem liberadas.
+  if (!isPrivate) {
+    const window = await getLastPublicIncomingAt(id);
+    if (!window.ok) {
+      return NextResponse.json({ error: window.error }, { status: window.status });
+    }
+
+    if (window.lastPublicIncomingAt === null) {
+      // Conversas receptivas também podem nascer vazias durante o menu do bot.
+      // A origem diferencia esse caso do atendimento ativo que ainda aguarda a
+      // primeira resposta ao template.
+      const source = await getConversationSource(id);
+      if (source === 'saf-monitor') {
+        return NextResponse.json(
+          {
+            error: 'Aguardando a primeira resposta do cliente. Mensagens públicas continuam bloqueadas; use uma nota interna.',
+          },
+          { status: 409 }
+        );
+      }
+    } else if (Date.now() / 1000 - window.lastPublicIncomingAt >= WHATSAPP_WINDOW_SECONDS) {
+      return NextResponse.json(
+        {
+          error: 'A janela de 24 horas do WhatsApp encerrou. Envie o template de retomada e aguarde o cliente responder.',
+        },
+        { status: 409 }
+      );
+    }
   }
 
   // `idempotent: false` de propósito: só repetimos quando o erro prova que a

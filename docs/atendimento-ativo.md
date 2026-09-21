@@ -36,6 +36,7 @@ A API tem prefixo global `/api` — os caminhos são `/api/admin/...`.
 | `src/integrations/chatbot.ts` | Cliente Basic Auth, cadastro em cascata e `active-handoffs`, com os erros traduzidos |
 | `src/app/api/chatbot/catalogo/route.ts` | Proxy do cadastro (cache de 5 min) |
 | `src/app/api/chatbot/active-handoff/route.ts` | Dispara o handoff, grava auditoria, devolve a conversa |
+| `src/app/api/chatbot/conversation/[id]/reengage/route.ts` | Proxy autenticado que solicita o template de retomada sem aceitar telefone do navegador |
 | `src/components/IniciarConversaModal.tsx` | Cascata unidade → número → departamento → subdepartamento → assunto |
 | `src/components/SectorChatwootLiveSection.tsx` | Botão "Iniciar conversa" no cabeçalho do setor |
 | `src/components/ChatwootConversationModal.tsx` | Trava da caixa de resposta na janela de 24h |
@@ -57,13 +58,50 @@ Decisões que importam para quem for mexer:
 - **O POST não é repetido automaticamente** (`idempotent: false`): se a conexão
   cair depois de enviada, a escola pode já ter recebido o template. Repetir
   mandaria uma segunda mensagem.
-- **Janela de 24h**: enquanto a escola não responder ao template, o WhatsApp não
-  entrega texto livre — e não entrega nem pelo Chatwoot, porque a restrição é da
-  plataforma. O Chatwoot aceita e a mensagem morre em silêncio. A caixa de
-  resposta fica travada até chegar a primeira mensagem da escola; nota interna
-  continua liberada, porque não vai para o WhatsApp. A regra não olha a origem
-  da conversa: conversa receptiva sempre tem mensagem recebida, então "nenhuma
-  mensagem recebida" identifica exatamente o handoff à espera de resposta.
+- **Janela de 24h**: enquanto a escola não responder ao primeiro template, ou
+  quando a última mensagem pública recebida completar 24 horas, texto, imagem,
+  arquivo e áudio públicos ficam bloqueados. Notas internas continuam liberadas,
+  porque não vão para o WhatsApp. O cálculo ignora notas privadas e usa
+  `created_at` do Chatwoot como epoch em segundos.
+- **Duas barreiras**: a modal impede o envio e a rota que cria mensagens consulta
+  novamente o histórico antes de qualquer mensagem pública. Assim Enter, uma
+  chamada manual ou uma corrida com o polling não contornam a janela.
+- **Rascunho preservado**: solicitar a retomada não limpa nem envia o texto já
+  digitado. O compositor só é liberado quando o polling encontrar uma nova
+  mensagem pública recebida do cliente.
+
+## Retomada depois de 24 horas
+
+Com a janela encerrada, a modal oferece **Retomar pelo WhatsApp**. O navegador
+chama somente:
+
+```http
+POST /api/chatbot/conversation/:chatwootConversationId/reengage
+```
+
+A rota exige a sessão JWT do SAF Monitor, valida um id numérico positivo e
+encaminha apenas o `conversationId`. Ela nunca aceita telefone do navegador. No
+servidor, `src/integrations/chatbot.ts` chama, com a Basic Auth de serviço:
+
+```http
+POST /api/admin/chats/:chatwootConversationId/reengage
+```
+
+Contrato do chatbot:
+
+| Status | Corpo/efeito no SAF Monitor |
+|---|---|
+| `200` | `{ sent: true, alreadySent: false, whatsappMessageId? }`: informa que o template foi enviado e mantém o compositor bloqueado |
+| `200` | `{ sent: false, alreadySent: true }`: não duplica o template e continua aguardando a resposta |
+| `409` | Janela ainda aberta, cliente nunca respondeu ou não existe handoff ativo; a mensagem do chatbot é exibida junto ao compositor |
+| `502` | WhatsApp recusou o template; nenhuma mensagem livre é enviada |
+| `503` | Template de retomada ainda não configurado |
+
+O template possui um botão de resposta rápida, mas **o envio do template não
+abre a janela**. Somente o clique/resposta do cliente (ou outra mensagem pública
+recebida) cria uma nova janela de 24 horas. O polling já existente, a cada 10
+segundos, detecta essa incoming e libera o compositor sem disparar um refresh
+concorrente.
 
 ## Tratamento dos erros
 
