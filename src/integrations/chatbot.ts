@@ -75,6 +75,16 @@ export interface ActiveHandoffSuccess {
   chatwootConversationId: number;
 }
 
+export interface ReengageSuccess {
+  sent: boolean;
+  alreadySent: boolean;
+  whatsappMessageId?: string;
+}
+
+export type ReengageResult =
+  | { ok: true; data: ReengageSuccess }
+  | { ok: false; status: 409 | 502 | 503; message: string };
+
 /** Resultado do POST já traduzido para o que a tela precisa decidir. */
 export type ActiveHandoffResult =
   | { ok: true; data: ActiveHandoffSuccess }
@@ -271,5 +281,101 @@ export async function createActiveHandoff(
       || 'Não foi possível notificar a escola: o envio da mensagem falhou no WhatsApp. '
          + 'O atendimento não foi criado. Avise o suporte antes de tentar de novo — '
          + 'cada tentativa envia mensagem para o franqueado.',
+  };
+}
+
+/**
+ * Envia o template de retomada de uma conversa cuja janela de 24h encerrou.
+ *
+ * O POST não leva telefone: o chatbot resolve o destinatário pelo handoff
+ * ativo associado ao id da conversa. Como o envio não é idempotente no
+ * transporte, `upstreamFetch` apenas repete a sondagem de conectividade e faz
+ * no máximo um POST.
+ */
+export async function reengageConversation(conversationId: number): Promise<ReengageResult> {
+  if (!isChatbotConfigured()) {
+    return {
+      ok: false,
+      status: 503,
+      message: new ChatbotNotConfiguredError().message,
+    };
+  }
+
+  const path = `/api/admin/chats/${conversationId}/reengage`;
+  const outcome = await upstreamFetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: authHeader(),
+      accept: 'application/json',
+    },
+    timeoutMs: 30_000,
+    attempts: 3,
+  });
+
+  if (outcome.kind !== 'response') {
+    log.error(`reengage da conversa ${conversationId} falhou sem resposta: ${outcome.kind}`);
+    return {
+      ok: false,
+      status: 502,
+      message: outcome.kind === 'unreachable'
+        ? 'O chatbot não aceitou a conexão. O template não foi enviado — tente novamente.'
+        : 'A conexão caiu durante o envio. Confira a conversa antes de tentar novamente.',
+    };
+  }
+
+  const res = outcome.response;
+  const payload = await res.json().catch(() => null) as
+    | {
+        sent?: boolean;
+        alreadySent?: boolean;
+        whatsappMessageId?: string;
+        message?: string;
+        error?: string;
+      }
+    | null;
+
+  if (res.ok) {
+    if (payload?.sent !== true && payload?.alreadySent !== true) {
+      log.error(`reengage da conversa ${conversationId} retornou sucesso sem confirmação`);
+      return {
+        ok: false,
+        status: 502,
+        message: 'O chatbot respondeu sem confirmar o envio do template. Confira a conversa antes de tentar novamente.',
+      };
+    }
+    return {
+      ok: true,
+      data: {
+        sent: payload?.sent === true,
+        alreadySent: payload?.alreadySent === true,
+        ...(payload?.whatsappMessageId ? { whatsappMessageId: payload.whatsappMessageId } : {}),
+      },
+    };
+  }
+
+  const upstreamMessage = payload?.message?.trim() || payload?.error?.trim();
+  if (res.status === 409) {
+    return {
+      ok: false,
+      status: 409,
+      message: upstreamMessage
+        || 'Não é possível retomar esta conversa: a janela ainda está aberta, o cliente nunca respondeu ou não há handoff ativo.',
+    };
+  }
+  if (res.status === 503) {
+    return {
+      ok: false,
+      status: 503,
+      message: upstreamMessage
+        || 'O template de retomada ainda não está configurado no chatbot.',
+    };
+  }
+
+  log.error(`reengage da conversa ${conversationId} → HTTP ${res.status}`);
+  return {
+    ok: false,
+    status: 502,
+    message: upstreamMessage
+      || 'O WhatsApp recusou o template de retomada. Nenhuma mensagem livre foi enviada.',
   };
 }

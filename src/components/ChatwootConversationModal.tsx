@@ -146,6 +146,12 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
+  const [reengaging, setReengaging] = useState(false);
+  const [waitingReengagementReplyFrom, setWaitingReengagementReplyFrom] = useState<number | null>(null);
+  const [reengageFeedback, setReengageFeedback] = useState<{
+    kind: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const [resolving, setResolving] = useState(false);
   const [confirmResolve, setConfirmResolve] = useState(false);
   const [resolveError, setResolveError] = useState('');
@@ -178,6 +184,9 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
   const audioChunksRef = useRef<Blob[]>([]);
   const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const discardRecordingRef = useRef(false);
+  const publicSendBlockedRef = useRef(false);
+  const isNoteRef = useRef(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -246,6 +255,9 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     // o modal foi fechado/reaberto ou a página recarregou.
     setReply(loadDraft('cw', conversation.id));
     setSendError('');
+    setReengaging(false);
+    setWaitingReengagementReplyFrom(null);
+    setReengageFeedback(null);
     setConfirmResolve(false);
     setShowTransfer(false);
     setSelectedTeamId('');
@@ -301,6 +313,10 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
   }
 
   function selectAttachment(file: File) {
+    if (!isNoteRef.current && publicSendBlockedRef.current) {
+      setSendError('Mensagens públicas estão bloqueadas até o cliente responder. O rascunho foi preservado.');
+      return;
+    }
     if (file.size > MAX_UPLOAD_BYTES) {
       setSendError(`Arquivo muito grande (máx. ${formatBytes(MAX_UPLOAD_BYTES)}).`);
       return;
@@ -317,6 +333,10 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
 
   async function sendAttachment(file: Blob, filename: string) {
     if (!conversation) return;
+    if (!isNoteRef.current && publicSendBlockedRef.current) {
+      setSendError('Mensagens públicas estão bloqueadas até o cliente responder. O anexo e o texto foram mantidos.');
+      return;
+    }
     setSending(true);
     setSendError('');
     try {
@@ -346,6 +366,10 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
 
   async function handleSend() {
     if (!conversation || sending) return;
+    if (!isNoteRef.current && publicSendBlockedRef.current) {
+      setSendError('Mensagens públicas estão bloqueadas até o cliente responder. O rascunho foi preservado.');
+      return;
+    }
 
     if (attachFile) {
       await sendAttachment(attachFile, attachFile.name);
@@ -384,9 +408,65 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   }
 
+  async function handleReengage() {
+    if (!conversation || reengaging) return;
+    setReengaging(true);
+    setReengageFeedback(null);
+    setSendError('');
+    try {
+      const res = await fetch(`/api/chatbot/conversation/${conversation.id}/reengage`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(35_000),
+      });
+      const isHtml = (res.headers.get('content-type') ?? '').includes('text/html');
+      if (res.redirected || isHtml) {
+        setReengageFeedback({
+          kind: 'error',
+          message: 'Sua sessão expirou. Recarregue a página e entre novamente.',
+        });
+        return;
+      }
+
+      const data = await res.json().catch(() => null) as { error?: string } | null;
+      if (!res.ok) {
+        const fallback = res.status === 409
+          ? 'Esta conversa ainda não pode ser retomada. Atualize o histórico e confira se o cliente já respondeu.'
+          : res.status === 503
+          ? 'O template de retomada ainda não está configurado no chatbot.'
+          : res.status === 502
+          ? 'O WhatsApp recusou o template de retomada. Tente novamente mais tarde.'
+          : `Não foi possível enviar o template (HTTP ${res.status}).`;
+        setReengageFeedback({ kind: 'error', message: data?.error ?? fallback });
+        return;
+      }
+
+      // O template não reabre a janela. Guardamos a última incoming conhecida e
+      // só liberamos quando o polling encontrar uma pública mais recente.
+      setWaitingReengagementReplyFrom(ultimaRecebida);
+      setReengageFeedback({
+        kind: 'success',
+        message: 'Template enviado. Aguardando o cliente responder para liberar novas mensagens.',
+      });
+    } catch (err) {
+      setReengageFeedback({
+        kind: 'error',
+        message: (err as Error)?.name === 'TimeoutError'
+          ? 'O chatbot não respondeu em 35 segundos. Confira a conversa antes de tentar novamente.'
+          : 'Sem conexão com o servidor. O template não pôde ser confirmado.',
+      });
+    } finally {
+      setReengaging(false);
+    }
+  }
+
   async function handleRecordToggle() {
     if (recording) {
       mediaRecorderRef.current?.stop();
+      return;
+    }
+
+    if (!isNoteRef.current && publicSendBlockedRef.current) {
+      setSendError('Áudio público bloqueado até o cliente responder.');
       return;
     }
 
@@ -399,15 +479,22 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
       const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
+      discardRecordingRef.current = false;
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
 
       recorder.onstop = async () => {
+        const discarded = discardRecordingRef.current;
+        discardRecordingRef.current = false;
         stopStream();
         setRecording(false);
         setRecSec(0);
+        if (discarded) {
+          audioChunksRef.current = [];
+          return;
+        }
         const blob = new Blob(audioChunksRef.current, { type: mimeType });
         await sendAttachment(blob, 'audio.webm');
       };
@@ -529,19 +616,45 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
    * handoff e também pode criar uma conversa sem mensagens no Chatwoot. Por isso
    * somente `custom_attributes.source = saf-monitor` ativa este bloqueio.
    */
-  const recebidas = messages.filter((m) => m.message_type === 0);
+  const recebidas = messages.filter((m) => m.message_type === 0 && m.private !== true);
   const semRespostaDaEscola =
     conversationSource === 'saf-monitor' && recebidas.length === 0;
-  const envioBloqueado = semRespostaDaEscola && !isNote;
 
-  // Passadas 24h da última mensagem da escola, texto livre também para de ser
-  // entregue. Aqui não travamos — só avisamos, porque a conversa pode estar
-  // legitimamente em andamento e a política depende do provedor.
+  // Epoch do Chatwoot vem em segundos. Com 24h exatas, a janela já encerrou.
   const ultimaRecebida = recebidas.length > 0
     ? Math.max(...recebidas.map((m) => m.created_at ?? 0))
     : 0;
   const janelaExpirada =
-    !loading && ultimaRecebida > 0 && Date.now() / 1000 - ultimaRecebida > 24 * 3600;
+    !loading && ultimaRecebida > 0 && Date.now() / 1000 - ultimaRecebida >= 24 * 3600;
+  const aguardandoRespostaRetomada = waitingReengagementReplyFrom !== null;
+  const envioPublicoBloqueado = semRespostaDaEscola || janelaExpirada || aguardandoRespostaRetomada;
+  const envioBloqueado = envioPublicoBloqueado && !isNote;
+  publicSendBlockedRef.current = envioPublicoBloqueado;
+  isNoteRef.current = isNote;
+
+  // O polling existente atualiza `messages`. Uma incoming pública posterior ao
+  // template é a única condição que reabre o compositor — o sucesso do POST,
+  // sozinho, nunca libera texto livre.
+  useEffect(() => {
+    if (
+      waitingReengagementReplyFrom !== null
+      && ultimaRecebida > waitingReengagementReplyFrom
+    ) {
+      setWaitingReengagementReplyFrom(null);
+      setReengageFeedback(null);
+      setSendError('');
+    }
+  }, [ultimaRecebida, waitingReengagementReplyFrom]);
+
+  // Se a janela fechar enquanto um áudio público está sendo gravado, cancela a
+  // captura sem enviar. Isso cobre a virada das 24h durante o polling.
+  useEffect(() => {
+    if (envioPublicoBloqueado && !isNote && recording) {
+      discardRecordingRef.current = true;
+      mediaRecorderRef.current?.stop();
+      setSendError('A janela de atendimento encerrou durante a gravação. O áudio não foi enviado.');
+    }
+  }, [envioPublicoBloqueado, isNote, recording]);
 
   const canSend = !sending && !recording && !envioBloqueado && (!!reply.trim() || !!attachFile);
 
@@ -903,14 +1016,40 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
               </div>
             )}
 
-            {janelaExpirada && (
-              <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800
-                bg-amber-50/70 dark:bg-amber-950/30 px-3 py-2.5">
-                <Clock size={14} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300">
-                  A escola não escreve há mais de 24 horas. Dependendo da política do WhatsApp,
-                  mensagem escrita pode não ser entregue — confirme por outro canal se for urgente.
-                </p>
+            {janelaExpirada && !semRespostaDaEscola && (
+              <div className="mb-3 rounded-lg border border-amber-200 dark:border-amber-800
+                bg-amber-50/70 dark:bg-amber-950/30 px-3 py-3">
+                <div className="flex items-start gap-2">
+                  <Clock size={14} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+                      <b>A janela de 24 horas encerrou.</b> Mensagens públicas estão bloqueadas.
+                      Envie o template de retomada e aguarde o cliente clicar no botão ou mandar uma
+                      nova mensagem. O template sozinho não libera texto livre; notas internas continuam disponíveis.
+                    </p>
+                    {!aguardandoRespostaRetomada && (
+                      <button
+                        type="button"
+                        onClick={handleReengage}
+                        disabled={reengaging}
+                        className="mt-2.5 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold
+                          bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60 transition-colors"
+                      >
+                        <RefreshCw size={13} className={reengaging ? 'animate-spin' : ''} />
+                        {reengaging ? 'Enviando template…' : 'Retomar pelo WhatsApp'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {reengageFeedback && (
+                  <p className={`mt-2 text-xs leading-relaxed ${
+                    reengageFeedback.kind === 'success'
+                      ? 'text-emerald-700 dark:text-emerald-300'
+                      : 'text-red-600 dark:text-red-400'
+                  }`}>
+                    {reengageFeedback.message}
+                  </p>
+                )}
               </div>
             )}
 
@@ -919,11 +1058,13 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
               <button
                 type="button"
                 onClick={() => setIsNote(false)}
+                disabled={envioPublicoBloqueado}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   !isNote
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
-                }`}
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={envioPublicoBloqueado ? 'Aguardando uma nova mensagem pública do cliente' : undefined}
               >
                 <Send size={11} />Responder ao cliente
               </button>
@@ -1007,7 +1148,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
               {/* Image button */}
               <button
                 onClick={() => imageInputRef.current?.click()}
-                disabled={recording || sending}
+                disabled={recording || sending || envioBloqueado}
                 className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl
                   bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400
                   hover:bg-gray-200 dark:hover:bg-slate-700
@@ -1020,7 +1161,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
               {/* File button */}
               <button
                 onClick={() => fileInputRef.current?.click()}
-                disabled={recording || sending}
+                disabled={recording || sending || envioBloqueado}
                 className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl
                   bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400
                   hover:bg-gray-200 dark:hover:bg-slate-700
@@ -1033,7 +1174,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
               {/* Mic button */}
               <button
                 onClick={handleRecordToggle}
-                disabled={sending || !!attachFile}
+                disabled={sending || !!attachFile || envioBloqueado}
                 className={`shrink-0 flex items-center justify-center w-10 h-10 rounded-xl transition-colors
                   disabled:opacity-40 ${
                     recording
@@ -1054,7 +1195,9 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                 disabled={recording || envioBloqueado}
                 placeholder={
                   envioBloqueado
-                    ? 'Aguardando a escola responder — só nota interna por enquanto'
+                    ? semRespostaDaEscola
+                      ? 'Aguardando a primeira resposta da escola — só nota interna por enquanto'
+                      : 'Janela encerrada — aguarde a resposta ao template ou use nota interna'
                     : recording
                     ? 'Gravando áudio…'
                     : attachFile
