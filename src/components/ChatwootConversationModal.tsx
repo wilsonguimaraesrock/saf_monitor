@@ -331,6 +331,24 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     if (file) selectAttachment(file);
   }
 
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        e.preventDefault();
+        const ext = item.type.split('/')[1] || 'png';
+        const named = file.name && file.name !== 'blob'
+          ? file
+          : new File([file], `print-${Date.now()}.${ext}`, { type: file.type });
+        selectAttachment(named);
+        break;
+      }
+    }
+  }
+
   async function sendAttachment(file: Blob, filename: string) {
     if (!conversation) return;
     if (!isNoteRef.current && publicSendBlockedRef.current) {
@@ -1192,6 +1210,7 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
                 onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
                 disabled={recording || envioBloqueado}
                 placeholder={
                   envioBloqueado
