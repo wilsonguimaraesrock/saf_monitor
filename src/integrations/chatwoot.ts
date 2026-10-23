@@ -1,5 +1,9 @@
 import { businessElapsedSeconds } from '../lib/businessTime';
 import { describeOutcome, upstreamFetch } from '../lib/upstreamFetch';
+import {
+  getActiveConversationIds,
+  type ConversationOrigin,
+} from '../repository/activeConversations';
 
 const BASE_URL = process.env.CHATWOOT_BASE_URL?.replace(/\/$/, '');
 const ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID ?? '1';
@@ -347,6 +351,7 @@ export async function getChatwootPanelData(
 export interface ChatwootConversation {
   id: number;
   source: string | null;
+  origem: ConversationOrigin;
   contactName: string;
   contactPhone: string;
   unitName: string;
@@ -391,19 +396,36 @@ export async function getOpenConversations(
       if (all.length >= limit) break;
     }
 
-    return all.slice(0, limit).map((c) => ({
-      id: c.id,
-      source:          c.custom_attributes?.source?.trim().toLowerCase() ?? null,
-      contactName:    c.meta?.sender?.name ?? '—',
-      contactPhone:   c.meta?.sender?.phone_number ?? '',
-      unitName:       c.custom_attributes?.unitName ?? '',
-      labels:         c.labels ?? [],
-      assigneeId:     c.meta?.assignee?.id ?? null,
-      assigneeName:   c.meta?.assignee?.name ?? null,
-      lastMessage:    c.last_non_activity_message?.content ?? '',
-      waitingSinceSec: c.waiting_since ?? 0,
-      chatwootUrl: `${BASE_URL}/app/accounts/${ACCOUNT_ID}/conversations/${c.id}`,
-    }));
+    const conversationIds = all.map((c) => c.id);
+    let activeIds = new Set<number>();
+    try {
+      activeIds = await getActiveConversationIds(conversationIds);
+    } catch {
+      // Fallback gracioso caso a conexão com banco falhe
+    }
+
+    return all.slice(0, limit).map((c) => {
+      const source = c.custom_attributes?.source?.trim().toLowerCase() ?? null;
+      const isAtivo =
+        activeIds.has(c.id) ||
+        source === 'saf-monitor' ||
+        (c.labels ?? []).includes('ativa');
+
+      return {
+        id: c.id,
+        source,
+        origem: (isAtivo ? 'ativo' : 'receptivo') as ConversationOrigin,
+        contactName:    c.meta?.sender?.name ?? '—',
+        contactPhone:   c.meta?.sender?.phone_number ?? '',
+        unitName:       c.custom_attributes?.unitName ?? '',
+        labels:         c.labels ?? [],
+        assigneeId:     c.meta?.assignee?.id ?? null,
+        assigneeName:   c.meta?.assignee?.name ?? null,
+        lastMessage:    c.last_non_activity_message?.content ?? '',
+        waitingSinceSec: c.waiting_since ?? 0,
+        chatwootUrl: `${BASE_URL}/app/accounts/${ACCOUNT_ID}/conversations/${c.id}`,
+      };
+    });
   } catch {
     return [];
   }

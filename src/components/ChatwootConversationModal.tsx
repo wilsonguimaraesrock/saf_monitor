@@ -7,6 +7,7 @@ import {
   Paperclip, FileText, StickyNote, Lock, AlertTriangle, Clock,
 } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
+import { ConversationOriginBadge } from './ConversationOriginBadge';
 import { loadDraft, saveDraft, clearDraft } from '@/lib/replyDraft';
 
 interface Attachment {
@@ -717,15 +718,26 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                   </span>
                 )}
               </div>
-              {conversation.labels.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {conversation.labels.map((l) => (
-                    <span key={l} className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${labelColor(l)}`}>
-                      {l}
-                    </span>
-                  ))}
-                </div>
-              )}
+              {(() => {
+                const isAtivo =
+                  conversation.origem === 'ativo' ||
+                  conversationSource === 'saf-monitor' ||
+                  conversation.source === 'saf-monitor' ||
+                  conversation.labels.includes('ativa');
+                const displayLabels = conversation.labels.filter((l) => l.toLowerCase() !== 'ativa');
+                if (!isAtivo && displayLabels.length === 0) return null;
+
+                return (
+                  <div className="flex flex-wrap items-center gap-1 mt-2">
+                    {isAtivo && <ConversationOriginBadge origin="ativo" />}
+                    {displayLabels.map((l) => (
+                      <span key={l} className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${labelColor(l)}`}>
+                        {l}
+                      </span>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex items-center gap-2 shrink-0">

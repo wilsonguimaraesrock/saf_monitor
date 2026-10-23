@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { MessageSquare, UserX, History, ChevronDown, Loader2 } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
 import { ChatwootConversationModal } from './ChatwootConversationModal';
+import { ConversationOriginBadge } from './ConversationOriginBadge';
 import { businessElapsedSeconds } from '@/lib/businessTime';
 
 const LABEL_COLORS = [
@@ -196,16 +197,32 @@ export function ChatwootConversationTable({ conversations, title = 'Conversas Ab
                       </td>
 
                       <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1">
-                          {c.labels.length > 0
-                            ? c.labels.map((l) => (
-                                <span key={l} className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${labelColor(l)}`}>
+                        {(() => {
+                          const isAtivo =
+                            c.origem === 'ativo' ||
+                            c.source === 'saf-monitor' ||
+                            c.labels.includes('ativa');
+                          const displayLabels = c.labels.filter((l) => l.toLowerCase() !== 'ativa');
+                          const hasContent = isAtivo || displayLabels.length > 0;
+
+                          if (!hasContent) {
+                            return <span className="text-gray-300 dark:text-slate-700 text-sm">—</span>;
+                          }
+
+                          return (
+                            <div className="flex flex-wrap items-center gap-1">
+                              {isAtivo && <ConversationOriginBadge origin="ativo" />}
+                              {displayLabels.map((l) => (
+                                <span
+                                  key={l}
+                                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${labelColor(l)}`}
+                                >
                                   {l}
                                 </span>
-                              ))
-                            : <span className="text-gray-300 dark:text-slate-700 text-sm">—</span>
-                          }
-                        </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       <td className="px-4 py-3 tabular-nums">

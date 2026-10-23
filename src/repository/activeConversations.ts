@@ -11,12 +11,16 @@ export async function getActiveConversationIds(conversationIds: number[]): Promi
   const ids = [...new Set(conversationIds.filter(Number.isFinite))];
   if (ids.length === 0) return new Set();
 
-  const rows = await query<{ chatwoot_conversation_id: number }>(
-    `SELECT chatwoot_conversation_id
-       FROM conversas_ativas
-      WHERE chatwoot_conversation_id = ANY($1::int[])`,
-    [ids]
-  );
+  try {
+    const rows = await query<{ chatwoot_conversation_id: number }>(
+      `SELECT chatwoot_conversation_id
+         FROM conversas_ativas
+        WHERE chatwoot_conversation_id = ANY($1::int[])`,
+      [ids]
+    );
 
-  return new Set(rows.map((row) => Number(row.chatwoot_conversation_id)));
+    return new Set(rows.map((row) => Number(row.chatwoot_conversation_id)));
+  } catch {
+    return new Set();
+  }
 }
