@@ -4,6 +4,11 @@ import {
   getActiveConversationIds,
   type ConversationOrigin,
 } from '../repository/activeConversations';
+import {
+  getClassifications,
+  type Prioridade,
+  type Complexidade,
+} from '../repository/conversationClassification';
 
 const BASE_URL = process.env.CHATWOOT_BASE_URL?.replace(/\/$/, '');
 const ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID ?? '1';
@@ -352,6 +357,8 @@ export interface ChatwootConversation {
   id: number;
   source: string | null;
   origem: ConversationOrigin;
+  prioridade?: Prioridade | null;
+  complexidade?: Complexidade | null;
   contactName: string;
   contactPhone: string;
   unitName: string;
@@ -398,8 +405,14 @@ export async function getOpenConversations(
 
     const conversationIds = all.map((c) => c.id);
     let activeIds = new Set<number>();
+    let classificationsMap = new Map();
     try {
-      activeIds = await getActiveConversationIds(conversationIds);
+      const [actives, classifs] = await Promise.all([
+        getActiveConversationIds(conversationIds),
+        getClassifications(conversationIds),
+      ]);
+      activeIds = actives;
+      classificationsMap = classifs;
     } catch {
       // Fallback gracioso caso a conexão com banco falhe
     }
@@ -411,10 +424,14 @@ export async function getOpenConversations(
         source === 'saf-monitor' ||
         (c.labels ?? []).includes('ativa');
 
+      const cls = classificationsMap.get(c.id);
+
       return {
         id: c.id,
         source,
         origem: (isAtivo ? 'ativo' : 'receptivo') as ConversationOrigin,
+        prioridade: cls?.prioridade ?? null,
+        complexidade: cls?.complexidade ?? null,
         contactName:    c.meta?.sender?.name ?? '—',
         contactPhone:   c.meta?.sender?.phone_number ?? '',
         unitName:       c.custom_attributes?.unitName ?? '',

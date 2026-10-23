@@ -181,6 +181,8 @@ export async function POST(req: NextRequest) {
         id: chatwootConversationId,
         source: 'saf-monitor',
         origem: 'ativo',
+        prioridade: null,
+        complexidade: null,
         contactName: body.unitName ?? 'Escola',
         contactPhone: body.whatsappNumber ?? '',
         unitName: body.unitName ?? '',

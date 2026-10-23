@@ -91,6 +91,8 @@ function toModalConversation(c: BacklogConversation): ChatwootConversation {
     id: c.id,
     source:         c.source,
     origem:         c.origem,
+    prioridade:     null,
+    complexidade:   null,
     contactName:    c.contactName,
     contactPhone:   c.contactPhone,
     unitName:       c.unidade,

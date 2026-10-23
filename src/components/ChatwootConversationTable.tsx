@@ -5,6 +5,13 @@ import { MessageSquare, UserX, History, ChevronDown, Loader2 } from 'lucide-reac
 import type { ChatwootConversation } from '@/integrations/chatwoot';
 import { ChatwootConversationModal } from './ChatwootConversationModal';
 import { ConversationOriginBadge } from './ConversationOriginBadge';
+import {
+  PriorityBadge,
+  ComplexityBadge,
+  PRIORIDADE_OPTIONS,
+  COMPLEXIDADE_OPTIONS,
+} from './ClassificationBadge';
+import type { Prioridade, Complexidade } from '@/repository/conversationClassification';
 import { businessElapsedSeconds } from '@/lib/businessTime';
 
 const LABEL_COLORS = [
@@ -87,6 +94,16 @@ export function ChatwootConversationTable({ conversations, title = 'Conversas Ab
   // optimistic local overrides: convId → { id, name } | null (null = unassigned)
   const [localAssignees, setLocalAssignees] = useState<Record<number, { id: number; name: string } | null>>({});
 
+  // optimistic local classification overrides: convId → { prioridade, complexidade }
+  const [localClassifications, setLocalClassifications] = useState<
+    Record<number, { prioridade: Prioridade | null; complexidade: Complexidade | null }>
+  >({});
+  const [editingClassif, setEditingClassif] = useState<{
+    convId: number;
+    field: 'prioridade' | 'complexidade';
+  } | null>(null);
+  const [savingClassifId, setSavingClassifId] = useState<number | null>(null);
+
   const loadAgents = useCallback(async () => {
     if (agentsLoaded) return;
     try {
@@ -126,9 +143,60 @@ export function ChatwootConversationTable({ conversations, title = 'Conversas Ab
     }
   }
 
+  async function updateClassification(
+    convId: number,
+    field: 'prioridade' | 'complexidade',
+    value: string | null
+  ) {
+    setSavingClassifId(convId);
+    try {
+      const res = await fetch(`/api/chatwoot/conversation/${convId}/classification`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value ? value : null }),
+      });
+      if (res.ok) {
+        setLocalClassifications((prev) => {
+          const fallback = conversations.find((c) => c.id === convId);
+          const current = prev[convId] ?? {
+            prioridade: fallback?.prioridade ?? null,
+            complexidade: fallback?.complexidade ?? null,
+          };
+          return {
+            ...prev,
+            [convId]: {
+              ...current,
+              [field]: (value ? (value as any) : null),
+            },
+          };
+        });
+      }
+    } finally {
+      setSavingClassifId(null);
+      setEditingClassif(null);
+    }
+  }
+
   return (
     <>
-      <ChatwootConversationModal conversation={selected} onClose={() => setSelected(null)} />
+      <ChatwootConversationModal
+        conversation={selected ? {
+          ...selected,
+          prioridade: Object.prototype.hasOwnProperty.call(localClassifications, selected.id)
+            ? localClassifications[selected.id].prioridade
+            : (selected.prioridade ?? null),
+          complexidade: Object.prototype.hasOwnProperty.call(localClassifications, selected.id)
+            ? localClassifications[selected.id].complexidade
+            : (selected.complexidade ?? null),
+        } : null}
+        onClose={() => setSelected(null)}
+        onClassificationChange={(convId, data) => {
+          setLocalClassifications((prev) => ({
+            ...prev,
+            [convId]: data,
+          }));
+        }}
+      />
       <div className="card overflow-hidden p-0">
         <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-gray-700 dark:text-slate-200 uppercase tracking-wide">
@@ -159,6 +227,7 @@ export function ChatwootConversationTable({ conversations, title = 'Conversas Ab
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Contato</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Última mensagem</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Labels</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Classificação</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Aguardando</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Agente</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide w-12"></th>
@@ -220,6 +289,96 @@ export function ChatwootConversationTable({ conversations, title = 'Conversas Ab
                                   {l}
                                 </span>
                               ))}
+                            </div>
+                          );
+                        })()}
+                      </td>
+
+                      {/* Classificação — dropdowns inline */}
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                          const classif = Object.prototype.hasOwnProperty.call(localClassifications, c.id)
+                            ? localClassifications[c.id]
+                            : { prioridade: c.prioridade ?? null, complexidade: c.complexidade ?? null };
+                          const isSaving = savingClassifId === c.id;
+
+                          if (isSaving) {
+                            return (
+                              <span className="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500">
+                                <Loader2 size={12} className="animate-spin" /> Salvando…
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <div className="flex flex-col gap-1 items-start">
+                              {/* Prioridade */}
+                              {editingClassif?.convId === c.id && editingClassif?.field === 'prioridade' ? (
+                                <select
+                                  autoFocus
+                                  defaultValue={classif.prioridade ?? ''}
+                                  onChange={async (e) => {
+                                    await updateClassification(c.id, 'prioridade', e.target.value || null);
+                                  }}
+                                  onBlur={() => setEditingClassif(null)}
+                                  className="text-xs font-semibold border border-gray-300 dark:border-slate-600 rounded px-1.5 py-0.5
+                                    bg-white dark:bg-slate-800 text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                                >
+                                  <option value="">— Sem prioridade</option>
+                                  {PRIORIDADE_OPTIONS.map((o) => (
+                                    <option key={o.value} value={o.value}>{o.label}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <button
+                                  className="group flex items-center gap-1 text-left rounded px-1 -mx-1 py-0.5 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors"
+                                  title="Clique para alterar a prioridade"
+                                  onClick={() => setEditingClassif({ convId: c.id, field: 'prioridade' })}
+                                >
+                                  {classif.prioridade ? (
+                                    <PriorityBadge prioridade={classif.prioridade} />
+                                  ) : (
+                                    <span className="text-xs text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300">
+                                      + Prioridade
+                                    </span>
+                                  )}
+                                  <ChevronDown size={10} className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </button>
+                              )}
+
+                              {/* Complexidade */}
+                              {editingClassif?.convId === c.id && editingClassif?.field === 'complexidade' ? (
+                                <select
+                                  autoFocus
+                                  defaultValue={classif.complexidade ?? ''}
+                                  onChange={async (e) => {
+                                    await updateClassification(c.id, 'complexidade', e.target.value || null);
+                                  }}
+                                  onBlur={() => setEditingClassif(null)}
+                                  className="text-xs font-medium border border-gray-300 dark:border-slate-600 rounded px-1.5 py-0.5
+                                    bg-white dark:bg-slate-800 text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                                >
+                                  <option value="">— Sem complexidade</option>
+                                  {COMPLEXIDADE_OPTIONS.map((o) => (
+                                    <option key={o.value} value={o.value}>{o.label}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <button
+                                  className="group flex items-center gap-1 text-left rounded px-1 -mx-1 py-0.5 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors"
+                                  title="Clique para alterar a complexidade"
+                                  onClick={() => setEditingClassif({ convId: c.id, field: 'complexidade' })}
+                                >
+                                  {classif.complexidade ? (
+                                    <ComplexityBadge complexidade={classif.complexidade} />
+                                  ) : (
+                                    <span className="text-xs text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300">
+                                      + Complexidade
+                                    </span>
+                                  )}
+                                  <ChevronDown size={10} className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </button>
+                              )}
                             </div>
                           );
                         })()}

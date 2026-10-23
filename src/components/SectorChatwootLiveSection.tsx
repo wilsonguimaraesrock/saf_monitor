@@ -209,6 +209,8 @@ export function SectorChatwootLiveSection({
                 id: conversationId,
                 source: null,
                 origem: 'ativo',
+                prioridade: null,
+                complexidade: null,
                 contactName: 'Atendimento em andamento',
                 contactPhone: '',
                 unitName: '',
