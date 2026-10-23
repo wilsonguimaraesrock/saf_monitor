@@ -213,9 +213,14 @@ export async function GET(req: NextRequest) {
     const conversations: BacklogConversation[] = convArray.map((c, i) => {
       const csat = csatMap.get(c.id);
       const bot  = botDataList[i];
+      const source = c.custom_attributes?.source?.trim().toLowerCase() ?? null;
+      const isAtivo =
+        activeConversationIds.has(c.id) ||
+        source === 'saf-monitor' ||
+        (c.labels ?? []).includes('ativa');
       return {
         id:              c.id,
-        source:          c.custom_attributes?.source?.trim().toLowerCase() ?? null,
+        source,
         contactName:     c.meta?.sender?.name ?? '—',
         contactPhone:    c.meta?.sender?.phone_number ?? '',
         assigneeName:    c.meta?.assignee?.name ?? null,
@@ -229,7 +234,7 @@ export async function GET(req: NextRequest) {
         departamento:    bot.departamento,
         subdepartamento: bot.subdepartamento,
         assunto:         bot.assunto,
-        origem:          activeConversationIds.has(c.id) ? 'ativo' : 'receptivo',
+        origem:          isAtivo ? 'ativo' : 'receptivo',
       };
     });
 

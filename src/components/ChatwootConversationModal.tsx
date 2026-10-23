@@ -7,6 +7,8 @@ import {
   Paperclip, FileText, StickyNote, Lock, AlertTriangle, Clock,
 } from 'lucide-react';
 import type { ChatwootConversation } from '@/integrations/chatwoot';
+import type { Prioridade, Complexidade } from '@/repository/conversationClassification';
+import { ConversationOriginBadge } from './ConversationOriginBadge';
 import { loadDraft, saveDraft, clearDraft } from '@/lib/replyDraft';
 
 interface Attachment {
@@ -29,6 +31,10 @@ interface Message {
 interface Props {
   conversation: ChatwootConversation | null;
   onClose: () => void;
+  onClassificationChange?: (
+    convId: number,
+    data: { prioridade: Prioridade | null; complexidade: Complexidade | null }
+  ) => void;
 }
 
 const LABEL_COLORS = [
@@ -137,11 +143,14 @@ function renderWhatsApp(text: string): React.ReactNode {
   return <>{nodes}</>;
 }
 
-export function ChatwootConversationModal({ conversation, onClose }: Props) {
+export function ChatwootConversationModal({ conversation, onClose, onClassificationChange }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationSource, setConversationSource] = useState<string | null>(
     conversation?.source?.trim().toLowerCase() ?? null
   );
+  const [prioridade, setPrioridade] = useState<Prioridade | null>(conversation?.prioridade ?? null);
+  const [complexidade, setComplexidade] = useState<Complexidade | null>(conversation?.complexidade ?? null);
+  const [savingClassif, setSavingClassif] = useState(false);
   const [loading, setLoading] = useState(false);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
@@ -271,6 +280,51 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
     setLoading(true);
     fetchMessages(conversation.id).finally(() => setLoading(false));
   }, [conversation?.id, conversation?.source, fetchMessages]);
+
+  // Sincroniza classificação quando a conversa abre ou muda
+  useEffect(() => {
+    if (!conversation) return;
+    setPrioridade(conversation.prioridade ?? null);
+    setComplexidade(conversation.complexidade ?? null);
+    fetch(`/api/chatwoot/conversation/${conversation.id}/classification`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.classification) {
+          setPrioridade(d.classification.prioridade ?? null);
+          setComplexidade(d.classification.complexidade ?? null);
+        }
+      })
+      .catch(() => {});
+  }, [conversation?.id, conversation?.prioridade, conversation?.complexidade]);
+
+  async function handleUpdateClassification(
+    field: 'prioridade' | 'complexidade',
+    value: string | null
+  ) {
+    if (!conversation) return;
+    const newPrio = field === 'prioridade' ? (value ? (value as Prioridade) : null) : prioridade;
+    const newComp = field === 'complexidade' ? (value ? (value as Complexidade) : null) : complexidade;
+
+    if (field === 'prioridade') setPrioridade(newPrio);
+    if (field === 'complexidade') setComplexidade(newComp);
+
+    setSavingClassif(true);
+    try {
+      const res = await fetch(`/api/chatwoot/conversation/${conversation.id}/classification`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value ? value : null }),
+      });
+      if (res.ok) {
+        onClassificationChange?.(conversation.id, {
+          prioridade: newPrio,
+          complexidade: newComp,
+        });
+      }
+    } finally {
+      setSavingClassif(false);
+    }
+  }
 
   // Persiste o rascunho a cada alteração — sobrevive a fechar o modal,
   // recarregar a página ou perder a aba com o envio ainda pendente.
@@ -717,15 +771,62 @@ export function ChatwootConversationModal({ conversation, onClose }: Props) {
                   </span>
                 )}
               </div>
-              {conversation.labels.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {conversation.labels.map((l) => (
-                    <span key={l} className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${labelColor(l)}`}>
-                      {l}
-                    </span>
-                  ))}
+              {(() => {
+                const isAtivo =
+                  conversation.origem === 'ativo' ||
+                  conversationSource === 'saf-monitor' ||
+                  conversation.source === 'saf-monitor' ||
+                  conversation.labels.includes('ativa');
+                const displayLabels = conversation.labels.filter((l) => l.toLowerCase() !== 'ativa');
+                if (!isAtivo && displayLabels.length === 0) return null;
+
+                return (
+                  <div className="flex flex-wrap items-center gap-1 mt-2">
+                    {isAtivo && <ConversationOriginBadge origin="ativo" />}
+                    {displayLabels.map((l) => (
+                      <span key={l} className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${labelColor(l)}`}>
+                        {l}
+                      </span>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Classificação: Prioridade e Complexidade */}
+              <div className="flex flex-wrap items-center gap-3 mt-3 pt-2.5 border-t border-gray-100 dark:border-slate-800 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-500 dark:text-slate-400 font-medium">Prioridade:</span>
+                  <select
+                    value={prioridade ?? ''}
+                    disabled={savingClassif}
+                    onChange={(e) => handleUpdateClassification('prioridade', e.target.value || null)}
+                    className="text-xs font-semibold rounded-md px-2 py-1 border border-gray-200 dark:border-slate-700
+                      bg-white dark:bg-slate-800 text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  >
+                    <option value="">— Não definida</option>
+                    <option value="urgente">🔴 Urgente</option>
+                    <option value="alta">🟠 Alta</option>
+                    <option value="media">🟡 Média</option>
+                    <option value="baixa">🟢 Baixa</option>
+                  </select>
                 </div>
-              )}
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-500 dark:text-slate-400 font-medium">Complexidade:</span>
+                  <select
+                    value={complexidade ?? ''}
+                    disabled={savingClassif}
+                    onChange={(e) => handleUpdateClassification('complexidade', e.target.value || null)}
+                    className="text-xs font-medium rounded-md px-2 py-1 border border-gray-200 dark:border-slate-700
+                      bg-white dark:bg-slate-800 text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  >
+                    <option value="">— Não definida</option>
+                    <option value="alta">🟣 Complexidade Alta</option>
+                    <option value="media">🔵 Complexidade Média</option>
+                    <option value="baixa">⚪ Complexidade Baixa</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">

@@ -219,24 +219,31 @@ export async function GET(req: NextRequest) {
     );
     const activeConversationIds = await getActiveConversationIds(capped.map((c) => c.id));
 
-    const conversations: GlobalBacklogConversation[] = capped.map((c, i) => ({
-      id:              c.id,
-      contactName:     c.meta?.sender?.name ?? '—',
-      contactPhone:    c.meta?.sender?.phone_number ?? '',
-      assigneeName:    c.meta?.assignee?.name ?? null,
-      labels:          c.labels ?? [],
-      status:          c.status,
-      createdAt:       c.created_at,
-      csatRating:      csatMap.get(c.id) ?? null,
-      chatwootUrl:     `${BASE_URL}/app/accounts/${ACCOUNT_ID}/conversations/${c.id}`,
-      unidade:         botDataList[i].unidade,
-      departamento:    botDataList[i].departamento,
-      subdepartamento: botDataList[i].subdepartamento,
-      assunto:         botDataList[i].assunto,
-      sectorSlug:      c.sectorSlug,
-      sectorName:      c.sectorName,
-      origem:          activeConversationIds.has(c.id) ? 'ativo' : 'receptivo',
-    }));
+    const conversations: GlobalBacklogConversation[] = capped.map((c, i) => {
+      const source = c.custom_attributes?.source?.trim().toLowerCase() ?? null;
+      const isAtivo =
+        activeConversationIds.has(c.id) ||
+        source === 'saf-monitor' ||
+        (c.labels ?? []).includes('ativa');
+      return {
+        id:              c.id,
+        contactName:     c.meta?.sender?.name ?? '—',
+        contactPhone:    c.meta?.sender?.phone_number ?? '',
+        assigneeName:    c.meta?.assignee?.name ?? null,
+        labels:          c.labels ?? [],
+        status:          c.status,
+        createdAt:       c.created_at,
+        csatRating:      csatMap.get(c.id) ?? null,
+        chatwootUrl:     `${BASE_URL}/app/accounts/${ACCOUNT_ID}/conversations/${c.id}`,
+        unidade:         botDataList[i].unidade,
+        departamento:    botDataList[i].departamento,
+        subdepartamento: botDataList[i].subdepartamento,
+        assunto:         botDataList[i].assunto,
+        sectorSlug:      c.sectorSlug,
+        sectorName:      c.sectorName,
+        origem:          isAtivo ? 'ativo' : 'receptivo',
+      };
+    });
 
     return NextResponse.json({
       conversations,

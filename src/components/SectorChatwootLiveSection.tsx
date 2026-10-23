@@ -208,6 +208,9 @@ export function SectorChatwootLiveSection({
                 // 409: só temos o id, o resto o próprio modal busca pela conversa
                 id: conversationId,
                 source: null,
+                origem: 'ativo',
+                prioridade: null,
+                complexidade: null,
                 contactName: 'Atendimento em andamento',
                 contactPhone: '',
                 unitName: '',
