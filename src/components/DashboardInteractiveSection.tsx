@@ -209,6 +209,10 @@ export function DashboardInteractiveSection({
       return;
     }
 
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `/dashboard?start=${start}&end=${end}`);
+    }
+
     setIsLoading(true);
     setErrorMessage(null);
     try {
@@ -229,6 +233,10 @@ export function DashboardInteractiveSection({
 
   const handleMonthChange = async (monthVal: string) => {
     setSelectedMonth(monthVal);
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `/dashboard?m=${monthVal}`);
+    }
+
     if (monthVal === currentMonth) {
       setActiveData(initialData);
       setActiveLabel(formatMonth(currentMonth));
@@ -258,20 +266,17 @@ export function DashboardInteractiveSection({
     const toYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
     if (preset === 'current') {
-      const start = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
-      const end = toYMD(now);
-      setCustomStart(start);
-      setCustomEnd(end);
-      handleApplyCustomPeriod(start, end, `Este mês (${pad(now.getMonth() + 1)}/${now.getFullYear()})`);
+      setPeriodType('month');
+      if (availableMonths.length > 0) {
+        handleMonthChange(availableMonths[0]);
+      }
     } else if (preset === 'prev') {
-      const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const start = `${prevDate.getFullYear()}-${pad(prevDate.getMonth() + 1)}-01`;
-      const lastDay = new Date(prevDate.getFullYear(), prevDate.getMonth() + 1, 0).getDate();
-      const end = `${prevDate.getFullYear()}-${pad(prevDate.getMonth() + 1)}-${pad(lastDay)}`;
-      setCustomStart(start);
-      setCustomEnd(end);
-      handleApplyCustomPeriod(start, end, `Mês anterior (${formatMonth(`${prevDate.getFullYear()}-${pad(prevDate.getMonth() + 1)}`)})`);
+      setPeriodType('month');
+      if (availableMonths.length > 1) {
+        handleMonthChange(availableMonths[1]);
+      }
     } else if (preset === 'last30') {
+      setPeriodType('custom');
       const past = new Date(now.getTime() - 30 * 86400 * 1000);
       const start = toYMD(past);
       const end = toYMD(now);
@@ -279,6 +284,7 @@ export function DashboardInteractiveSection({
       setCustomEnd(end);
       handleApplyCustomPeriod(start, end, 'Últimos 30 dias');
     } else if (preset === 'last90') {
+      setPeriodType('custom');
       const past = new Date(now.getTime() - 90 * 86400 * 1000);
       const start = toYMD(past);
       const end = toYMD(now);
@@ -546,7 +552,7 @@ export function DashboardInteractiveSection({
                 >
                   {availableMonths.map((m) => (
                     <option key={m} value={m}>
-                      {formatMonth(m)} {m === currentMonth ? '(Mês Atual na Tela)' : ''}
+                      {formatMonth(m)}
                     </option>
                   ))}
                 </select>

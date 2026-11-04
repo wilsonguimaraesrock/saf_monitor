@@ -141,26 +141,9 @@ async function DashboardContent({ month }: { month: string }) {
   return (
     <div className="space-y-8">
 
-      {/* ── Seletor de mês ─────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-2">
-        {months.map((m) => (
-          <Link
-            key={m}
-            href={`/dashboard?m=${m}`}
-            className={clsx(
-              'px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap',
-              m === month
-                ? 'bg-orange-600 text-white shadow-sm'
-                : 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'
-            )}
-          >
-            {formatMonth(m)}
-          </Link>
-        ))}
-      </div>
-
       {/* ── Área de Exportação & Seção Interativa ────────────────── */}
       <DashboardInteractiveSection
+        key={month}
         currentMonth={month}
         availableMonths={months}
         initialData={{
