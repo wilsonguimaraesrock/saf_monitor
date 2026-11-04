@@ -1,3 +1,21 @@
+export const MONTH_NAMES_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+export function formatMonth(m: string): string {
+  const [year, month] = m.split('-');
+  return `${MONTH_NAMES_PT[Number(month) - 1]} ${year}`;
+}
+
+/** Últimos 12 meses em "YYYY-MM", do mais recente para o mais antigo. */
+export function getLast12Months(): string[] {
+  const months: string[] = [];
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return months;
+}
+
 /** Returns "YYYY-MM-DD" for the first and last day of a "YYYY-MM" string. */
 export function ymToDateRange(ym: string): { dateFrom: string; dateTo: string } {
   const [y, m] = ym.split('-').map(Number);

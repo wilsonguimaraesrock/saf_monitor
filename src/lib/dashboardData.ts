@@ -8,7 +8,12 @@
  */
 
 import { SECTORS } from '@/lib/sectors';
-import { getMonthlySectorStats, type MonthlyStats } from '@/repository/analytics';
+import {
+  getMonthlySectorStats,
+  getSectorStatsForDateRange,
+  type MonthlyStats,
+  type SectorPeriodStats,
+} from '@/repository/analytics';
 import {
   getCsatForPeriod,
   getWhatsappHandlingStats,
@@ -26,23 +31,8 @@ import { memoize } from '@/lib/memoCache';
  */
 const DASHBOARD_TTL_MS = 3 * 60_000;
 
-export const MONTH_NAMES_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-/** Últimos 12 meses em "YYYY-MM", do mais recente para o mais antigo. */
-export function getLast12Months(): string[] {
-  const months: string[] = [];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-  }
-  return months;
-}
-
-export function formatMonth(m: string): string {
-  const [year, month] = m.split('-');
-  return `${MONTH_NAMES_PT[Number(month) - 1]} ${year}`;
-}
+import { formatMonth, MONTH_NAMES_PT, getLast12Months } from '@/lib/month';
+export { formatMonth, MONTH_NAMES_PT, getLast12Months };
 
 /** Limites epoch (segundos) do mês, para os relatórios do Chatwoot. */
 export function monthBounds(month: string): { since: number; until: number } {
@@ -178,6 +168,121 @@ async function buildDashboardData(month: string): Promise<DashboardData> {
     statsBySector, waBySector, trendMap, totals,
     resolutionRate, globalSla, globalSafTma,
     globalCsat, csatCount, globalTma, tmaCount, waConversations,
+  };
+}
+
+export interface PeriodDashboardData {
+  startDate: string;
+  endDate: string;
+  label: string;
+  timestamp: string;
+  statsBySector: Record<string, SectorPeriodStats>;
+  waBySector: Record<string, WaSectorStats>;
+  totals: DashboardTotals;
+  resolutionRate: number | null;
+  globalSla: number | null;
+  globalSafTma: number | null;
+  globalCsat: number | null;
+  csatCount: number;
+  globalTma: number | null;
+  tmaCount: number;
+  waConversations: number;
+}
+
+export async function getDashboardDataForDateRange(
+  startDateStr: string,
+  endDateStr: string
+): Promise<PeriodDashboardData> {
+  const cacheKey = `dashboard:period:${startDateStr}:${endDateStr}`;
+  return memoize(cacheKey, DASHBOARD_TTL_MS, () => buildDashboardPeriodData(startDateStr, endDateStr));
+}
+
+async function buildDashboardPeriodData(
+  startDateStr: string,
+  endDateStr: string
+): Promise<PeriodDashboardData> {
+  const since = Math.floor(new Date(`${startDateStr}T00:00:00-03:00`).getTime() / 1000);
+  const until = Math.floor(new Date(`${endDateStr}T23:59:59-03:00`).getTime() / 1000);
+
+  const [statsBySector, waResults] = await Promise.all([
+    getSectorStatsForDateRange(startDateStr, endDateStr),
+    Promise.all(
+      SECTORS
+        .filter((s) => s.chatwoot)
+        .map(async (s): Promise<WaSectorStats> => {
+          const [csat, handling] = await Promise.all([
+            getCsatForPeriod(s.chatwoot!.inboxId, since, until, s.chatwoot!.teamId),
+            getWhatsappHandlingStats(s.chatwoot!.teamId, since, until),
+          ]);
+          return { slug: s.slug, csat, handling };
+        })
+    ),
+  ]);
+
+  const waBySector = Object.fromEntries(waResults.map((r) => [r.slug, r]));
+
+  const totals = SECTORS.reduce<DashboardTotals>(
+    (acc, s) => {
+      const st = statsBySector[s.slug];
+      if (!st) return acc;
+      return {
+        abertos:            acc.abertos + st.abertos,
+        resolvidos:         acc.resolvidos + st.resolvidos,
+        aguardandoNos:      acc.aguardandoNos + st.aguardandoNos,
+        aguardandoFranquia: acc.aguardandoFranquia + st.aguardandoFranquia,
+        withDeadline:       acc.withDeadline + st.withDeadline,
+        withinSla:          acc.withinSla + st.withinSla,
+        tmaSum:             acc.tmaSum + (st.avgResolutionSec ?? 0) * st.resolvidos,
+        tmaCount:           acc.tmaCount + (st.avgResolutionSec !== null ? st.resolvidos : 0),
+      };
+    },
+    { abertos: 0, resolvidos: 0, aguardandoNos: 0, aguardandoFranquia: 0,
+      withDeadline: 0, withinSla: 0, tmaSum: 0, tmaCount: 0 }
+  );
+
+  const resolutionRate = totals.abertos > 0
+    ? Math.round((100 * totals.resolvidos) / totals.abertos)
+    : null;
+  const globalSla = totals.withDeadline > 0
+    ? Math.round((100 * totals.withinSla) / totals.withDeadline)
+    : null;
+  const globalSafTma = totals.tmaCount > 0
+    ? Math.round(totals.tmaSum / totals.tmaCount)
+    : null;
+
+  const csatSum   = waResults.reduce((a, r) => a + (r.csat.avg ?? 0) * r.csat.total, 0);
+  const csatCount = waResults.reduce((a, r) => a + r.csat.total, 0);
+  const globalCsat = csatCount > 0 ? Math.round((csatSum / csatCount) * 10) / 10 : null;
+
+  const tmaSum   = waResults.reduce((a, r) => a + (r.handling.avgResolutionSec ?? 0) * r.handling.resolutionsCount, 0);
+  const tmaCount = waResults.reduce((a, r) => a + (r.handling.avgResolutionSec ? r.handling.resolutionsCount : 0), 0);
+  const globalTma = tmaCount > 0 ? Math.round(tmaSum / tmaCount) : null;
+
+  const waConversations = waResults.reduce((a, r) => a + r.handling.conversationsCount, 0);
+
+  const fmtDate = (dStr: string) => {
+    const [y, m, d] = dStr.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  const label = `${fmtDate(startDateStr)} a ${fmtDate(endDateStr)}`;
+
+  return {
+    startDate: startDateStr,
+    endDate: endDateStr,
+    label,
+    timestamp: new Date().toISOString(),
+    statsBySector,
+    waBySector,
+    totals,
+    resolutionRate,
+    globalSla,
+    globalSafTma,
+    globalCsat,
+    csatCount,
+    globalTma,
+    tmaCount,
+    waConversations,
   };
 }
 

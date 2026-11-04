@@ -176,3 +176,155 @@ export async function getMonthlySectorStats(monthsBack = 12): Promise<MonthlySta
     b.month.localeCompare(a.month) || a.sectorSlug.localeCompare(b.sectorSlug)
   );
 }
+
+export interface SectorPeriodStats {
+  sectorSlug: string;
+  abertos: number;
+  resolvidos: number;
+  aguardandoNos: number;
+  aguardandoFranquia: number;
+  withDeadline: number;
+  withinSla: number;
+  slaRate: number | null;
+  avgResolutionSec: number | null;
+}
+
+/**
+ * Estatísticas por setor para um intervalo arbitrário de datas (YYYY-MM-DD).
+ * Permite filtrar SAFs abertos no período e resolvidos dentro desse mesmo período.
+ */
+export async function getSectorStatsForDateRange(
+  startDateStr: string,
+  endDateStr: string
+): Promise<Record<string, SectorPeriodStats>> {
+  const SLA_START = '2026-05-01';
+  const startParam = `${startDateStr} 00:00:00-03`;
+  const endParam = `${endDateStr} 23:59:59-03`;
+
+  const rows = await query<{
+    department: string;
+    abertos: string;
+    resolvidos: string;
+    aguardando_nos: string;
+    aguardando_franquia: string;
+    with_deadline: string;
+    within_sla: string;
+  }>(
+    `WITH t AS (
+       SELECT
+         department,
+         opened_at,
+         resolved_at,
+         due_at,
+         status,
+         awaiting_our_response,
+         (status = 'resolvido'
+          AND resolved_at IS NOT NULL
+          AND resolved_at <= $2::timestamptz) AS resolved_in_period
+       FROM saf_tickets
+       WHERE opened_at >= $1::timestamptz
+         AND opened_at <= $2::timestamptz
+         AND opened_at IS NOT NULL
+         AND department IS NOT NULL
+     )
+     SELECT
+       department,
+       COUNT(*) AS abertos,
+       COUNT(*) FILTER (WHERE resolved_in_period) AS resolvidos,
+       COUNT(*) FILTER (WHERE awaiting_our_response
+                          AND status NOT IN ('resolvido','cancelado')) AS aguardando_nos,
+       COUNT(*) FILTER (WHERE status = 'aguardando_franquia') AS aguardando_franquia,
+       COUNT(*) FILTER (WHERE resolved_in_period
+                          AND due_at IS NOT NULL
+                          AND opened_at >= $3::date) AS with_deadline,
+       COUNT(*) FILTER (WHERE resolved_in_period
+                          AND due_at IS NOT NULL
+                          AND opened_at >= $3::date
+                          AND resolved_at <= due_at) AS within_sla
+     FROM t
+     GROUP BY 1`,
+    [startParam, endParam, SLA_START]
+  );
+
+  const resolvedRows = await query<{
+    department: string;
+    opened_at: Date;
+    resolved_at: Date;
+  }>(
+    `SELECT
+       department,
+       opened_at,
+       resolved_at
+     FROM saf_tickets
+     WHERE opened_at >= $1::timestamptz
+       AND opened_at <= $2::timestamptz
+       AND department IS NOT NULL
+       AND status = 'resolvido'
+       AND resolved_at IS NOT NULL
+       AND resolved_at <= $2::timestamptz`,
+    [startParam, endParam]
+  );
+
+  const map = new Map<string, {
+    abertos: number; resolvidos: number; aguardandoNos: number;
+    aguardandoFranquia: number; withDeadline: number; withinSla: number;
+    resolutionSecSum: number; resolutionSecCount: number;
+  }>();
+
+  for (const s of SECTORS) {
+    map.set(s.slug, {
+      abertos: 0, resolvidos: 0, aguardandoNos: 0,
+      aguardandoFranquia: 0, withDeadline: 0, withinSla: 0,
+      resolutionSecSum: 0, resolutionSecCount: 0,
+    });
+  }
+
+  for (const row of rows) {
+    for (const slug of DEPT_TO_SECTORS.get(row.department) ?? []) {
+      const e = map.get(slug);
+      if (e) {
+        e.abertos            += Number(row.abertos);
+        e.resolvidos         += Number(row.resolvidos);
+        e.aguardandoNos      += Number(row.aguardando_nos);
+        e.aguardandoFranquia += Number(row.aguardando_franquia);
+        e.withDeadline       += Number(row.with_deadline);
+        e.withinSla          += Number(row.within_sla);
+      }
+    }
+  }
+
+  for (const row of resolvedRows) {
+    const openedSec   = Math.floor(new Date(row.opened_at).getTime() / 1000);
+    const resolvedSec = Math.floor(new Date(row.resolved_at).getTime() / 1000);
+    const sec = businessElapsedSeconds(openedSec, resolvedSec);
+    for (const slug of DEPT_TO_SECTORS.get(row.department) ?? []) {
+      const e = map.get(slug);
+      if (e) {
+        e.resolutionSecSum   += sec;
+        e.resolutionSecCount += 1;
+      }
+    }
+  }
+
+  const result: Record<string, SectorPeriodStats> = {};
+  for (const s of SECTORS) {
+    const v = map.get(s.slug)!;
+    result[s.slug] = {
+      sectorSlug:         s.slug,
+      abertos:            v.abertos,
+      resolvidos:         v.resolvidos,
+      aguardandoNos:      v.aguardandoNos,
+      aguardandoFranquia: v.aguardandoFranquia,
+      withDeadline:       v.withDeadline,
+      withinSla:          v.withinSla,
+      slaRate: v.withDeadline > 0
+        ? Math.round(100 * v.withinSla / v.withDeadline)
+        : null,
+      avgResolutionSec: v.resolutionSecCount > 0
+        ? Math.round(v.resolutionSecSum / v.resolutionSecCount)
+        : null,
+    };
+  }
+
+  return result;
+}

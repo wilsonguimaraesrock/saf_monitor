@@ -13,3 +13,5 @@ test-results/
 dados-privados/
 .ts-scripts-out/
 .env.local.bak-*
+.env*
+*.tsbuildinfo

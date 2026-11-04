@@ -12,6 +12,7 @@ import { getDashboardData, formatMonth, getLast12Months } from '@/lib/dashboardD
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { NotificationBell } from '@/components/NotificationBell';
 import { UserMenu } from '@/components/UserMenu';
+import { DashboardInteractiveSection } from '@/components/DashboardInteractiveSection';
 
 export const dynamic = 'force-dynamic';
 
@@ -158,184 +159,24 @@ async function DashboardContent({ month }: { month: string }) {
         ))}
       </div>
 
-      {/* ── Indicadores do mês ─────────────────────────────────── */}
-      <div>
-        <div className="flex items-baseline justify-between mb-3">
-          <h2 className="text-base font-bold text-gray-900 dark:text-slate-100">
-            {formatMonth(month)}
-          </h2>
-          <p className="text-xs text-gray-400 dark:text-slate-500">
-            SAFs contados pelo mês de abertura
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-stretch gap-3">
-          {/* SAFs */}
-          <div className="flex-[6] min-w-[560px] grid grid-cols-3 xl:grid-cols-6 gap-3">
-            <Kpi label="SAFs abertos"  value={totals.abertos}    icon={Inbox}         tone="slate"
-                 sub="abertos no mês" />
-            <Kpi label="Resolvidos"    value={totals.resolvidos} icon={CircleCheckBig} tone="emerald"
-                 sub="resolvidos no mês" />
-            <Kpi label="% resolvidos"  value={resolutionRate !== null ? `${resolutionRate}%` : '—'} icon={BarChart3} tone="blue"
-                 sub="do que abriu no mês" />
-            <Kpi label="Aguard. nós"   value={totals.aguardandoNos} icon={Clock} tone="amber"
-                 sub="pendente conosco" />
-            <Kpi label="Aguard. franquia" value={totals.aguardandoFranquia} icon={Building2} tone="orange"
-                 sub="pendente com a franquia" />
-            <Kpi label="SLA no prazo" value={globalSla !== null ? `${globalSla}%` : '—'} icon={ShieldCheck} tone="violet"
-                 sub="resolvidos no prazo" />
-          </div>
-
-          {/* Divisor SAFs | WhatsApp */}
-          <div className="hidden xl:flex flex-col items-center justify-center gap-2 px-1">
-            <div className="w-px flex-1 bg-gray-200 dark:bg-slate-800" />
-            <MessageSquare size={13} className="text-green-600 dark:text-green-500 shrink-0" />
-            <div className="w-px flex-1 bg-gray-200 dark:bg-slate-800" />
-          </div>
-
-          {/* WhatsApp */}
-          <div className="flex-[2] min-w-[220px] grid grid-cols-2 gap-3">
-            <Kpi label="CSAT WhatsApp" value={globalCsat !== null ? globalCsat : '—'} icon={Star} tone="emerald"
-                 sub={csatCount > 0 ? `${csatCount} avaliações` : 'sem avaliações'} />
-            <Kpi label="TMA WhatsApp" value={fmtDuration(globalTma)} icon={Timer} tone="blue"
-                 sub={tmaCount > 0 ? `${tmaCount} resolvidas` : 'sem resoluções'} />
-          </div>
-        </div>
-      </div>
-
-      {/* ── Tabela do mês selecionado ───────────────────────────── */}
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-3">
-          Por setor — {formatMonth(month)}
-        </h2>
-        <div className="rounded-2xl border border-gray-200 dark:border-slate-800 overflow-x-auto bg-white dark:bg-slate-900 shadow-sm">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-800">
-                <th rowSpan={2} className={clsx(TH, 'text-left align-bottom')}>Setor</th>
-                <th colSpan={7} className="px-4 pt-3 pb-1 text-center text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-slate-500 border-b border-gray-100 dark:border-slate-800">
-                  SAFs
-                </th>
-                <th colSpan={3} className={clsx(
-                  'px-4 pt-3 pb-1 text-center text-xs font-bold uppercase tracking-widest',
-                  'text-green-700 dark:text-green-400 border-b border-gray-100 dark:border-slate-800',
-                  WA_ZONE, WA_EDGE
-                )}>
-                  <span className="inline-flex items-center gap-1.5">
-                    <MessageSquare size={12} /> WhatsApp
-                  </span>
-                </th>
-              </tr>
-              <tr className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-800">
-                <th className={clsx(TH, 'text-center')}>Abertos</th>
-                <th className={clsx(TH, 'text-center')}>Resolvidos</th>
-                <th className={clsx(TH, 'text-center')}>% Resolv.</th>
-                <th className={clsx(TH, 'text-center')}>Aguard. nós</th>
-                <th className={clsx(TH, 'text-center')}>Aguard. franquia</th>
-                <th className={clsx(TH, 'text-center')}>SLA</th>
-                <th className={clsx(TH, 'text-center')}>Tempo médio</th>
-                <th className={clsx(TH, 'text-center', WA_ZONE, WA_EDGE)}>Conversas</th>
-                <th className={clsx(TH, 'text-center', WA_ZONE)}>CSAT</th>
-                <th className={clsx(TH, 'text-center', WA_ZONE)}>Tempo médio</th>
-              </tr>
-            </thead>
-            <tbody>
-              {SECTORS.map((sector, i) => {
-                const st   = statsBySector[sector.slug];
-                const wa   = waBySector[sector.slug];
-                const Icon = sector.icon;
-                const rate = st && st.abertos > 0
-                  ? Math.round((100 * st.resolvidos) / st.abertos)
-                  : null;
-                return (
-                  <tr
-                    key={sector.slug}
-                    className={clsx(
-                      'transition-colors hover:bg-gray-50/60 dark:hover:bg-slate-800/40',
-                      i < SECTORS.length - 1 && 'border-b border-gray-50 dark:border-slate-800/60'
-                    )}
-                  >
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <Icon size={16} className="text-gray-400 dark:text-slate-500 shrink-0" />
-                        <Link
-                          href={`/setor/${sector.slug}`}
-                          className="text-base font-semibold text-gray-900 dark:text-slate-100 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
-                        >
-                          {sector.name}
-                        </Link>
-                      </div>
-                    </td>
-                    <td className={clsx(TD_NUM, 'text-gray-900 dark:text-slate-100')}>
-                      {st?.abertos ?? <span className="text-gray-300 dark:text-slate-700">—</span>}
-                    </td>
-                    <td className={clsx(TD_NUM, 'text-emerald-600 dark:text-emerald-400')}>
-                      {st?.resolvidos ?? <span className="text-gray-300 dark:text-slate-700">—</span>}
-                    </td>
-                    <td className={clsx(TD_NUM, 'text-gray-600 dark:text-slate-300')}>
-                      {rate !== null ? `${rate}%` : <span className="text-gray-300 dark:text-slate-700">—</span>}
-                    </td>
-                    <td className={clsx(TD_NUM, (st?.aguardandoNos ?? 0) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-300 dark:text-slate-700')}>
-                      {st?.aguardandoNos ?? 0}
-                    </td>
-                    <td className={clsx(TD_NUM, (st?.aguardandoFranquia ?? 0) > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-300 dark:text-slate-700')}>
-                      {st?.aguardandoFranquia ?? 0}
-                    </td>
-                    <td className="px-3 py-4 text-center">
-                      <SlaCell rate={st?.slaRate ?? null} />
-                    </td>
-                    <td className="px-3 py-4 text-center">
-                      <TmaCell sec={st?.avgResolutionSec ?? null} {...SAF_TMA} />
-                    </td>
-                    <td className={clsx(TD_NUM, WA_ZONE, WA_EDGE, (wa?.handling.conversationsCount ?? 0) > 0 ? 'text-gray-900 dark:text-slate-100' : 'text-gray-300 dark:text-slate-700')}>
-                      {wa?.handling.conversationsCount ?? <span className="text-gray-300 dark:text-slate-700">—</span>}
-                    </td>
-                    <td className={clsx('px-3 py-4 text-center', WA_ZONE)}>
-                      <CsatCell avg={wa?.csat.avg ?? null} total={wa?.csat.total ?? 0} />
-                    </td>
-                    <td className={clsx('px-3 py-4 text-center', WA_ZONE)}>
-                      <TmaCell sec={wa?.handling.avgResolutionSec ?? null} count={wa?.handling.resolutionsCount ?? 0} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">
-                <td className="px-4 py-4 text-sm font-bold uppercase tracking-wide text-gray-500 dark:text-slate-400">Total</td>
-                <td className={clsx(TD_NUM, 'text-xl text-gray-900 dark:text-slate-100')}>{totals.abertos}</td>
-                <td className={clsx(TD_NUM, 'text-xl text-emerald-600 dark:text-emerald-400')}>{totals.resolvidos}</td>
-                <td className={clsx(TD_NUM, 'text-xl text-gray-600 dark:text-slate-300')}>
-                  {resolutionRate !== null ? `${resolutionRate}%` : '—'}
-                </td>
-                <td className={clsx(TD_NUM, 'text-xl text-amber-600 dark:text-amber-400')}>{totals.aguardandoNos}</td>
-                <td className={clsx(TD_NUM, 'text-xl text-orange-600 dark:text-orange-400')}>{totals.aguardandoFranquia}</td>
-                <td className="px-3 py-4 text-center">
-                  <SlaCell rate={globalSla} />
-                </td>
-                <td className="px-3 py-4 text-center">
-                  <TmaCell sec={globalSafTma} {...SAF_TMA} />
-                </td>
-                <td className={clsx(TD_NUM, 'text-xl text-gray-900 dark:text-slate-100', WA_ZONE, WA_EDGE)}>
-                  {waConversations}
-                </td>
-                <td className={clsx('px-3 py-4 text-center', WA_ZONE)}>
-                  <CsatCell avg={globalCsat} total={csatCount} />
-                </td>
-                <td className={clsx('px-3 py-4 text-center', WA_ZONE)}>
-                  <TmaCell sec={globalTma} count={tmaCount} />
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        <p className="mt-2 text-xs text-gray-400 dark:text-slate-500">
-          Resolvidos = SAFs abertos <strong>e</strong> resolvidos dentro do mês. SAFs abertos em meses
-          anteriores não entram na contagem, mesmo que resolvidos no mês filtrado.
-          Tempo médio de atendimento dos SAFs = abertura → resolução em horário útil (fim de semana não conta).
-          Do lado do WhatsApp, conversas, CSAT e tempo médio vêm do relatório do Chatwoot (tempo corrido).
-        </p>
-      </div>
+      {/* ── Área de Exportação & Seção Interativa ────────────────── */}
+      <DashboardInteractiveSection
+        currentMonth={month}
+        availableMonths={months}
+        initialData={{
+          statsBySector,
+          waBySector,
+          totals,
+          resolutionRate,
+          globalSla,
+          globalSafTma,
+          globalCsat,
+          csatCount,
+          globalTma,
+          tmaCount,
+          waConversations,
+        }}
+      />
 
       {/* ── Histórico: SAFs abertos por setor ──────────────────── */}
       <HistoryTable
