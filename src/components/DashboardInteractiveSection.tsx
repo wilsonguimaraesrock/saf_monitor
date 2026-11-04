@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   FileSpreadsheet,
   FileDown,
@@ -9,7 +10,6 @@ import {
   Filter,
   Check,
   Loader2,
-  AlertCircle,
   Inbox,
   CircleCheckBig,
   BarChart3,
@@ -20,7 +20,6 @@ import {
   Timer,
   MessageSquare,
   Sparkles,
-  ChevronDown,
   X,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -62,8 +61,13 @@ interface DashboardInteractiveData {
 }
 
 interface DashboardInteractiveSectionProps {
-  currentMonth: string; // e.g. "2026-11"
+  currentMonth: string;
   availableMonths: string[];
+  isCustomRange?: boolean;
+  startDateParam?: string;
+  endDateParam?: string;
+  periodLabel: string;
+  initialDept?: string;
   initialData: DashboardInteractiveData;
 }
 
@@ -168,141 +172,136 @@ const WA_EDGE  = 'border-l-2 border-green-300 dark:border-green-800/70';
 export function DashboardInteractiveSection({
   currentMonth,
   availableMonths,
+  isCustomRange = false,
+  startDateParam,
+  endDateParam,
+  periodLabel,
+  initialDept = 'all',
   initialData,
 }: DashboardInteractiveSectionProps) {
-  // Estado de controle de filtros
-  const [periodType, setPeriodType] = useState<'month' | 'custom'>('month');
-  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonth);
+  const router = useRouter();
 
-  // Período personalizado (default: mês atual)
+  // Filtro de Departamento
+  const [selectedSector, setSelectedSector] = useState<string>(initialDept || 'all');
+
+  // Painel de Datas Livres
+  const [showCustomDates, setShowCustomDates] = useState<boolean>(isCustomRange);
   const [customStart, setCustomStart] = useState<string>(() => {
+    if (startDateParam) return startDateParam;
     const [y, m] = currentMonth.split('-');
     return `${y}-${m}-01`;
   });
   const [customEnd, setCustomEnd] = useState<string>(() => {
+    if (endDateParam) return endDateParam;
     const [y, m] = currentMonth.split('-').map(Number);
     const lastDay = new Date(y, m, 0).getDate();
     return `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   });
 
-  // Filtro de Departamento
-  const [selectedSector, setSelectedSector] = useState<string>('all');
-  const [filterOnScreen, setFilterOnScreen] = useState<boolean>(true);
-
-  // Dados ativos
-  const [activeData, setActiveData] = useState<DashboardInteractiveData>(initialData);
-  const [activeLabel, setActiveLabel] = useState<string>(formatMonth(currentMonth));
-
-  // Estados de carregamento e exportação
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  // Estados de exportação e navegação
+  const [isNavigating, setIsNavigating] = useState<boolean>(false);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Carrega dados de período customizado ou outro mês
-  const handleApplyCustomPeriod = async (start: string, end: string, label: string) => {
-    if (!start || !end) {
-      setErrorMessage('Por favor, informe a data inicial e final.');
-      return;
-    }
-    if (start > end) {
-      setErrorMessage('A data inicial não pode ser posterior à data final.');
-      return;
-    }
-
-    if (typeof window !== 'undefined') {
-      window.history.replaceState(null, '', `/dashboard?start=${start}&end=${end}`);
-    }
-
-    setIsLoading(true);
-    setErrorMessage(null);
-    try {
-      const res = await fetch(`/api/dashboard/export-data?startDate=${start}&endDate=${end}`);
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Falha ao buscar dados do período');
-      }
-      const data = await res.json();
-      setActiveData(data);
-      setActiveLabel(label || `${start} a ${end}`);
-    } catch (err) {
-      setErrorMessage((err as Error).message);
-    } finally {
-      setIsLoading(false);
-    }
+  // Navega para o mês selecionado (impacta a página inteira)
+  const handleSelectMonth = (m: string) => {
+    if (m === currentMonth && !isCustomRange) return;
+    setIsNavigating(true);
+    setShowCustomDates(false);
+    const deptQuery = selectedSector !== 'all' ? `&dept=${selectedSector}` : '';
+    router.push(`/dashboard?m=${m}${deptQuery}`);
   };
 
-  const handleMonthChange = async (monthVal: string) => {
-    setSelectedMonth(monthVal);
-    if (typeof window !== 'undefined') {
-      window.history.replaceState(null, '', `/dashboard?m=${monthVal}`);
-    }
-
-    if (monthVal === currentMonth) {
-      setActiveData(initialData);
-      setActiveLabel(formatMonth(currentMonth));
-      setErrorMessage(null);
+  // Aplica intervalo de datas livres
+  const handleApplyCustomDates = () => {
+    if (!customStart || !customEnd) return;
+    if (customStart > customEnd) {
+      alert('A data inicial não pode ser posterior à data final.');
       return;
     }
-
-    setIsLoading(true);
-    setErrorMessage(null);
-    try {
-      const res = await fetch(`/api/dashboard/export-data?month=${monthVal}`);
-      if (!res.ok) throw new Error('Falha ao carregar dados do mês selecionado');
-      const data = await res.json();
-      setActiveData(data);
-      setActiveLabel(formatMonth(monthVal));
-    } catch (err) {
-      setErrorMessage((err as Error).message);
-    } finally {
-      setIsLoading(false);
-    }
+    setIsNavigating(true);
+    const deptQuery = selectedSector !== 'all' ? `&dept=${selectedSector}` : '';
+    router.push(`/dashboard?start=${customStart}&end=${customEnd}${deptQuery}`);
   };
 
-  // Atalhos rápidos de data
-  const handlePreset = (preset: 'current' | 'prev' | 'last30' | 'last90') => {
+  // Atalhos rápidos para datas
+  const handleShortcut = (preset: 'last30' | 'last90') => {
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
     const toYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const days = preset === 'last30' ? 30 : 90;
+    const past = new Date(now.getTime() - days * 86400 * 1000);
+    const start = toYMD(past);
+    const end = toYMD(now);
+    setCustomStart(start);
+    setCustomEnd(end);
+    setIsNavigating(true);
+    const deptQuery = selectedSector !== 'all' ? `&dept=${selectedSector}` : '';
+    router.push(`/dashboard?start=${start}&end=${end}${deptQuery}`);
+  };
 
-    if (preset === 'current') {
-      setPeriodType('month');
-      if (availableMonths.length > 0) {
-        handleMonthChange(availableMonths[0]);
+  // Atualiza departamento e reflete na URL sem recarregar
+  const handleSectorChange = (slug: string) => {
+    setSelectedSector(slug);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (slug === 'all') {
+        url.searchParams.delete('dept');
+      } else {
+        url.searchParams.set('dept', slug);
       }
-    } else if (preset === 'prev') {
-      setPeriodType('month');
-      if (availableMonths.length > 1) {
-        handleMonthChange(availableMonths[1]);
-      }
-    } else if (preset === 'last30') {
-      setPeriodType('custom');
-      const past = new Date(now.getTime() - 30 * 86400 * 1000);
-      const start = toYMD(past);
-      const end = toYMD(now);
-      setCustomStart(start);
-      setCustomEnd(end);
-      handleApplyCustomPeriod(start, end, 'Últimos 30 dias');
-    } else if (preset === 'last90') {
-      setPeriodType('custom');
-      const past = new Date(now.getTime() - 90 * 86400 * 1000);
-      const start = toYMD(past);
-      const end = toYMD(now);
-      setCustomStart(start);
-      setCustomEnd(end);
-      handleApplyCustomPeriod(start, end, 'Últimos 90 dias');
+      window.history.replaceState(null, '', url.toString());
     }
   };
 
-  // Disparo de exportação
+  // Determina quais setores exibir na tabela e nos KPIs com base no filtro
+  const displayedSectors = selectedSector !== 'all'
+    ? SECTORS.filter((s) => s.slug === selectedSector)
+    : SECTORS;
+
+  // KPIs exibidos na tela
+  const currentKpiView = (() => {
+    if (selectedSector === 'all') {
+      return {
+        abertos: initialData.totals.abertos,
+        resolvidos: initialData.totals.resolvidos,
+        resolutionRate: initialData.resolutionRate,
+        aguardandoNos: initialData.totals.aguardandoNos,
+        aguardandoFranquia: initialData.totals.aguardandoFranquia,
+        slaRate: initialData.globalSla,
+        csatAvg: initialData.globalCsat,
+        csatCount: initialData.csatCount,
+        tmaSec: initialData.globalTma,
+        tmaCount: initialData.tmaCount,
+      };
+    }
+    const st = initialData.statsBySector[selectedSector];
+    const wa = initialData.waBySector[selectedSector];
+    const rate = st && st.abertos > 0 ? Math.round((100 * st.resolvidos) / st.abertos) : null;
+    return {
+      abertos: st?.abertos ?? 0,
+      resolvidos: st?.resolvidos ?? 0,
+      resolutionRate: rate,
+      aguardandoNos: st?.aguardandoNos ?? 0,
+      aguardandoFranquia: st?.aguardandoFranquia ?? 0,
+      slaRate: st?.slaRate ?? null,
+      csatAvg: wa?.csat.avg ?? null,
+      csatCount: wa?.csat.total ?? 0,
+      tmaSec: wa?.handling.avgResolutionSec ?? null,
+      tmaCount: wa?.handling.resolutionsCount ?? 0,
+    };
+  })();
+
+  const selectedSectorObj = SECTORS.find((s) => s.slug === selectedSector);
+
+  // Disparo de exportação em CSV ou PDF
   const handleExport = (type: 'csv' | 'pdf') => {
     setExportStatus(`Gerando ${type.toUpperCase()}...`);
 
     let rows: ExportRowData[] = [];
     if (selectedSector === 'all') {
       rows = SECTORS.map((s) => {
-        const st = activeData.statsBySector[s.slug];
-        const wa = activeData.waBySector[s.slug];
+        const st = initialData.statsBySector[s.slug];
+        const wa = initialData.waBySector[s.slug];
         const rate = st && st.abertos > 0 ? Math.round((100 * st.resolvidos) / st.abertos) : null;
         return {
           sectorSlug: s.slug,
@@ -321,48 +320,45 @@ export function DashboardInteractiveSection({
           waResolutionsCount: wa?.handling.resolutionsCount ?? 0,
         };
       });
-    } else {
-      const s = SECTORS.find((sec) => sec.slug === selectedSector);
-      if (s) {
-        const st = activeData.statsBySector[s.slug];
-        const wa = activeData.waBySector[s.slug];
-        const rate = st && st.abertos > 0 ? Math.round((100 * st.resolvidos) / st.abertos) : null;
-        rows = [
-          {
-            sectorSlug: s.slug,
-            sectorName: s.name,
-            abertos: st?.abertos ?? 0,
-            resolvidos: st?.resolvidos ?? 0,
-            resolutionRate: rate,
-            aguardandoNos: st?.aguardandoNos ?? 0,
-            aguardandoFranquia: st?.aguardandoFranquia ?? 0,
-            slaRate: st?.slaRate ?? null,
-            safTmaSec: st?.avgResolutionSec ?? null,
-            waConversations: wa?.handling.conversationsCount ?? 0,
-            waCsatAvg: wa?.csat.avg ?? null,
-            waCsatCount: wa?.csat.total ?? 0,
-            waTmaSec: wa?.handling.avgResolutionSec ?? null,
-            waResolutionsCount: wa?.handling.resolutionsCount ?? 0,
-          },
-        ];
-      }
+    } else if (selectedSectorObj) {
+      const st = initialData.statsBySector[selectedSectorObj.slug];
+      const wa = initialData.waBySector[selectedSectorObj.slug];
+      const rate = st && st.abertos > 0 ? Math.round((100 * st.resolvidos) / st.abertos) : null;
+      rows = [
+        {
+          sectorSlug: selectedSectorObj.slug,
+          sectorName: selectedSectorObj.name,
+          abertos: st?.abertos ?? 0,
+          resolvidos: st?.resolvidos ?? 0,
+          resolutionRate: rate,
+          aguardandoNos: st?.aguardandoNos ?? 0,
+          aguardandoFranquia: st?.aguardandoFranquia ?? 0,
+          slaRate: st?.slaRate ?? null,
+          safTmaSec: st?.avgResolutionSec ?? null,
+          waConversations: wa?.handling.conversationsCount ?? 0,
+          waCsatAvg: wa?.csat.avg ?? null,
+          waCsatCount: wa?.csat.total ?? 0,
+          waTmaSec: wa?.handling.avgResolutionSec ?? null,
+          waResolutionsCount: wa?.handling.resolutionsCount ?? 0,
+        },
+      ];
     }
 
     let totalsData: ExportTotalsData;
     if (selectedSector === 'all') {
       totalsData = {
-        abertos: activeData.totals.abertos,
-        resolvidos: activeData.totals.resolvidos,
-        resolutionRate: activeData.resolutionRate,
-        aguardandoNos: activeData.totals.aguardandoNos,
-        aguardandoFranquia: activeData.totals.aguardandoFranquia,
-        slaRate: activeData.globalSla,
-        safTmaSec: activeData.globalSafTma,
-        waConversations: activeData.waConversations,
-        waCsatAvg: activeData.globalCsat,
-        waCsatCount: activeData.csatCount,
-        waTmaSec: activeData.globalTma,
-        waResolutionsCount: activeData.tmaCount,
+        abertos: initialData.totals.abertos,
+        resolvidos: initialData.totals.resolvidos,
+        resolutionRate: initialData.resolutionRate,
+        aguardandoNos: initialData.totals.aguardandoNos,
+        aguardandoFranquia: initialData.totals.aguardandoFranquia,
+        slaRate: initialData.globalSla,
+        safTmaSec: initialData.globalSafTma,
+        waConversations: initialData.waConversations,
+        waCsatAvg: initialData.globalCsat,
+        waCsatCount: initialData.csatCount,
+        waTmaSec: initialData.globalTma,
+        waResolutionsCount: initialData.tmaCount,
       };
     } else {
       const r = rows[0];
@@ -382,11 +378,10 @@ export function DashboardInteractiveSection({
       };
     }
 
-    const selectedSectorObj = SECTORS.find((s) => s.slug === selectedSector);
     const selectedSectorName = selectedSectorObj ? selectedSectorObj.name : 'Todos os Setores';
 
     const payload: ExportReportPayload = {
-      periodLabel: activeLabel,
+      periodLabel,
       selectedSectorSlug: selectedSector,
       selectedSectorName,
       generatedAt: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
@@ -403,61 +398,20 @@ export function DashboardInteractiveSection({
       setExportStatus('Relatório exportado com sucesso!');
     } catch (err) {
       console.error(err);
-      setErrorMessage(`Erro ao gerar ${type.toUpperCase()}: ${(err as Error).message}`);
+      alert(`Erro ao gerar ${type.toUpperCase()}: ${(err as Error).message}`);
     } finally {
       setTimeout(() => setExportStatus(null), 3000);
     }
   };
 
-  // Determina quais setores exibir na tabela e nos KPIs com base no filtro
-  const displayedSectors = filterOnScreen && selectedSector !== 'all'
-    ? SECTORS.filter((s) => s.slug === selectedSector)
-    : SECTORS;
-
-  // KPIs exibidos na tela (se filtrado por setor, mostra métricas do setor; se 'all', mostra globais)
-  const currentKpiView = (() => {
-    if (!filterOnScreen || selectedSector === 'all') {
-      return {
-        abertos: activeData.totals.abertos,
-        resolvidos: activeData.totals.resolvidos,
-        resolutionRate: activeData.resolutionRate,
-        aguardandoNos: activeData.totals.aguardandoNos,
-        aguardandoFranquia: activeData.totals.aguardandoFranquia,
-        slaRate: activeData.globalSla,
-        csatAvg: activeData.globalCsat,
-        csatCount: activeData.csatCount,
-        tmaSec: activeData.globalTma,
-        tmaCount: activeData.tmaCount,
-      };
-    }
-    const st = activeData.statsBySector[selectedSector];
-    const wa = activeData.waBySector[selectedSector];
-    const rate = st && st.abertos > 0 ? Math.round((100 * st.resolvidos) / st.abertos) : null;
-    return {
-      abertos: st?.abertos ?? 0,
-      resolvidos: st?.resolvidos ?? 0,
-      resolutionRate: rate,
-      aguardandoNos: st?.aguardandoNos ?? 0,
-      aguardandoFranquia: st?.aguardandoFranquia ?? 0,
-      slaRate: st?.slaRate ?? null,
-      csatAvg: wa?.csat.avg ?? null,
-      csatCount: wa?.csat.total ?? 0,
-      tmaSec: wa?.handling.avgResolutionSec ?? null,
-      tmaCount: wa?.handling.resolutionsCount ?? 0,
-    };
-  })();
-
-  const selectedSectorObj = SECTORS.find((s) => s.slug === selectedSector);
-
   return (
     <div className="space-y-6">
 
-      {/* ── ÁREA DE EXPORTAÇÃO E FILTROS DO RELATÓRIO ──────────────── */}
-      <section
-        id="area-exportacao-relatorio"
-        className="rounded-2xl border-2 border-orange-500/20 dark:border-orange-500/30 bg-gradient-to-br from-orange-50/60 via-white to-amber-50/40 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900 shadow-md p-5 transition-all"
-      >
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-gray-200/80 dark:border-slate-800">
+      {/* ── CARD UNIFICADO DE FILTROS & EXPORTAÇÃO ───────────────────── */}
+      <section className="rounded-2xl border-2 border-orange-500/20 dark:border-orange-500/30 bg-gradient-to-br from-orange-50/50 via-white to-amber-50/30 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900 shadow-md p-5 transition-all">
+
+        {/* Linha 1: Título e Botões de Exportação */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-200/80 dark:border-slate-800">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-orange-600 text-white shadow-sm shadow-orange-600/30">
               <FileDown size={22} />
@@ -465,25 +419,23 @@ export function DashboardInteractiveSection({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100">
-                  Exportar Relatório do Dashboard
+                  Filtros & Exportação de Relatório
                 </h3>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300">
                   <Sparkles size={11} /> CSV & PDF
                 </span>
               </div>
               <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-                Escolha o período e o departamento para exportar os indicadores e métricas exibidos na tela.
+                Filtre por período e departamento para visualizar os dados na tela e exportar o relatório.
               </p>
             </div>
           </div>
 
-          {/* Botões de Ação de Exportação */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 shrink-0">
             <button
               type="button"
               onClick={() => handleExport('csv')}
-              disabled={isLoading}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white shadow-sm transition-all disabled:opacity-50 disabled:pointer-events-none"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white shadow-sm transition-all"
               title="Exportar planilha formatada em CSV (compatível com Excel)"
             >
               <FileSpreadsheet size={16} />
@@ -493,8 +445,7 @@ export function DashboardInteractiveSection({
             <button
               type="button"
               onClick={() => handleExport('pdf')}
-              disabled={isLoading}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-orange-600 hover:bg-orange-500 active:scale-95 text-white shadow-sm shadow-orange-600/30 transition-all disabled:opacity-50 disabled:pointer-events-none"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-orange-600 hover:bg-orange-500 active:scale-95 text-white shadow-sm shadow-orange-600/30 transition-all"
               title="Exportar documento executivo em PDF (Landscape A4)"
             >
               <FileDown size={16} />
@@ -503,199 +454,148 @@ export function DashboardInteractiveSection({
           </div>
         </div>
 
-        {/* Linha de Controles de Filtro */}
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-
-          {/* 1. Seleção de Tipo de Período */}
-          <div className="md:col-span-5 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-slate-300 flex items-center gap-1.5">
-                <Calendar size={13} className="text-orange-600 dark:text-orange-400" />
-                Período
-              </label>
-              <div className="flex items-center gap-1 text-[11px]">
-                <button
-                  type="button"
-                  onClick={() => setPeriodType('month')}
-                  className={clsx(
-                    'px-2 py-0.5 rounded transition-colors font-medium',
-                    periodType === 'month'
-                      ? 'bg-orange-600 text-white'
-                      : 'text-gray-500 hover:text-gray-800 dark:text-slate-400'
-                  )}
-                >
-                  Por Mês
-                </button>
-                <span className="text-gray-300 dark:text-slate-700">|</span>
-                <button
-                  type="button"
-                  onClick={() => setPeriodType('custom')}
-                  className={clsx(
-                    'px-2 py-0.5 rounded transition-colors font-medium',
-                    periodType === 'custom'
-                      ? 'bg-orange-600 text-white'
-                      : 'text-gray-500 hover:text-gray-800 dark:text-slate-400'
-                  )}
-                >
-                  Datas Livres
-                </button>
-              </div>
-            </div>
-
-            {periodType === 'month' ? (
-              <div className="relative">
-                <select
-                  value={selectedMonth}
-                  onChange={(e) => handleMonthChange(e.target.value)}
-                  disabled={isLoading}
-                  className="w-full h-10 px-3 pr-8 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-semibold text-gray-800 dark:text-slate-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                >
-                  {availableMonths.map((m) => (
-                    <option key={m} value={m}>
-                      {formatMonth(m)}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={14} className="absolute right-3 top-3 text-gray-400 pointer-events-none" />
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <div className="flex-1">
-                  <input
-                    type="date"
-                    value={customStart}
-                    onChange={(e) => setCustomStart(e.target.value)}
-                    className="w-full h-10 px-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-gray-800 dark:text-slate-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                  />
-                </div>
-                <span className="text-xs text-gray-400 font-bold">até</span>
-                <div className="flex-1">
-                  <input
-                    type="date"
-                    value={customEnd}
-                    onChange={(e) => setCustomEnd(e.target.value)}
-                    className="w-full h-10 px-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-gray-800 dark:text-slate-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const fmt = (dStr: string) => {
-                      const [y, m, d] = dStr.split('-');
-                      return `${d}/${m}/${y}`;
-                    };
-                    handleApplyCustomPeriod(customStart, customEnd, `${fmt(customStart)} a ${fmt(customEnd)}`);
-                  }}
-                  disabled={isLoading}
-                  className="h-10 px-3 rounded-xl bg-gray-900 dark:bg-slate-700 hover:bg-gray-800 dark:hover:bg-slate-600 text-white text-xs font-semibold shrink-0 transition-colors"
-                >
-                  Aplicar
-                </button>
-              </div>
-            )}
-
-            {/* Presets rápidos */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              <span className="text-[11px] text-gray-400 dark:text-slate-500 font-medium mr-0.5">Atalhos:</span>
-              <button
-                type="button"
-                onClick={() => handlePreset('current')}
-                className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-gray-100 dark:bg-slate-800 hover:bg-orange-100 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-300 transition-colors"
-              >
-                Este Mês
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePreset('prev')}
-                className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-gray-100 dark:bg-slate-800 hover:bg-orange-100 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-300 transition-colors"
-              >
-                Mês Anterior
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePreset('last30')}
-                className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-gray-100 dark:bg-slate-800 hover:bg-orange-100 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-300 transition-colors"
-              >
-                Últimos 30d
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePreset('last90')}
-                className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-gray-100 dark:bg-slate-800 hover:bg-orange-100 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-300 transition-colors"
-              >
-                Últimos 90d
-              </button>
-            </div>
-          </div>
-
-          {/* 2. Filtro de Departamento / Setor */}
-          <div className="md:col-span-4 space-y-1.5">
+        {/* Linha 2: Seletor de Período com Botões de Mês (Como funcionava antes) */}
+        <div className="pt-4 space-y-2">
+          <div className="flex items-center justify-between">
             <label className="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-slate-300 flex items-center gap-1.5">
-              <Filter size={13} className="text-orange-600 dark:text-orange-400" />
-              Departamento / Setor
+              <Calendar size={13} className="text-orange-600 dark:text-orange-400" />
+              Período:
             </label>
-            <div className="relative">
-              <select
-                value={selectedSector}
-                onChange={(e) => setSelectedSector(e.target.value)}
-                className="w-full h-10 px-3 pr-8 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-semibold text-gray-800 dark:text-slate-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-              >
-                <option value="all">Todos os Departamentos / Setores ({SECTORS.length})</option>
-                {SECTORS.map((s) => (
-                  <option key={s.slug} value={s.slug}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-3 text-gray-400 pointer-events-none" />
+            <div className="text-xs text-gray-500 dark:text-slate-400">
+              Exibindo: <strong className="text-orange-600 dark:text-orange-400">{periodLabel}</strong>
             </div>
+          </div>
 
-            <div className="flex items-center gap-2 pt-1">
-              <label className="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400 cursor-pointer select-none">
+          <div className="flex flex-wrap items-center gap-2">
+            {availableMonths.map((m) => {
+              const isSelected = !isCustomRange && currentMonth === m;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => handleSelectMonth(m)}
+                  disabled={isNavigating}
+                  className={clsx(
+                    'px-3.5 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap',
+                    isSelected
+                      ? 'bg-orange-600 text-white shadow-sm ring-2 ring-orange-600/30'
+                      : 'bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
+                  )}
+                >
+                  {formatMonth(m)}
+                </button>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={() => setShowCustomDates(!showCustomDates)}
+              className={clsx(
+                'px-3.5 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5',
+                isCustomRange || showCustomDates
+                  ? 'bg-orange-600 text-white shadow-sm ring-2 ring-orange-600/30'
+                  : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700'
+              )}
+            >
+              <Calendar size={14} />
+              <span>Datas Livres</span>
+            </button>
+          </div>
+
+          {/* Painel expansível de datas livres */}
+          {showCustomDates && (
+            <div className="p-3.5 rounded-xl bg-orange-100/60 dark:bg-slate-800/90 border border-orange-200 dark:border-slate-700 mt-2 flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-gray-700 dark:text-slate-300">De:</label>
                 <input
-                  type="checkbox"
-                  checked={filterOnScreen}
-                  onChange={(e) => setFilterOnScreen(e.target.checked)}
-                  className="rounded border-gray-300 text-orange-600 focus:ring-orange-500/30"
+                  type="date"
+                  value={customStart}
+                  onChange={(e) => setCustomStart(e.target.value)}
+                  className="h-9 px-2.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs font-semibold text-gray-800 dark:text-slate-100"
                 />
-                <span>Filtrar também tabela e cards abaixo</span>
-              </label>
-
-              {selectedSector !== 'all' && (
+                <label className="text-xs font-semibold text-gray-700 dark:text-slate-300">Até:</label>
+                <input
+                  type="date"
+                  value={customEnd}
+                  onChange={(e) => setCustomEnd(e.target.value)}
+                  className="h-9 px-2.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs font-semibold text-gray-800 dark:text-slate-100"
+                />
                 <button
                   type="button"
-                  onClick={() => setSelectedSector('all')}
-                  className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-orange-600 dark:text-orange-400 hover:underline ml-auto"
+                  onClick={handleApplyCustomDates}
+                  disabled={isNavigating}
+                  className="h-9 px-4 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold shadow-sm transition-colors"
                 >
-                  <X size={11} />
-                  <span>Limpar filtro</span>
+                  Filtrar Período
                 </button>
-              )}
-            </div>
-          </div>
+              </div>
 
-          {/* 3. Feedback e Resumo da Seleção */}
-          <div className="md:col-span-3 flex flex-col justify-end space-y-1.5">
-            <div className="rounded-xl bg-white/80 dark:bg-slate-800/80 border border-gray-200 dark:border-slate-700 px-3 py-2 text-xs">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-slate-500">
-                Escopo do Relatório
-              </p>
-              <p className="font-semibold text-gray-800 dark:text-slate-100 truncate mt-0.5">
-                {selectedSectorObj ? selectedSectorObj.name : 'Todos os Setores (9)'}
-              </p>
-              <p className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
-                Período: <span className="font-semibold text-orange-600 dark:text-orange-400">{activeLabel}</span>
-              </p>
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400 ml-auto">
+                <span>Atalhos:</span>
+                <button
+                  type="button"
+                  onClick={() => handleShortcut('last30')}
+                  disabled={isNavigating}
+                  className="px-2 py-1 rounded bg-white dark:bg-slate-700 hover:bg-orange-100 dark:hover:bg-slate-600 text-gray-700 dark:text-slate-300 text-xs font-medium border border-gray-200 dark:border-slate-600"
+                >
+                  Últimos 30d
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShortcut('last90')}
+                  disabled={isNavigating}
+                  className="px-2 py-1 rounded bg-white dark:bg-slate-700 hover:bg-orange-100 dark:hover:bg-slate-600 text-gray-700 dark:text-slate-300 text-xs font-medium border border-gray-200 dark:border-slate-600"
+                >
+                  Últimos 90d
+                </button>
+              </div>
             </div>
-          </div>
-
+          )}
         </div>
 
-        {/* Alertas de Status / Erro */}
-        {isLoading && (
+        {/* Linha 3: Filtro de Departamento / Setor */}
+        <div className="mt-4 pt-3 border-t border-gray-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3 flex-1 max-w-md">
+            <label className="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-slate-300 flex items-center gap-1.5 shrink-0">
+              <Filter size={13} className="text-orange-600 dark:text-orange-400" />
+              Departamento / Setor:
+            </label>
+            <select
+              value={selectedSector}
+              onChange={(e) => handleSectorChange(e.target.value)}
+              className="w-full h-9 px-3 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-semibold text-gray-800 dark:text-slate-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+            >
+              <option value="all">Todos os Departamentos / Setores ({SECTORS.length})</option>
+              {SECTORS.map((s) => (
+                <option key={s.slug} value={s.slug}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {selectedSector !== 'all' && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300">
+                Filtrado por: {selectedSectorObj?.name}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleSectorChange('all')}
+                className="text-xs font-semibold text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-0.5"
+              >
+                <X size={12} />
+                <span>Ver todos os setores</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Feedback visual durante carregamento ou exportação */}
+        {isNavigating && (
           <div className="mt-3.5 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-orange-100/70 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300 text-xs font-semibold animate-pulse">
             <Loader2 size={14} className="animate-spin" />
-            <span>Carregando dados consolidados do período selecionado...</span>
+            <span>Atualizando dashboard para o período selecionado...</span>
           </div>
         )}
 
@@ -705,13 +605,6 @@ export function DashboardInteractiveSection({
             <span>{exportStatus}</span>
           </div>
         )}
-
-        {errorMessage && (
-          <div className="mt-3.5 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-300 text-xs font-semibold">
-            <AlertCircle size={14} />
-            <span>{errorMessage}</span>
-          </div>
-        )}
       </section>
 
       {/* ── INDICADORES DO PERÍODO SELECIONADO ──────────────────────── */}
@@ -719,9 +612,9 @@ export function DashboardInteractiveSection({
         <div className="flex items-baseline justify-between mb-3">
           <div className="flex items-center gap-2">
             <h2 className="text-base font-bold text-gray-900 dark:text-slate-100">
-              {activeLabel}
+              {periodLabel}
             </h2>
-            {selectedSectorObj && filterOnScreen && (
+            {selectedSectorObj && (
               <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300">
                 Setor: {selectedSectorObj.name}
               </span>
@@ -810,9 +703,9 @@ export function DashboardInteractiveSection({
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
-            Por setor — {activeLabel}
+            Por setor — {periodLabel}
           </h2>
-          {selectedSector !== 'all' && filterOnScreen && (
+          {selectedSector !== 'all' && (
             <span className="text-xs text-orange-600 dark:text-orange-400 font-semibold">
               Exibindo 1 de {SECTORS.length} setores
             </span>
@@ -852,8 +745,8 @@ export function DashboardInteractiveSection({
             </thead>
             <tbody>
               {displayedSectors.map((sector, i) => {
-                const st   = activeData.statsBySector[sector.slug];
-                const wa   = activeData.waBySector[sector.slug];
+                const st   = initialData.statsBySector[sector.slug];
+                const wa   = initialData.waBySector[sector.slug];
                 const Icon = sector.icon;
                 const rate = st && st.abertos > 0
                   ? Math.round((100 * st.resolvidos) / st.abertos)
@@ -916,27 +809,27 @@ export function DashboardInteractiveSection({
               <tfoot>
                 <tr className="border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">
                   <td className="px-4 py-4 text-sm font-bold uppercase tracking-wide text-gray-500 dark:text-slate-400">Total</td>
-                  <td className={clsx(TD_NUM, 'text-xl text-gray-900 dark:text-slate-100')}>{activeData.totals.abertos}</td>
-                  <td className={clsx(TD_NUM, 'text-xl text-emerald-600 dark:text-emerald-400')}>{activeData.totals.resolvidos}</td>
+                  <td className={clsx(TD_NUM, 'text-xl text-gray-900 dark:text-slate-100')}>{initialData.totals.abertos}</td>
+                  <td className={clsx(TD_NUM, 'text-xl text-emerald-600 dark:text-emerald-400')}>{initialData.totals.resolvidos}</td>
                   <td className={clsx(TD_NUM, 'text-xl text-gray-600 dark:text-slate-300')}>
-                    {activeData.resolutionRate !== null ? `${activeData.resolutionRate}%` : '—'}
+                    {initialData.resolutionRate !== null ? `${initialData.resolutionRate}%` : '—'}
                   </td>
-                  <td className={clsx(TD_NUM, 'text-xl text-amber-600 dark:text-amber-400')}>{activeData.totals.aguardandoNos}</td>
-                  <td className={clsx(TD_NUM, 'text-xl text-orange-600 dark:text-orange-400')}>{activeData.totals.aguardandoFranquia}</td>
+                  <td className={clsx(TD_NUM, 'text-xl text-amber-600 dark:text-amber-400')}>{initialData.totals.aguardandoNos}</td>
+                  <td className={clsx(TD_NUM, 'text-xl text-orange-600 dark:text-orange-400')}>{initialData.totals.aguardandoFranquia}</td>
                   <td className="px-3 py-4 text-center">
-                    <SlaCell rate={activeData.globalSla} />
+                    <SlaCell rate={initialData.globalSla} />
                   </td>
                   <td className="px-3 py-4 text-center">
-                    <TmaCell sec={activeData.globalSafTma} {...SAF_TMA} />
+                    <TmaCell sec={initialData.globalSafTma} {...SAF_TMA} />
                   </td>
                   <td className={clsx(TD_NUM, 'text-xl text-gray-900 dark:text-slate-100', WA_ZONE, WA_EDGE)}>
-                    {activeData.waConversations}
+                    {initialData.waConversations}
                   </td>
                   <td className={clsx('px-3 py-4 text-center', WA_ZONE)}>
-                    <CsatCell avg={activeData.globalCsat} total={activeData.csatCount} />
+                    <CsatCell avg={initialData.globalCsat} total={initialData.csatCount} />
                   </td>
                   <td className={clsx('px-3 py-4 text-center', WA_ZONE)}>
-                    <TmaCell sec={activeData.globalTma} count={activeData.tmaCount} />
+                    <TmaCell sec={initialData.globalTma} count={initialData.tmaCount} />
                   </td>
                 </tr>
               </tfoot>

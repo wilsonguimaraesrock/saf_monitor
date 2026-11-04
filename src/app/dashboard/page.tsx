@@ -8,7 +8,13 @@ import {
 import { clsx } from 'clsx';
 import { SECTORS } from '@/lib/sectors';
 import { type MonthlyStats } from '@/repository/analytics';
-import { getDashboardData, formatMonth, getLast12Months } from '@/lib/dashboardData';
+import {
+  getDashboardData,
+  getDashboardDataForDateRange,
+  formatMonth,
+  getLast12Months,
+  type DashboardTotals,
+} from '@/lib/dashboardData';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { NotificationBell } from '@/components/NotificationBell';
 import { UserMenu } from '@/components/UserMenu';
@@ -129,23 +135,87 @@ const TD_NUM = 'px-3 py-4 text-center tabular-nums text-lg font-semibold';
 const WA_ZONE  = 'bg-green-50/60 dark:bg-green-950/20';
 const WA_EDGE  = 'border-l-2 border-green-300 dark:border-green-800/70';
 
-async function DashboardContent({ month }: { month: string }) {
-  // Toda a agregação vive em src/lib/dashboardData.ts — a API pública e a
-  // página /publico/dashboard leem daqui também, então os números não divergem.
-  const {
-    months, statsBySector, waBySector, trendMap, totals,
-    resolutionRate, globalSla, globalSafTma,
-    globalCsat, csatCount, globalTma, tmaCount, waConversations,
-  } = await getDashboardData(month);
+async function DashboardContent({
+  month,
+  startDate,
+  endDate,
+  initialDept,
+}: {
+  month: string;
+  startDate?: string;
+  endDate?: string;
+  initialDept?: string;
+}) {
+  const months = getLast12Months();
+  const isCustom = Boolean(
+    startDate &&
+    endDate &&
+    /^\d{4}-\d{2}-\d{2}$/.test(startDate) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(endDate)
+  );
+
+  let periodLabel = formatMonth(month);
+  let statsBySector: Record<string, any>;
+  let waBySector: Record<string, any>;
+  let totals: DashboardTotals;
+  let resolutionRate: number | null;
+  let globalSla: number | null;
+  let globalSafTma: number | null;
+  let globalCsat: number | null;
+  let csatCount: number;
+  let globalTma: number | null;
+  let tmaCount: number;
+  let waConversations: number;
+  let trendMap: Record<string, Record<string, MonthlyStats>>;
+
+  if (isCustom && startDate && endDate) {
+    const [periodData, monthData] = await Promise.all([
+      getDashboardDataForDateRange(startDate, endDate),
+      getDashboardData(month),
+    ]);
+    periodLabel = periodData.label;
+    statsBySector = periodData.statsBySector;
+    waBySector = periodData.waBySector;
+    totals = periodData.totals;
+    resolutionRate = periodData.resolutionRate;
+    globalSla = periodData.globalSla;
+    globalSafTma = periodData.globalSafTma;
+    globalCsat = periodData.globalCsat;
+    csatCount = periodData.csatCount;
+    globalTma = periodData.globalTma;
+    tmaCount = periodData.tmaCount;
+    waConversations = periodData.waConversations;
+    trendMap = monthData.trendMap;
+  } else {
+    const monthData = await getDashboardData(month);
+    periodLabel = formatMonth(monthData.month);
+    statsBySector = monthData.statsBySector;
+    waBySector = monthData.waBySector;
+    totals = monthData.totals;
+    resolutionRate = monthData.resolutionRate;
+    globalSla = monthData.globalSla;
+    globalSafTma = monthData.globalSafTma;
+    globalCsat = monthData.globalCsat;
+    csatCount = monthData.csatCount;
+    globalTma = monthData.globalTma;
+    tmaCount = monthData.tmaCount;
+    waConversations = monthData.waConversations;
+    trendMap = monthData.trendMap;
+  }
 
   return (
     <div className="space-y-8">
 
       {/* ── Área de Exportação & Seção Interativa ────────────────── */}
       <DashboardInteractiveSection
-        key={month}
+        key={`${month}-${startDate}-${endDate}`}
         currentMonth={month}
         availableMonths={months}
+        isCustomRange={isCustom}
+        startDateParam={startDate}
+        endDateParam={endDate}
+        periodLabel={periodLabel}
+        initialDept={initialDept}
         initialData={{
           statsBySector,
           waBySector,
@@ -315,9 +385,9 @@ function HistoryTable({
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ m?: string }>;
+  searchParams: Promise<{ m?: string; start?: string; end?: string; dept?: string }>;
 }) {
-  const { m } = await searchParams;
+  const { m, start, end, dept } = await searchParams;
   const months = getLast12Months();
   const selectedMonth = m && months.includes(m) ? m : months[0];
 
@@ -364,13 +434,19 @@ export default async function DashboardPage({
 
       <div className="max-w-screen-2xl mx-auto px-6 py-6">
         <Suspense
+          key={`${selectedMonth}-${start}-${end}`}
           fallback={
             <div className="flex items-center justify-center h-64 text-gray-400 text-sm">
               Carregando dados...
             </div>
           }
         >
-          <DashboardContent month={selectedMonth} />
+          <DashboardContent
+            month={selectedMonth}
+            startDate={start}
+            endDate={end}
+            initialDept={dept}
+          />
         </Suspense>
       </div>
     </main>
